@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capo"
+version = "0.1.0"
+description = "Covariance Aware Policy Optimization (CAPO)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+
+authors = [
+  { name = "Omid Shams Solari", email = "omid.solari@cerebras.net" },
+]
+
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: Apache Software License",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+keywords = ["reinforcement-learning", "rlhf", "verl", "capo"]
+
+dependencies = [
+  "torch>=2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "ruff>=0.5.0",
+  "mypy>=1.0",
+  "mkdocs>=1.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/omids/capo"
+Repository = "https://github.com/omids/capo"
+Issues = "https://github.com/omids/capo/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["capo*"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+# --- HOW TO PUBLISH --------------------------------
+# 1. Ensure you have up-to-date build tools:
+#       pip install -U build twine
+# 2. Build the source + wheel distributions:
+#       python -m build
+# 3. Upload to PyPI (or TestPyPI first):
+#       python -m twine upload dist/*
+#
+# Make sure you've set name, version, authors and URLs to match your repo.
+# -----------------------------------------------------------------------

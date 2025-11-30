@@ -1,0 +1,26 @@
+site_name: CAPO
+site_description: "CAPO: Covariance Aware Policy Optimization (CAPO)"
+site_url: "https://omids.github.io/capo/"  # update to your GH Pages URL
+
+repo_url: "https://github.com/omids/capo"
+repo_name: "omids/capo"
+
+docs_dir: docs
+
+nav:
+  - Home: index.md
+  - Method:
+      - Setup & Notation: setup.md        # from 2.setup.tex -> docs/setup.md
+      - CAPO Method: method.md           # from 3.method.tex -> docs/method.md
+      - Algorithms: algorithms.md        # from 4.algorithms.tex -> docs/algorithms.md
+      - Evaluations: evaluations.md      # from 5.evaluations.tex -> docs/evaluations.md
+
+theme:
+  name: mkdocs
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - footnotes
+  - tables
