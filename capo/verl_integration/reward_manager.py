@@ -116,8 +116,7 @@ def _build_wrong_step_token_mask(
 
         # Check that the response tokens match the step tokens at this offset.
         if not torch.equal(
-            response_ids[offset : offset + step_len],
-            step_token_ids_tensor,
+            response_ids[offset : offset + step_len], step_token_ids_tensor,
         ):
             # Alignment failure; see comment above.
             return mask
@@ -212,9 +211,7 @@ class CAPORewardManager(AbstractRewardManager):
         self.reward_kwargs = reward_kwargs
 
     def __call__(
-        self,
-        data: DataProto,
-        return_dict: bool = False,
+        self, data: DataProto, return_dict: bool = False,
     ) -> torch.Tensor | Dict[str, Any]:
         """
         Compute CAPO token-level rewards for a batch of data.
@@ -256,9 +253,7 @@ class CAPORewardManager(AbstractRewardManager):
         # Initialize reward tensor with zeros.
         responses = data.batch["responses"]
         reward_tensor = torch.zeros_like(
-            responses,
-            dtype=torch.float32,
-            device=responses.device,
+            responses, dtype=torch.float32, device=responses.device,
         )
 
         reward_extra_info: Dict[str, List[Any]] = defaultdict(list)
@@ -300,9 +295,7 @@ class CAPORewardManager(AbstractRewardManager):
             # We also propagate a few VERL-specific keys into extra_info
             # so they are visible to the reward function if needed.
             extra_info["__num_turns__"] = non_tensor.get("__num_turns__", None)
-            extra_info["rollout_reward_scores"] = non_tensor.get(
-                "reward_scores", {}
-            )
+            extra_info["rollout_reward_scores"] = non_tensor.get("reward_scores", {})
 
             # 1. Compute CAPO score & step statistics.
             result = self.compute_score(
@@ -321,9 +314,7 @@ class CAPORewardManager(AbstractRewardManager):
 
             score = float(result["score"])
             steps: List[str] = list(result.get("steps", []))
-            wrong_step_indices: List[int] = list(
-                result.get("wrong_step_indices", [])
-            )
+            wrong_step_indices: List[int] = list(result.get("wrong_step_indices", []))
 
             # 2. Convert flawed-step info into a token mask.
             wrong_token_mask = _build_wrong_step_token_mask(

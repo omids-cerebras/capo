@@ -21,7 +21,5 @@ The actual implementations live in:
 
 # Import modules for side-effects (registration)
 from .reward_fn import CAPOConfig, capo_reward_fn  # noqa: F401
-from .reward_manager import CAPORewardManager      # noqa: F401
-from .adv_estimators import (                      # noqa: F401
-    compute_capo_empirical_bayes_advantage,
-)
+from .reward_manager import CAPORewardManager  # noqa: F401
+from .adv_estimators import compute_capo_empirical_bayes_advantage  # noqa: F401

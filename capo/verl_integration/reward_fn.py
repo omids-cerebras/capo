@@ -162,8 +162,7 @@ def _get_or_create_config(reward_kwargs: Dict[str, Any]) -> CAPOConfig:
 
 
 def _get_or_create_genprm_client(
-    config: CAPOConfig,
-    reward_kwargs: Dict[str, Any],
+    config: CAPOConfig, reward_kwargs: Dict[str, Any],
 ) -> GenPRMClient:
     """
     Obtain a GenPRMClient for CAPO.
@@ -216,8 +215,7 @@ def _segment_solution_into_steps(solution_str: str) -> List[str]:
 
 
 def _aggregate_step_judgements(
-    critiques: Sequence[Sequence[bool]],
-    vote_mode: str,
+    critiques: Sequence[Sequence[bool]], vote_mode: str,
 ) -> Tuple[List[bool], List[int]]:
     """
     Aggregate multiple GenPRM critiques into final per-step judgements.
@@ -268,9 +266,9 @@ def _aggregate_step_judgements(
         num_wrong = sum(decisions_j)
 
         if vote_mode == "intersection":
-            is_wrong = (num_wrong == num_critiques)
+            is_wrong = num_wrong == num_critiques
         elif vote_mode == "majority":
-            is_wrong = (num_wrong > num_critiques // 2)
+            is_wrong = num_wrong > num_critiques // 2
         else:
             raise ValueError(f"Unsupported vote_mode: {vote_mode}")
 
@@ -400,8 +398,7 @@ def capo_reward_fn(
         critiques.append(step_is_correct)
 
     step_correctness, wrong_step_indices = _aggregate_step_judgements(
-        critiques=critiques,
-        vote_mode=config.vote_mode,
+        critiques=critiques, vote_mode=config.vote_mode,
     )
 
     # If there are no steps, treat as "no process information".

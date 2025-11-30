@@ -22,13 +22,7 @@ def test_acf_moment_fit_recovers_positive_rho():
             Y[i, t] = rho_true * Y[i, t - 1] + eps[t]
 
     rho_hat, eta_hat = acf_moment_fit(
-        Y=Y,
-        mask=mask,
-        k=5,
-        rho_max=0.99,
-        eta_max=2.0,
-        n_rho=21,
-        n_eta=11,
+        Y=Y, mask=mask, k=5, rho_max=0.99, eta_max=2.0, n_rho=21, n_eta=11,
     )
 
     # At least detect positive serial correlation.

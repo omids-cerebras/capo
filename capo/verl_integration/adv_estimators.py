@@ -159,8 +159,7 @@ def compute_capo_advantage(
 
 
 def _lengths_and_scalar_returns(
-    token_level_rewards: torch.Tensor,
-    response_mask: torch.Tensor,
+    token_level_rewards: torch.Tensor, response_mask: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """
     Compute trajectory lengths L_i and scalarized returns g_i.
@@ -281,7 +280,11 @@ def eb_lite_fit_beta_and_weights(
     else:
         w = omega / omega_sum
 
-    return float(beta_hat), w.to(dtype=torch.float32).to(device), m.to(dtype=torch.float32).to(device)
+    return (
+        float(beta_hat),
+        w.to(dtype=torch.float32).to(device),
+        m.to(dtype=torch.float32).to(device),
+    )
 
 
 @register_adv_est("capo_eb_lite")
@@ -351,12 +354,7 @@ def compute_capo_eb_lite_advantage(
 # ============================================================================
 
 
-def s_kband(
-    L: torch.Tensor,
-    rho: float,
-    k: int,
-    eta: float,
-) -> torch.Tensor:
+def s_kband(L: torch.Tensor, rho: float, k: int, eta: float,) -> torch.Tensor:
     """
     Stretched-geometric k-banded dependence shape (Definition~\\ref{def:kband}).
 
@@ -420,12 +418,7 @@ def s_kband(
 
 
 def eb_stats(
-    g: torch.Tensor,
-    L: torch.Tensor,
-    beta: float,
-    rho: float,
-    k: int,
-    eta: float,
+    g: torch.Tensor, L: torch.Tensor, beta: float, rho: float, k: int, eta: float,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float, float]:
     """
     EB statistics for ℓ(β, ξ) (eq.~(EB-obj)):
@@ -588,8 +581,12 @@ def grad_ell_rho_eta(
                     * ((Li - h) * (rho ** h_eta) * log_rho * h_eta * torch.log(h))
                 ).sum()
 
-        ds_drho_list.append(float(ds_drho if isinstance(ds_drho, torch.Tensor) else ds_drho))
-        ds_deta_list.append(float(ds_deta if isinstance(ds_deta, torch.Tensor) else ds_deta))
+        ds_drho_list.append(
+            float(ds_drho if isinstance(ds_drho, torch.Tensor) else ds_drho)
+        )
+        ds_deta_list.append(
+            float(ds_deta if isinstance(ds_deta, torch.Tensor) else ds_deta)
+        )
 
     ds_drho = torch.tensor(ds_drho_list, dtype=torch.double, device=device)
     ds_deta = torch.tensor(ds_deta_list, dtype=torch.double, device=device)
@@ -602,7 +599,9 @@ def grad_ell_rho_eta(
     dlogw_deta = -ds_deta / s_vals
     domega_deta = omega * dlogw_deta
 
-    def grad_phi(dlogw: torch.Tensor, domega: torch.Tensor, dlog_pi_phi: float) -> float:
+    def grad_phi(
+        dlogw: torch.Tensor, domega: torch.Tensor, dlog_pi_phi: float
+    ) -> float:
         term1 = dlogw.sum()
         term2 = domega.sum() / max(Lambda_omega, 1e-8)
         term3 = (omega * (e * e) * dlogw).sum()
@@ -701,8 +700,12 @@ def acf_moment_fit(
         else:
             r_bar[h] = gamma_bar[h] / gamma_bar[0]
 
-    rho_grid = torch.linspace(0.0, rho_max, steps=n_rho, dtype=torch.double, device=device)
-    eta_grid = torch.linspace(0.0, eta_max, steps=n_eta, dtype=torch.double, device=device)
+    rho_grid = torch.linspace(
+        0.0, rho_max, steps=n_rho, dtype=torch.double, device=device
+    )
+    eta_grid = torch.linspace(
+        0.0, eta_max, steps=n_eta, dtype=torch.double, device=device
+    )
 
     best_rho = 0.0
     best_eta = 1.0

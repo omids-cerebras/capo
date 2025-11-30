@@ -17,7 +17,9 @@ from __future__ import annotations
 from typing import Dict, List
 
 
-def build_dummy_prompt(question: str, solution: str, ground_truth: str | None) -> List[Dict[str, str]]:
+def build_dummy_prompt(
+    question: str, solution: str, ground_truth: str | None
+) -> List[Dict[str, str]]:
     """
     Example placeholder for a chat-style prompt.
 
