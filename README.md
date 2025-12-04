@@ -1,759 +1,187 @@
-# CAPO + VERL: Implementation & Training Guide
+# CAPO: Outcome+Process RL with Empirical Bayes Weighting for VERL
 
-This document explains:
+CAPO is a method for **outcome + process** reinforcement learning from human feedback (RLHF), designed for reasoning tasks (math, coding, etc.). It has two key pieces:
 
-1. How VERL’s PPO/GRPO training loop works.  
-2. How the **CAPO** method is implemented inside VERL.  
-3. What each CAPO component does (reward + advantage).  
-4. How to configure and **run a training experiment** with CAPO / EB–CAPO.  
+1. A **CAPO reward** that combines:
+   - final answer correctness (**C** term), and  
+   - process/step correctness (**P** term), as judged by a process critic (GenPRM).
 
-Paste this README directly into your repo root (as `README.md`) or into `docs/howto_capo_verl.md`. The LaTeX math uses `$...$` and `$$...$$` so it renders correctly on GitHub / MkDocs.
+2. An **Empirical Bayes (EB)** module that estimates:
+   - a **length exponent** $\beta$ (how variance scales with trajectory length), and  
+   - a **dependence shape** $\xi = (\rho, \eta)$ (how token-level noise is correlated),  
 
----
+   and uses them to produce **precision-optimal trajectory weights** for training.
 
-## 0. High‑level: where CAPO plugs into VERL
+This repository integrates CAPO into **VERL** (VolcEngine RL), in particular its PPO/GRPO trainer:
 
-A single PPO/GRPO step in VERL can be sketched as:
+- CAPO plugs into VERL's **reward path** via a custom `RewardManager`.  
+- EB–CAPO plugs into VERL's **advantage path** via custom advantage estimators.
 
-1. **Rollout**: actors sample trajectories from the current policy.  
-2. **Reward**: a `RewardManager` converts trajectories into token‑level rewards.  
-3. **Advantage estimation**: an advantage estimator converts rewards into token‑level advantages.  
-4. **Policy update**: PPO/GRPO uses advantages and log‑prob ratios to update the policy.
+The goal is to make CAPO easy to:
 
-CAPO integrates at steps **2** and **3**:
-
-- `CAPORewardManager`: implements CAPO’s outcome + process reward and produces **token‑level CAPO rewards**.  
-- `capo`, `capo_eb_lite`, `capo_eb`: three advantage estimators that compute **CAPO advantages** from those rewards, including Empirical Bayes weighting (EB–CAPO).
+- reproducibly install and run on top of VERL,  
+- inspect and modify algorithmically, and  
+- test (both numerically and with synthetic experiments).
 
 ---
 
-## 1. Repository structure & registration
+## Repository Layout
 
-The relevant CAPO code lives under:
+The main components relevant to CAPO and EB–CAPO are:
 
 ```text
 capo/
   __init__.py
+  eb_core.py                  # Core EB algorithms (β, ρ, η, k-banded weights, ACF moment)
   verl_integration/
-    __init__.py
-    reward_fn.py          # CAPO reward function + GenPRM interface
-    reward_manager.py     # CAPORewardManager (token-level rewards for VERL)
-    adv_estimators.py     # CAPO, EB–CAPO-lite, full EB–CAPO
+    __init__.py               # Registers CAPO modules with VERL
+    reward_fn.py              # CAPO reward (Outcome + Process) / GenPRM interface
+    reward_manager.py         # CAPORewardManager -> token-level rewards for VERL
+    adv_estimators.py         # "capo", "capo_eb_lite", "capo_eb" advantage estimators
+
+docs/
+  ...                         # MkDocs site; see docs/ for details
+
+tests/
+  test_eb_toy.py              # 3-trajectory toy example (β=1, β=0.5)
+  test_eb_lite.py             # EB-lite recovers β on synthetic data
+  test_acf_moment.py          # ACF-moment recovers ρ on AR(1) increments
+  ...                         # (other tests if present)
 ```
 
-To hook into VERL’s registries, `capo/verl_integration/__init__.py` imports the submodules:
-
-```python
-# capo/verl_integration/__init__.py
-from . import reward_manager   # registers "capo" RewardManager
-from . import adv_estimators   # registers "capo", "capo_eb_lite", "capo_eb"
-```
-
-Then, **before training starts**, you must import:
-
-```python
-import capo.verl_integration  # side effect: registers CAPORewardManager + adv estimators
-```
-
-After this, VERL can see:
-
-- `reward_model.reward_manager: capo`  
-- `algorithm.adv_estimator: capo`, `capo_eb_lite`, or `capo_eb`
-
-in your Hydra config.
+The **VERL integration** is entirely contained under `capo/verl_integration/`. The **Empirical Bayes math** lives in `capo/eb_core.py`.
 
 ---
 
-## 2. CAPO reward path in VERL
+## Installation
 
-### 2.1 CAPO reward function (`reward_fn.py`)
+### Requirements
 
-File: `capo/verl_integration/reward_fn.py`
+- Python **3.10+** (3.11 recommended).
+- A working C++ toolchain (if you compile PyTorch from source).
+- Optionally: `uv` or `pip` for dependency management.
+- VERL (installed from GitHub or via your internal distribution).
 
-This file implements the **CAPO reward logic** at the example level.
+### Recommended: pinned environment via `pin.sh` / `create_env.sh`
 
-#### CAPOConfig
+If your repo includes `requirements.in`, `pin.sh`, and `create_env.sh`:
 
-A small config object collects CAPO hyperparameters, conceptually:
+1. **Pin dependencies**
 
-- `correct_reward` (denoted $C$ in the paper)  
-- `process_penalty` (denoted $P$)  
-- `num_critiques` (how many GenPRM calls / votes)  
-- `vote_mode` (`"intersection"` or `"majority"`)  
-- `genprm_model_name` (if you actually call an LLM as GenPRM)
+   ```bash
+   ./pin.sh
+   ```
 
-#### GenPRMClient (process critic interface)
+   This produces a `pinned-requirements.txt` for your current platform.
 
-`GenPRMClient` is an abstraction for the **process critic**:
+2. **Create a virtual environment and install**
 
-```python
-class GenPRMClient:
-    def judge_steps(self, question, solution, ground_truth, steps) -> list[bool]:
-        ...
-```
+   ```bash
+   ./create_env.sh .venv
+   source .venv/bin/activate
+   ```
 
-In a real setup, `judge_steps` runs an LLM or external verifier and returns a boolean per step (`True` = step is judged correct).
+   This will:
 
-#### Step segmentation
+   - create (or reuse) `.venv/`,
+   - install all pinned dependencies,
+   - install the `capo` package in editable mode (`-e .`).
 
-CAPO needs the reasoning process split into steps:
+3. **Install VERL**
 
-```python
-def _segment_solution_into_steps(solution_str: str) -> list[str]:
-    # typically:
-    # - split on newlines
-    # - strip empty lines
-    return steps
-```
+   If VERL is not already in pinned requirements, you can install from GitHub:
 
-You can customize this depending on the dataset (e.g., explicit “Step 1:” markers).
+   ```bash
+   pip install "git+https://github.com/volcengine/verl.git"
+   ```
 
-#### Aggregating critiques
+4. **Sanity check**
 
-Given `num_critiques` sets of step judgments, we aggregate them:
-
-- `intersection`: a step is **wrong** only if *all* critiques say wrong.  
-- `majority`: a step is wrong if a strict majority say wrong.
-
-This produces a final binary vector `step_correctness` and a list `wrong_step_indices`.
-
-#### CAPO score table
-
-Let:
-
-- `is_correct` = final answer is correct (from `extra_info["is_correct"]`),  
-- `any_wrong_step` = at least one step is judged wrong.
-
-CAPO uses the table:
-
-- Correct & all steps correct:  
-  $$\text{score} = +C$$
-
-- Correct & some steps wrong:  
-  $$\text{score} = C - P$$
-
-- Incorrect & all steps correct:  
-  $$\text{score} = 0$$
-
-- Incorrect & some steps wrong:  
-  $$\text{score} = -P$$
-
-So the core reward function looks like:
-
-```python
-def capo_reward_fn(
-    data_source: str,
-    solution_str: str,
-    ground_truth: str,
-    extra_info: dict | None = None,
-    config: CAPOConfig | None = None,
-    genprm_client: GenPRMClient | None = None,
-) -> dict:
-    # 1) segment solution into steps
-    # 2) get step correctness via GenPRMClient across num_critiques
-    # 3) apply (C, P) table to get scalar "score"
-    # 4) return score + per-step metadata
-```
-
-It returns a dict like:
-
-```python
-{
-  "score": float,                 # CAPO scalar
-  "steps": list[str],             # segmented steps
-  "step_correctness": list[bool],
-  "wrong_step_indices": list[int],
-}
-```
-
-This function is **agnostic** to VERL; it just implements CAPO’s math.
+   ```bash
+   python -c "import verl, capo; print('OK')"
+   ```
 
 ---
 
-### 2.2 CAPORewardManager (`reward_manager.py`)
+## Quickstart with VERL
 
-File: `capo/verl_integration/reward_manager.py`
+### 1. Import CAPO integration (registration)
 
-VERL expects a **RewardManager** that takes a batch and returns a tensor of token‑level rewards. You register one as:
+Before constructing the VERL trainer, ensure the CAPO integration is imported:
 
 ```python
-from verl.workers.reward_manager import register
-from verl.workers.reward_manager.abstract import AbstractRewardManager
-
-@register("capo")
-class CAPORewardManager(AbstractRewardManager):
-    ...
+import capo.verl_integration
 ```
 
-In your config, you select it via:
+This has **side effects**:
+
+- registers `CAPORewardManager` as `reward_model.reward_manager: "capo"`,  
+- registers the advantage estimators `"capo"`, `"capo_eb_lite"`, `"capo_eb"`.
+
+If you forget this import, VERL will not see CAPO's custom components.
+
+### 2. Configure CAPO as VERL's reward manager
+
+In your Hydra config (or equivalent), set:
 
 ```yaml
 reward_model:
-  reward_manager: capo
-```
-
-#### Constructor
-
-Conceptually:
-
-```python
-def __init__(
-    self,
-    tokenizer,
-    num_examine: int = 0,
-    compute_score: callable | None = capo_reward_fn,
-    reward_fn_key: str = "data_source",
-    **reward_kwargs,
-):
-    # tokenizer: HF tokenizer used by the actor
-    # num_examine: number of examples to pretty-print
-    # compute_score: usually capo_reward_fn
-    # reward_fn_key: key in non_tensor_batch holding data_source
-    # reward_kwargs: forwarded to CAPOConfig / capo_reward_fn
-```
-
-#### `__call__(data: DataProto, return_dict=False)`
-
-VERL passes a `DataProto` object with:
-
-- `batch`: tensors  
-  - `prompts`, `responses`, `attention_mask`  
-- `non_tensor_batch`: Python objects  
-  - `ground_truth`  
-  - `data_source`  
-  - `extra_info` (should contain `is_correct`)
-
-`CAPORewardManager` does:
-
-1. **Short-circuit** if `token_level_rewards` already exists in `data.batch` (to avoid double work).
-
-2. For each item `i`:
-
-   - Extract `prompt_ids`, `response_ids`, `response_mask` from the batch tensors.
-   - Decode them to strings:
-     ```python
-     prompt_str   = tokenizer.decode(prompt_ids,   skip_special_tokens=True)
-     solution_str = tokenizer.decode(response_ids, skip_special_tokens=True)
-     ```
-
-   - Read metadata from `non_tensor_batch`:
-     - `ground_truth`,
-     - `data_source`,
-     - `extra_info["is_correct"]`.
-
-   - Call CAPO:
-
-     ```python
-     result = compute_score(
-         data_source=data_source,
-         solution_str=solution_str,
-         ground_truth=ground_truth,
-         extra_info=extra_info,
-         config=capo_config,
-         genprm_client=genprm_client,
-     )
-     score = result["score"]
-     steps = result["steps"]
-     wrong_step_indices = result["wrong_step_indices"]
-     ```
-
-3. **Step → token alignment**:
-
-   `_build_wrong_step_token_mask(tokenizer, response_ids, steps, wrong_step_indices)`:
-
-   - Encode each `step` text into token IDs,  
-   - Concatenate and align them to `response_ids`,  
-   - Produce a boolean mask `wrong_step_token_mask` for response tokens belonging to **wrong** steps.
-
-4. **Construct token‑level reward vector**:
-
-   For each trajectory \(i\):
-
-   - Let `score` be CAPO’s scalar reward,
-   - Let `P` be the process penalty,
-   - Initialize:
-
-     ```python
-     reward_vec = torch.full((response_length,), score, dtype=torch.float32)
-     ```
-
-   - For tokens where `wrong_step_token_mask[t]` is `True`, subtract `P`:
-
-     ```python
-     reward_vec[t] -= P
-     ```
-
-   - Assign:
-
-     ```python
-     reward_tensor[i, :response_length] = reward_vec
-     ```
-
-   - Set rewards for padding tokens to `0`.
-
-5. **Return**:
-
-   - If `return_dict=False` (default), return `reward_tensor`.  
-   - If `return_dict=True`, return `{ "reward_tensor": reward_tensor, "reward_extra_info": ... }`.
-
-VERL then writes this tensor into `data.batch["token_level_rewards"]`.
-
----
-
-## 3. CAPO advantage estimators (`adv_estimators.py`)
-
-File: `capo/verl_integration/adv_estimators.py`
-
-Advantage estimators are registered via:
-
-```python
-from verl.trainer.ppo.core_algos import register_adv_est
-
-@register_adv_est("capo")
-def compute_capo_advantage(...): ...
-
-@register_adv_est("capo_eb_lite")
-def compute_capo_eb_lite_advantage(...): ...
-
-@register_adv_est("capo_eb")
-def compute_capo_eb_full_advantage(...): ...
-```
-
-In your config, you choose one via:
-
-```yaml
-algorithm:
-  adv_estimator: capo         # or capo_eb_lite, capo_eb
-```
-
-The common signature is:
-
-```python
-def adv_estimator(
-    token_level_rewards: torch.Tensor,  # (B, T)
-    response_mask: torch.Tensor,       # (B, T)
-    index,                             # group ids (not always used)
-    config: Any = None,
-    **kwargs,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    # returns (advantages, returns)
-```
-
-### 3.1 Helper: $(g_i, L_i)$ from token‑level rewards
-
-All EB variants use the scalarized per‑trajectory returns:
-
-```python
-def _lengths_and_scalar_returns(token_level_rewards, response_mask):
-    valid = response_mask > 0
-    lengths = valid.sum(dim=-1).clamp_min(1).float()              # L_i
-    returns_scalar = (token_level_rewards * valid).sum(dim=-1) / lengths  # g_i
-    return lengths, returns_scalar, valid
-```
-
-For each trajectory $i$:
-
-- $L_i$ = number of valid response tokens,  
-- $g_i$ = mean token reward per trajectory:
-  $$
-  g_i = \frac{1}{L_i} \sum_{t=1}^{L_i} r_{i,t}.
-  $$
-
-These $(g_i, L_i)$ pairs are the inputs to EB–CAPO.
-
----
-
-### 3.2 Plain CAPO (`capo`)
-
-This is the simplest CAPO estimator: **z‑normalize rewards token‑wise**, GRPO‑style.
-
-Algorithm:
-
-1. Compute `valid = (response_mask > 0)`.
-2. Extract `valid_rewards = token_level_rewards[valid]`.
-3. Compute:
-   - mean $\mu_r = \text{mean}(r_{i,t})$ over valid tokens,
-   - std $\sigma_r = \text{std}(r_{i,t})$.
-4. Define advantages:
-   $$
-   A_{i,t} = \frac{r_{i,t} - \mu_r}{\sigma_r + \varepsilon}.
-   $$
-5. Zero out invalid positions and use `returns = token_level_rewards * response_mask`.
-
-This is analogous to GRPO‑style advantage normalization, but using **CAPO shaped rewards**.
-
----
-
-### 3.3 EB–CAPO‑lite (`capo_eb_lite`)
-
-EB–CAPO‑lite uses a **length‑only** variance model.
-
-#### 3.3.1 Variance model
-
-For each trajectory $i$:
-
-- $L_i$: length,
-- $g_i$: scalarized return (mean CAPO reward),
-
-assume:
-
-```math
-\mathrm{Var}(g_i \mid L_i) \propto L_i^{\beta}.
-```
-
-Define **precisions**:
-
-```math
-\omega_i(\beta) = L_i^{-\beta}.
-```
-
-MVU‑style weights are then $w_i(\beta) \propto \omega_i(\beta)$.
-
-#### 3.3.2 EB‑lite log–log regression
-
-`eb_lite_fit_beta_and_weights(g, L)` implements:
-
-1. Initialize:
-
-   ```math
-   m^{(0)} = \frac{1}{G} \sum_{i=1}^G g_i.
-   ```
-
-2. Repeat:
-
-   - Residuals $e_i^{(k)} = g_i - m^{(k)}$,
-   - Define:
-
-     ```math
-     z_i^{(k)} = \log\!\big((e_i^{(k)})^2 + \varepsilon\big).
-     ```
-
-   - Regress:
-
-     ```math
-     z_i^{(k)} = c - \beta \log L_i + \epsilon_i
-     ```
-
-     by OLS. If the regression slope is $b$, set:
-
-     ```math
-     \hat{\beta}^{(k+1)} = -b.
-     ```
-
-   - Set weights:
-
-     ```math
-     w_i^{(k+1)} \propto L_i^{-\hat{\beta}^{(k+1)}},
-     \quad \sum_i w_i^{(k+1)} = 1.
-     ```
-
-   - Update:
-
-     ```math
-     m^{(k+1)} = \sum_i w_i^{(k+1)} g_i.
-     ```
-
-   - Stop when $|m^{(k+1)} - m^{(k)}|$ is small or `max_iters` is reached.
-
-3. Return $\hat{\beta}$, final `w`, and `m`.
-
-#### 3.3.3 Advantages from EB‑lite
-
-`compute_capo_eb_lite_advantage`:
-
-1. Calls `_lengths_and_scalar_returns` → `(lengths, returns_scalar, valid)`.
-2. Calls `eb_lite_fit_beta_and_weights(returns_scalar, lengths)`.
-3. Computes per‑trajectory scalar advantages:
-
-   ```math
-   A_i = w_i(\hat{\beta}) \big(g_i - m(\hat{\beta})\big).
-   ```
-
-4. Broadcasts `A_i` across tokens in trajectory `i` (with `response_mask`).
-5. Optionally normalizes advantages by std across valid tokens.
-
----
-
-### 3.4 Full EB–CAPO (`capo_eb`)
-
-Full EB–CAPO adds a **dependence factor** $s(L; \xi)$:
-
-#### 3.4.1 Variance and precision
-
-Variance model:
-
-```math
-\mathrm{Var}(g_i) = \sigma^2 L_i^{\beta} s(L_i; \xi),
-```
-
-with:
-
-- length exponent $\beta$,
-- dependence parameters $\xi = (\rho, k, \eta)$.
-
-Precision (up to scale):
-
-```math
-\omega_i(\beta, \xi) = L_i^{-\beta} s(L_i; \xi)^{-1}.
-```
-
-#### 3.4.2 k‑banded dependence shape
-
-`s_kband(L, rho, k, eta)` implements:
-
-```math
-s(L; \rho, k, \eta) =
-  1 + \frac{2}{L}
-      \sum_{h=1}^{m}
-        (L - h)\,\rho^{h^{\eta}},
-\qquad
-m = \min\{k, L - 1\}.
-```
-
-#### 3.4.3 EB statistics
-
-`eb_stats(g, L, beta, rho, k, eta)` computes:
-
-- Precisions:
-
-  ```math
-  \omega_i(\beta,\xi) = \frac{L_i^{-\beta}}{s(L_i; \xi)}.
-  ```
-
-- Precision sum:
-
-  ```math
-  \Lambda_\omega(\beta,\xi) = \sum_i \omega_i(\beta,\xi).
-  ```
-
-- Normalized weights:
-
-  ```math
-  w_i(\beta,\xi) = \frac{\omega_i(\beta,\xi)}{\Lambda_\omega(\beta,\xi)}.
-  ```
-
-- Aggregated mean:
-
-  ```math
-  m(\beta,\xi) = \sum_i w_i(\beta,\xi)\,g_i.
-  ```
-
-- Residuals:
-
-  ```math
-  e_i(\beta,\xi) = g_i - m(\beta,\xi).
-  ```
-
-- Weighted RSS:
-
-  ```math
-  \mathrm{RSS}_\omega(\beta,\xi) =
-    \sum_i \omega_i(\beta,\xi) \, e_i(\beta,\xi)^2.
-  ```
-
-#### 3.4.4 EB objective and gradients
-
-The EB objective $\ell(\beta,\xi)$ (up to constants) can be written as:
-
-```math
-\ell(\beta,\xi)
- = \log \pi_\beta(\beta)
-   + \log \pi_\xi(\xi)
-   + \frac{1}{2}\sum_i \log \omega_i(\beta,\xi)
-   - \frac{1}{2}\log \Lambda_\omega(\beta,\xi)
-   - \frac{G-1}{2}\log \mathrm{RSS}_\omega(\beta,\xi)
-   + \text{const}.
-```
-
-`grad_ell_beta(...)` implements the length‑direction derivative
-$\partial \ell / \partial \beta$.
-`grad_ell_rho_eta(...)` implements $\partial \ell / \partial \rho$ and
-$\partial \ell / \partial \eta$, using:
-
-- derivatives of $s(L; \xi)$ w.r.t. $\rho$ and $\eta$,
-- the general EB gradient expression.
-
-#### 3.4.5 ACF‑moment estimator
-
-`acf_moment_fit(Y, mask, k)` is a moment‑based estimator for $(\rho,\eta)$:
-
-1. For each trajectory, compute empirical autocovariances
-   $\hat{\gamma}_i(h)$ up to lag $k$.
-2. Aggregate to $\bar{\gamma}(h)$ and normalize to
-   $\bar{r}(h) = \bar{\gamma}(h)/\bar{\gamma}(0)$.
-3. Fit $\bar{r}(h) \approx \rho^{h^{\eta}}$ by grid search over $\rho$ and $\eta$.
-
-The resulting $(\hat{\rho},\hat{\eta})$ is used as an initial guess for EB gradient ascent.
-
-#### 3.4.6 Full EB–CAPO advantage flow
-
-`compute_capo_eb_full_advantage`:
-
-1. Compute `lengths`, `returns_scalar`, `valid` via `_lengths_and_scalar_returns(...)`.
-
-2. Initialize:
-
-   - $\beta \leftarrow \beta_{\text{init}}$,
-   - $\rho \leftarrow \rho_{\text{init}}$,
-   - $\eta \leftarrow \eta_{\text{init}}$,
-   - `k_band`.
-
-3. Optional ACF initialization:
-
-   - If `increments` and `increments_mask` are passed and `use_acf_moment=True`,
-   - Run `acf_moment_fit` to get $(\rho_{\text{acf}},\eta_{\text{acf}})$,
-   - Blend into current $(\rho,\eta)$.
-
-4. Gradient ascent on $\beta$:
-
-   - For `beta_steps` iterations:
-     - Call `eb_stats` → `omega, w, m, e, Lambda_omega, RSS_omega`.
-     - Compute `g_beta = grad_ell_beta(...)`.
-     - Update `beta ← beta + beta_lr * g_beta`, clamp to `[0, 2]`.
-
-5. Gradient ascent on $\xi = (\rho,\eta)$:
-
-   - For `xi_steps` iterations:
-     - Compute `grad_rho, grad_eta = grad_ell_rho_eta(...)`.
-     - Update:
-       - `rho ← rho + rho_lr * grad_rho`,
-       - `eta ← eta + eta_lr * grad_eta`,
-     - Clamp `rho` to `[0, rho_max]`, `eta` to `[0, eta_max]`.
-
-6. Final stats and advantages:
-
-   - Recompute `omega, w, m, e` with final $(\beta,\rho,\eta)$.
-   - Define per‑trajectory advantages:
-
-     ```math
-     A_i = w_i(\hat{\beta},\hat{\xi})
-           \big(g_i - m(\hat{\beta},\hat{\xi})\big).
-     ```
-
-   - Broadcast `A_i` to token level using `response_mask`.
-   - Optionally normalize by std over valid tokens.
-
----
-
-## 4. Running a Training Experiment
-
-### 4.1 Environment setup
-
-From the repo root:
-
-```bash
-./pin.sh
-./create_env.sh
-source .venv/bin/activate
-
-# Ensure VERL is installed if not already pinned
-pip install "git+https://github.com/volcengine/verl.git"
-```
-
-Check imports:
-
-```bash
-python -c "import verl, capo; print('OK')"
-```
-
-### 4.2 Ensure CAPO is registered
-
-Before constructing VERL’s trainer, import the integration module once so registration happens:
-
-```python
-import capo.verl_integration  # registers CAPORewardManager and adv_estimators
-```
-
-You can do this in your main script or in a package `__init__`.
-
-### 4.3 Example experiment config (YAML sketch)
-
-Save something like this as
-`configs/experiments/math/qwen2_7b_capo_eb.yaml`:
-
-```yaml
-trainer:
-  nnodes: 1
-  n_gpus_per_node: 1
-  device: "cuda"
-  project_name: "capo-math"
-  experiment_name: "qwen2-7b-capo-eb"
-
-data:
-  train_files:
-    - /path/to/train.parquet
-  val_files:
-    - /path/to/val.parquet
-  # RLHFDataset options...
-  # Each row should at least have "prompt" and whatever
-  # fields you use in extra_info (e.g. ground_truth, is_correct).
-
-actor_rollout_ref:
-  model:
-    name: Qwen/Qwen2.5-7B-Instruct  # or your model
-  actor:
-    strategy: fsdp
-  rollout:
-    strategy: fsdp
-  ref:
-    strategy: fsdp
-  hybrid_engine: true
-
-critic:
-  enable: false              # GRPO-style without critic
-  strategy: fsdp
-
-reward_model:
-  enable: false              # using function-based CAPO reward
-  reward_manager: capo       # <-- CAPORewardManager
+  enable: false            # we use a function-based reward, not a learned RM
+  reward_manager: capo     # use CAPORewardManager
   reward_kwargs:
-    correct_reward: 2.0
-    process_penalty: 1.0
+    correct_reward: 2.0    # C
+    process_penalty: 1.0   # P
     num_critiques: 4
     vote_mode: intersection
     genprm_model_name: "qwen2.5-72b-instruct"
+```
 
+You must ensure your data loader populates (in `non_tensor_batch`):
+
+- `ground_truth` (solution or labels),  
+- `extra_info["is_correct"]` (boolean final correctness),  
+- `data_source` (optional dataset key if you multiplex datasets).
+
+### 3. Choose a CAPO advantage estimator
+
+In your `algorithm` block:
+
+```yaml
 algorithm:
-  name: grpo                 # or "ppo"
-  adv_estimator: capo_eb     # one of: capo, capo_eb_lite, capo_eb
+  name: grpo                    # or ppo; we focus on GRPO-style
+  adv_estimator: capo_eb        # "capo", "capo_eb_lite", or "capo_eb"
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: true
 
+  # EB hyperparameters for "capo_eb":
   adv_kwargs:
     beta_init: 1.0
     rho_init: 0.0
     eta_init: 1.0
     k_band: 64
-    beta_steps: 3
-    xi_steps: 3
+    beta_steps: 1
+    xi_steps: 1
     beta_lr: 0.1
     rho_lr: 0.1
     eta_lr: 0.1
+    beta_min: 0.0
+    beta_max: 2.0
     rho_max: 0.99
-    eta_max: 3.0
-    use_acf_moment: true      # if you pass increments & mask
-
-logging:
-  # configure wandb / tensorboard / CSV as needed
+    ema_beta: 1.0
+    ema_xi: 1.0
+    use_acf_moment: true
 ```
 
-Notes:
+You may tighten or relax the ranges and learning rates depending on the task.
 
-- `reward_model.reward_manager: capo` selects `CAPORewardManager`.
-- `algorithm.adv_estimator` selects which CAPO‑side algorithm you use:
-  - `capo` – plain CAPO,
-  - `capo_eb_lite` – EB–CAPO‑lite,
-  - `capo_eb` – full EB–CAPO.
+### 4. Launch a training run
 
-### 4.4 Example Python entrypoint
-
-A minimal script to launch training:
+Example minimal Python entrypoint:
 
 ```python
-# run_capo_experiment.py
 from omegaconf import OmegaConf
 
-import capo.verl_integration  # ensure CAPO is registered
+import capo.verl_integration  # <-- important: register CAPO with VERL
 
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer, ResourcePoolManager, Role
 from verl.trainer.main_ppo import create_tokenizer
@@ -762,13 +190,11 @@ from verl.single_controller.ray import RayWorkerGroup
 from verl.trainer.ppo.reward import RewardManager as VerlRewardManager
 
 
-def main(config_path: str):
-    config = OmegaConf.load(config_path)
-
-    # 1. Tokenizer
+def main(cfg_path: str):
+    config = OmegaConf.load(cfg_path)
     tokenizer = create_tokenizer(config.actor_rollout_ref.model)
 
-    # 2. Worker roles and resource pool
+    # Allocate all roles to a single pool (simple single-node setup).
     role_worker_mapping = {
         Role.ActorRolloutRef: ActorRolloutRefWorker,
         Role.Critic: CriticWorker,
@@ -786,11 +212,9 @@ def main(config_path: str):
         mapping=mapping,
     )
 
-    # 3. RewardManager – CAPORewardManager is selected internally by VERL
     reward_fn = VerlRewardManager(tokenizer=tokenizer, num_examine=0)
     val_reward_fn = VerlRewardManager(tokenizer=tokenizer, num_examine=1)
 
-    # 4. Trainer
     trainer = RayPPOTrainer(
         config=config,
         tokenizer=tokenizer,
@@ -807,54 +231,387 @@ def main(config_path: str):
 
 if __name__ == "__main__":
     import sys
-    cfg_path = sys.argv[1] if len(sys.argv) > 1 else "configs/experiments/math/qwen2_7b_capo_eb.yaml"
-    main(cfg_path)
+    cfg = sys.argv[1] if len(sys.argv) > 1 else "configs/experiments/math/qwen2_7b_capo_eb.yaml"
+    main(cfg)
 ```
 
-Run:
+Then:
 
 ```bash
-source .venv/bin/activate
 python run_capo_experiment.py configs/experiments/math/qwen2_7b_capo_eb.yaml
 ```
 
 ---
 
-## 5. Sanity Checks and Debugging
+## CAPO Reward: Outcome + Process
 
-Before launching a big training run:
+The CAPO reward function is implemented in:
 
-1. **Unit tests**
+- `capo/verl_integration/reward_fn.py`
+- `capo/verl_integration/reward_manager.py`
 
-   - Run all tests in `tests/` to verify:
-     - EB‑lite weights match the 3‑trajectory toy example,
-     - `s_kband`, `eb_stats`, `acf_moment_fit` behave as expected,
-     - Advantage estimators return finite values.
+### Conceptual behavior
 
-2. **Dry run with a tiny config**
+Given a trajectory (question, solution, ground truth):
 
-   - Set `trainer.max_steps = 1` and use a tiny dataset.
-   - Check:
-     - CAPORewardManager prints reasonable scores (if you set `num_examine > 0`),
-     - `advantages` are non‑zero and finite,
-     - no NaNs in losses.
+1. **Segment** the solution string into steps (usually per line).  
+2. Use a **GenPRM process critic** (LLM or external model) to judge each step as correct/incorrect, possibly aggregating multiple critiques via `vote_mode ∈ {intersection, majority}`.  
+3. Use the dataset’s answer checker to obtain `is_correct` (final answer correctness).  
+4. Apply the CAPO table:
 
-3. **Monitor EB parameters**
+Let $C$ = `correct_reward`, $P$ = `process_penalty`.
 
-   - Log `beta`, `rho`, `eta`, effective sample size (ESS), and EB weights over training.
-   - Expect:
-     - $\hat{\beta} < 1$ when longer rollouts are less noisy,
-     - $\hat{\beta} > 1$ when very long rollouts are degraded.
+- Final answer correct, all steps correct:  
+  $\text{score} = +C$  
 
-4. **Compare variants**
+- Final answer correct, some steps wrong:  
+  $\text{score} = C - P$  
 
-   - Run the same experiment with:
-     - `adv_estimator: capo`,
-     - `adv_estimator: capo_eb_lite`,
-     - `adv_estimator: capo_eb`.
-   - Compare:
-     - Pass@k / Avg@k curves,
-     - training stability,
-     - sample efficiency (tokens‑to‑target).
+- Final answer incorrect, all steps correct:  
+  $\text{score} = 0$  
 
-This gives you a complete end‑to‑end pipeline for using CAPO and EB–CAPO inside VERL on real RLHF / math‑style tasks.
+- Final answer incorrect, some steps wrong:  
+  $\text{score} = -P$
+
+5. Map wrong steps to tokens via the tokenizer and penalize tokens belonging to wrong steps (e.g., subtract $P$ on those tokens).
+
+### Code structure
+
+**`reward_fn.py`**:
+
+- `CAPOConfig` — collects reward hyperparameters (`C`, `P`, `num_critiques`, `vote_mode`, `genprm_model_name`, etc.).
+- `GenPRMClient` — abstract interface for a process critic; implement `judge_steps(...)`.
+- `_segment_solution_into_steps` — splits solution string into a list of steps.
+- `_aggregate_step_judgements` — combines multiple critiques per step.
+- `capo_reward_fn` — implements the CAPO decision table and returns:
+
+  ```python
+  {
+      "score": float,
+      "steps": list[str],
+      "step_correctness": list[bool],
+      "wrong_step_indices": list[int],
+  }
+  ```
+
+**`reward_manager.py`**:
+
+- `CAPORewardManager` (registered as `"capo"`):
+
+  - Takes a `DataProto` from VERL’s rollout worker.
+  - Decodes prompts and responses to text using the tokenizer.
+  - Calls `capo_reward_fn` per trajectory.
+  - Aligns wrong steps to tokens and builds a `(B, T)` `reward_tensor`:
+
+    - base value: `score` for each response token,  
+    - minus `P` for tokens in wrong steps,  
+    - 0 for prompt tokens and padding.
+
+  - Returns `reward_tensor`, which VERL puts into `data.batch["token_level_rewards"]`.
+
+---
+
+## Empirical Bayes CAPO (EB–CAPO)
+
+The EB layer lives in `capo/eb_core.py` and corresponds to your Algorithms section:
+
+- **Section 4.1** — EB theory and objective $\ell(\beta, \xi)$  
+- **Algorithm EB–CAPO** — integrated into the CAPO training loop  
+- **Algorithm EB-lite** — length-only fit  
+- **Algorithm ACF-moment** — moment-based dependence estimator  
+- **Algorithm k-banded weights** — $k$-banded stretched-geometric dependence  
+- **Algorithm joint EB update** — joint updates for $(\beta, \rho, \eta)$  
+
+### 1. EB-lite (length-only)
+
+Function:
+
+```python
+from capo.eb_core import eb_lite_fit_beta_and_weights
+```
+
+Implements Algorithm `EB-lite`:
+
+- Model:  
+  $\mathrm{Var}(g_i \mid L_i) \approx \sigma^2 L_i^{\beta}$,
+  ignoring dependence ($s(L; \xi) \equiv 1$).
+- Approximation:  
+  $\log((g_i - m)^2) \approx c - \beta \log L_i$.
+- Iterative procedure:
+
+  1. Initialize $m^{(0)}$ as the mean of $\{g_i\}$.
+  2. At each iteration:
+     - $e_i = g_i - m^{(k)}$,
+     - $z_i = \log(e_i^2 + \varepsilon)$,
+     - regress $z_i$ on $\log L_i$ to get slope $b$, set $\beta^{(k+1)} = -b$,
+     - set $w_i \propto L_i^{-\beta^{(k+1)}}$ and normalize,
+     - $m^{(k+1)} = \sum_i w_i g_i$.
+  3. Stop when $m$ stabilizes.
+
+Returns:
+
+- `beta_hat` — $\hat{\beta}$,  
+- `w` — $w_i \propto L_i^{-\hat{\beta}}$,  
+- `m` — $m(\hat{\beta})$.
+
+Used by the **EB–CAPO-lite** advantage estimator.
+
+### 2. ACF-moment estimator
+
+Function:
+
+```python
+from capo.eb_core import acf_moment_estimate
+```
+
+Implements Algorithm `ACF-moment`:
+
+- Input: token-level increments $Y_{i,\tau}$ and a boolean mask for valid tokens.  
+- For each trajectory $i$:
+
+  - center $Y_{i,\tau}$ by its mean $\bar{Y}_i$,  
+  - compute empirical autocovariances $\hat{\gamma}_i(h)$ up to lag $k$.
+
+- Pool across trajectories using weights $(L_i - h)$ to get $\bar{\gamma}(h)$.  
+- Normalize to autocorrelations $\bar{r}(h) = \bar{\gamma}(h) / \bar{\gamma}(0)$.  
+- Fit $(\rho, \eta)$ by minimizing:
+
+  $$
+  \sum_{h=1}^k \bigl(\bar{r}(h) - \rho^{h^{\eta}}\bigr)^2
+  $$
+
+  over a small grid of $\rho$ and $\eta$.
+
+Used as a **warm-start** for $(\rho, \eta)$ in joint EB updates.
+
+### 3. k-banded stretched-geometric weights
+
+Functions:
+
+```python
+from capo.eb_core import s_kband, kband_weights
+```
+
+Implement Algorithm `k-banded covariance weights`:
+
+- Shape function:
+
+  $$
+  s(L; \rho, k, \eta) = 1 + \frac{2}{L}
+  \sum_{h=1}^{m(L)} (L - h)\, \rho^{h^{\eta}}, \quad
+  m(L) = \min\{k, L - 1\}.
+  $$
+
+- Dependence-corrected weights:
+
+  $$
+  \omega_i(\beta, \xi) = [L_i^{\beta} s(L_i; \xi)]^{-1}, \quad
+  w_i(\beta, \xi) = \frac{\omega_i}{\sum_j \omega_j}.
+  $$
+
+### 4. Joint EB update for $(\beta, \rho, \eta)$
+
+Functions:
+
+```python
+from capo.eb_core import (
+    eb_statistics,
+    grad_ell_beta_closed_form,
+    numeric_grad_rho_eta,
+    joint_eb_update_kband,
+)
+```
+
+- `eb_statistics` implements the E-step summary:
+
+  - $\omega_i(\beta, \xi)$,  
+  - $w_i(\beta, \xi)$,  
+  - $m(\beta, \xi)$,  
+  - $e_i = g_i - m(\beta, \xi)$,  
+  - $\Lambda_{\omega} = \sum_i \omega_i$,  
+  - $\mathrm{RSS}_{\omega} = \sum_i \omega_i e_i^2$.
+
+- `grad_ell_beta_closed_form` implements the closed-form gradient $\partial \ell / \partial \beta$ from Corollary in the paper:
+
+  $$
+  g_{\beta} = \frac{1}{2}
+  \left[
+    -\sum_i \log L_i +
+    \frac{\sum_i \omega_i \log L_i}{\Lambda_{\omega}}
+  \right]
+  +
+  \frac{G - 1}{2} \frac{1}{\mathrm{RSS}_{\omega}}
+  \sum_i \omega_i e_i^2 \log L_i
+  + \partial_{\beta}\log \pi_{\beta}(\beta).
+  $$
+
+- `numeric_grad_rho_eta` approximates $\partial \ell / \partial \rho$ and $\partial \ell / \partial \eta$ using **central finite differences** (or forward difference near $\eta=0$).
+
+- `joint_eb_update_kband` implements Algorithm `joint EB update`:
+
+  - optional warm-start for $(\rho, \eta)$ via `acf_moment_estimate`,
+  - gradient ascent on $\beta$ using `grad_ell_beta_closed_form`,
+  - gradient ascent on $(\rho, \eta)$ using `numeric_grad_rho_eta`,
+  - projection to constraints:
+    - $\beta \in [\beta_{\min}, \beta_{\max}]$,
+    - $|\rho| \le \rho_{\max} < 1$,
+    - $\eta \ge 0$,
+  - EMA smoothing for stability,
+  - final call to `kband_weights` to get $w_i^{(t)}$ at $(\beta_t, \rho_t, \eta_t)$.
+
+This is the **full EB–CAPO update** that the `"capo_eb"` advantage estimator uses.
+
+---
+
+## Advantage Estimators
+
+Defined in `capo/verl_integration/adv_estimators.py` and registered with VERL under the names:
+
+- `"capo"`
+- `"capo_eb_lite"`
+- `"capo_eb"`
+
+### 1. `"capo"` — plain CAPO advantage
+
+Formula:
+
+- Let $r_{i,t}$ be CAPO token-level rewards over valid tokens.  
+- Compute global mean and std over valid tokens across the batch:
+
+  $$
+  \mu_r = \mathrm{mean}(r_{i,t}), \quad
+  \sigma_r = \mathrm{std}(r_{i,t}).
+  $$
+
+- Define advantages:
+
+  $$
+  A_{i,t} = \frac{r_{i,t} - \mu_r}{\sigma_r}.
+  $$
+
+This is *GRPO-style* z-normalization, used here on CAPO rewards instead of vanilla rewards.
+
+### 2. `"capo_eb_lite"` — EB–CAPO-lite
+
+Steps:
+
+1. Collapse token-level rewards to `(g_i, L_i)` via `_lengths_and_scalar_returns`.  
+2. Run `eb_lite_fit_beta_and_weights(g, L)` → `(beta_hat, w, m)`.  
+3. Define per-trajectory scalar advantages:
+
+   $$
+   A_i = w_i(\hat{\beta}) \bigl(g_i - m(\hat{\beta})\bigr).
+   $$
+
+4. Broadcast to tokens:
+
+   $$
+   A_{i,t} = A_i \quad \text{for all valid tokens in trajectory } i.
+   $$
+
+5. Optionally apply final std-normalization over valid `A_{i,t}` if `norm_adv_by_std_in_grpo=True`.
+
+### 3. `"capo_eb"` — full EB–CAPO
+
+Steps:
+
+1. Collapse token-level rewards to `(g_i, L_i)`.
+
+2. Call `joint_eb_update_kband`:
+
+   - optionally warm-start $(\rho, \eta)$ using `acf_moment_estimate` on token-level increments,  
+   - run $N_{\beta}$ steps of gradient-ascent on $\beta$,  
+   - run $N_{\xi}$ steps of gradient-ascent on $(\rho, \eta)$,  
+   - project and EMA-smooth,
+   - return $(\beta_t, \rho_t, \eta_t)` and dependence-corrected weights $w_i$.
+
+3. Compute:
+
+   $$
+   m_t = \sum_i w_i g_i,
+   \qquad
+   A_i = w_i (g_i - m_t),
+   $$
+
+   and broadcast $A_i$ over tokens with `response_mask`.
+
+4. Optionally apply final std-normalization (GRPO-style).
+
+This matches the **EB–CAPO** workflow in your latest algorithms section.
+
+---
+
+## Tests
+
+The test suite is designed to be:
+
+- **unit-level** (for EB math), and  
+- **algorithmically aligned** with the LaTeX text.
+
+Key tests:
+
+- `tests/test_eb_toy.py`  
+  - Checks the **3-trajectory toy example**:
+    - $L = [16, 64, 256]$,
+    - $g = [0.8, 1.0, 1.1]$,
+    - for $\beta = 1$ and $\beta = 0.5$, verifies that:
+      - $w_i(\beta)$ sum to 1,
+      - $m(\beta)$ matches the approximate values in the text (`≈ 0.846` and `≈ 0.892`).
+
+- `tests/test_eb_lite.py`  
+  - Generates synthetic trajectories with a known length exponent $\beta_{\star}$,  
+  - Uses `eb_lite_fit_beta_and_weights` to estimate $\hat{\beta}$,  
+  - Asserts that $\hat{\beta}$ is within a reasonable band of $\beta_{\star}$ and that weights sum to 1.
+
+- `tests/test_acf_moment.py`  
+  - Generates AR(1) increments with known $\rho_{\star}$,  
+  - Calls `acf_moment_estimate`,  
+  - Checks that $\hat{\rho}$ is close to $\rho_{\star}$ and $\hat{\eta} ≥ 0$.
+
+Run tests via:
+
+```bash
+pytest
+```
+
+---
+
+## Development Notes
+
+- All EB code is written with **explicit notation** mirroring the paper:
+  - $\omega_i$, $w_i$, $m$, $e_i$, $\Lambda_{\omega}$, $\mathrm{RSS}_{\omega}$,
+  - $s(L; \rho, k, \eta)$,
+  - $(\beta, \rho, \eta)$.
+- Functions in `capo/eb_core.py` contain docstrings that explicitly reference the corresponding algorithms in the LaTeX:
+
+  - EB-lite → Algorithm `EB-lite`.  
+  - ACF-moment → Algorithm `ACF-moment`.  
+  - k-banded weights → Algorithm `kband-weights`.  
+  - Joint EB update → Algorithm `joint-eb-kband`.
+
+- Advantage estimators are **thin, VERL-specific wrappers** on top of these EB utilities.  
+
+If you modify notation or the algorithms in your LaTeX, the mapping from equation → function is intended to be explicit and local, so you can keep code and text synchronized.
+
+---
+
+## How to Extend
+
+A few natural extensions:
+
+- **Alternative priors** on $(\beta, \rho, \eta)$:  
+  Currently, prior gradients `dlog_pi_*` are scalar inputs. You can replace them with learned or adaptive priors if you want.
+
+- **Different dependence families**:  
+  You can implement alternative $s(L; \xi)$ in `eb_core.py` and swap them into `eb_statistics` / `joint_eb_update_kband`.
+
+- **Different reward shaping**:  
+  The CAPO reward manager is written to be modular:
+  - you can change step segmentation,
+  - adjust how per-step penalties are distributed over tokens,
+  - or plug in richer GenPRM annotations.
+
+- **Direct loss integration**:  
+  If you want, you can expose EB weights `w_i` to other parts of the training loop (e.g., teacher/student losses, replay buffers) by logging or storing them in `DataProto`.
+
+If you want to wire any of these into VERL in a custom way, `capo/verl_integration` is the right place to begin.

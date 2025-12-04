@@ -51,7 +51,10 @@ def test_empirical_bayes_advantage_basic_shape():
     mask = torch.ones_like(token_rewards, dtype=torch.bool)
 
     advantages, returns = compute_capo_empirical_bayes_advantage(
-        token_level_rewards=token_rewards, response_mask=mask, index=index, config=None,
+        token_level_rewards=token_rewards,
+        response_mask=mask,
+        index=index,
+        config=None,
     )
 
     assert advantages.shape == token_rewards.shape
@@ -71,7 +74,10 @@ def test_empirical_bayes_shrinkage_behavior():
 
     # Group 0: small group (n=2) with low rewards.
     # Group 1: large group (n=8) with high rewards.
-    rewards_list = [[1.0, 1.0], [1.5, 1.5],] + [  # g0  # g0
+    rewards_list = [
+        [1.0, 1.0],
+        [1.5, 1.5],
+    ] + [  # g0  # g0
         [5.0, 5.0],  # g1 x 8
         [5.0, 5.0],
         [5.0, 5.0],
@@ -88,7 +94,10 @@ def test_empirical_bayes_shrinkage_behavior():
     index = np.array([0, 0] + [1] * 8)
 
     advantages, _ = compute_capo_empirical_bayes_advantage(
-        token_level_rewards=token_rewards, response_mask=mask, index=index, config=None,
+        token_level_rewards=token_rewards,
+        response_mask=mask,
+        index=index,
+        config=None,
     )
 
     # Collapse advantages per sequence.

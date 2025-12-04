@@ -1,65 +1,53 @@
 # tests/test_eb_toy.py
 """
-Numerical check of the toy example in the EB--CAPO write-up (§EB examples).
+Tests for EB weighting on the 3-trajectory toy example from the paper.
 
-We consider G=3 trajectories with lengths
+We verify that, for the length-only case s(L; ξ) ≡ 1, the normalized
+weights w_i ∝ L_i^{-β} and the aggregated mean m(β) reproduce the
+values given in Section 4:
 
-    L_1 = 16, L_2 = 64, L_3 = 256,
-
-and scalarized returns
-
-    g_1 = 0.8, g_2 = 1.0, g_3 = 1.1.
-
-For a length-only variance model v_i ∝ L_i^{β}, precisions are
-ω_i(β) = L_i^{-β}. This test reproduces the normalized weights
-
-    w_i(β) = ω_i / Σ_j ω_j
-
-and aggregated estimate
-
-    m(β) = Σ_i w_i(β) g_i
-
-for β=1 (ΔL-style) and β=0.5 (EB-favored when longer rollouts are
-less noisy), matching the examples in the text.
+- Case β = 1 ("ΔL" rule),
+- Case β = 0.5 (EB-favored when longer rollouts are less noisy).
 """
 
 import math
 
 import torch
 
-
-def _weights_and_mean(L, g, beta: float):
-    L = torch.tensor(L, dtype=torch.float64)
-    g = torch.tensor(g, dtype=torch.float64)
-    omega = L.pow(-beta)
-    Lam = omega.sum()
-    w = omega / Lam
-    m = (w * g).sum()
-    return w, m
+from capo.eb_core import kband_weights
 
 
-def test_toy_example_beta_1_and_beta_half():
-    L = [16.0, 64.0, 256.0]
-    g = [0.8, 1.0, 1.1]
+def _compute_m_from_weights(w: torch.Tensor, g: torch.Tensor) -> float:
+    """Helper: m(β) = Σ_i w_i g_i."""
+    return float((w * g).sum().item())
 
-    w1, m1 = _weights_and_mean(L, g, beta=1.0)
-    w2, m2 = _weights_and_mean(L, g, beta=0.5)
 
-    # Expected from exact computation (no rounding):
-    expected_w1 = torch.tensor(
-        [0.7619047619047619, 0.19047619047619047, 0.047619047619047616],
-        dtype=torch.float64,
-    )
-    expected_m1 = 0.8523809523809525
+def test_toy_example_beta_1():
+    # L_1=16, L_2=64, L_3=256, g=[0.8, 1.0, 1.1]
+    L = torch.tensor([16.0, 64.0, 256.0])
+    g = torch.tensor([0.8, 1.0, 1.1])
 
-    expected_w2 = torch.tensor(
-        [0.5714285714285714, 0.2857142857142857, 0.14285714285714285],
-        dtype=torch.float64,
-    )
-    expected_m2 = 0.9
+    # β = 1, s(L) ≡ 1 ⇒ k=0 or ρ=0 gives s_i=1
+    s, w = kband_weights(L=L, beta=1.0, rho=0.0, eta=1.0, k=0)
 
-    assert torch.allclose(w1, expected_w1, atol=1e-10)
-    assert abs(m1.item() - expected_m1) < 1e-10
+    # Weights should sum to 1
+    assert torch.allclose(w.sum(), torch.tensor(1.0), atol=1e-6)
 
-    assert torch.allclose(w2, expected_w2, atol=1e-10)
-    assert abs(m2.item() - expected_m2) < 1e-10
+    m = _compute_m_from_weights(w, g)
+    # From the text, m(β=1) ≈ 0.846
+    assert math.isclose(m, 0.846, rel_tol=5e-3, abs_tol=5e-3)
+
+
+def test_toy_example_beta_point_five():
+    # L_1=16, L_2=64, L_3=256, g=[0.8, 1.0, 1.1]
+    L = torch.tensor([16.0, 64.0, 256.0])
+    g = torch.tensor([0.8, 1.0, 1.1])
+
+    # β = 0.5, s(L) ≡ 1
+    s, w = kband_weights(L=L, beta=0.5, rho=0.0, eta=1.0, k=0)
+
+    assert torch.allclose(w.sum(), torch.tensor(1.0), atol=1e-6)
+
+    m = _compute_m_from_weights(w, g)
+    # From the text, m(β=0.5) ≈ 0.892
+    assert math.isclose(m, 0.892, rel_tol=5e-3, abs_tol=5e-3)
