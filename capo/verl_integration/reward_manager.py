@@ -29,9 +29,7 @@ from capo.verl_integration.reward_fn import CAPOConfig, capo_reward_fn
 # supposed to be imported in isolation without VERL.
 try:
     from verl import DataProto
-    from verl.utils.reward_score import default_compute_score
-    from verl.workers.reward_manager import register
-    from verl.workers.reward_manager.abstract import AbstractRewardManager
+    from verl.utils.reward_score import _default_compute_score
 except ImportError as exc:  # pragma: no cover - only triggered w/o VERL
     raise ImportError(
         "CAPORewardManager requires VERL to be installed. "
@@ -132,8 +130,7 @@ def _build_wrong_step_token_mask(
     return mask
 
 
-@register("capo")
-class CAPORewardManager(AbstractRewardManager):
+class CAPORewardManager:
     """
     VERL `RewardManager` for CAPO.
 

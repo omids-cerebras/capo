@@ -14,11 +14,12 @@ these tests are skipped.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 import torch
 
-pytest.importorskip("verl")  # Skip entire module if VERL is not installed.
+# pytest.importorskip("verl")  # Skip entire module if VERL is not installed.
+
+import numpy as np
 
 from capo.verl_integration.adv_estimators import compute_capo_empirical_bayes_advantage
 

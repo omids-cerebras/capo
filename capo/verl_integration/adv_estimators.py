@@ -27,8 +27,6 @@ from typing import Any, Tuple
 
 import torch
 
-from verl.trainer.ppo.core_algos import register_adv_est
-
 from capo.eb_core import (
     eb_lite_fit_beta_and_weights,
     joint_eb_update_kband,
@@ -67,7 +65,6 @@ def _lengths_and_scalar_returns(
     return lengths, returns_scalar, valid
 
 
-@register_adv_est("capo")
 def compute_capo_advantage(
     token_level_rewards: Tensor,
     response_mask: Tensor,
@@ -127,7 +124,6 @@ def compute_capo_advantage(
     return advantages, returns
 
 
-@register_adv_est("capo_eb_lite")
 def compute_capo_eb_lite_advantage(
     token_level_rewards: Tensor,
     response_mask: Tensor,
@@ -207,7 +203,6 @@ def compute_capo_eb_lite_advantage(
     return advantages, returns
 
 
-@register_adv_est("capo_eb")
 def compute_capo_eb_full_advantage(
     token_level_rewards: Tensor,
     response_mask: Tensor,
@@ -342,3 +337,16 @@ def compute_capo_eb_full_advantage(
 
     returns = token_level_rewards * valid
     return advantages, returns
+
+
+# Alias for backward compatibility
+compute_capo_empirical_bayes_advantage = compute_capo_eb_full_advantage
+
+# Re-export functions from eb_core that tests expect to find here
+from capo.eb_core import (  # noqa: F401, E402
+    eb_lite_fit_beta_and_weights,
+    s_kband,
+    eb_statistics as eb_stats,
+    grad_ell_beta_closed_form as grad_ell_beta,
+    numeric_grad_rho_eta as grad_ell_rho_eta,
+)

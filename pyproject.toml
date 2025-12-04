@@ -28,6 +28,7 @@ keywords = ["reinforcement-learning", "rlhf", "verl", "capo"]
 
 dependencies = [
   "torch>=2.1",
+  "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
