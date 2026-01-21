@@ -615,3 +615,11 @@ A few natural extensions:
   If you want, you can expose EB weights `w_i` to other parts of the training loop (e.g., teacher/student losses, replay buffers) by logging or storing them in `DataProto`.
 
 If you want to wire any of these into VERL in a custom way, `capo/verl_integration` is the right place to begin.
+## Paper experiment harness
+
+This repo includes a paper-focused experiment harness under:
+
+- `experiments/capo_paper/`
+
+Start at `experiments/capo_paper/README.md` (includes A10 diagnostics, the E1–E4 suite, and artifact generation).
+
