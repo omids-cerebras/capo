@@ -107,7 +107,9 @@ class RunSummary:
         return d
 
 
-def _extract_best_val(rows: List[Dict[str, Any]]) -> Tuple[Optional[int], Optional[float]]:
+def _extract_best_val(
+    rows: List[Dict[str, Any]],
+) -> Tuple[Optional[int], Optional[float]]:
     # Prefer val/acc, else val/score, else val/reward.
     candidates = ["val/acc", "val/score", "val/reward"]
     best_step: Optional[int] = None
@@ -166,8 +168,12 @@ def summarize_run(run_dir: Path) -> Optional[RunSummary]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs_dir", type=str, default="outputs", help="Hydra outputs directory")
-    ap.add_argument("--out", type=str, default="artifacts/collected", help="Output directory")
+    ap.add_argument(
+        "--runs_dir", type=str, default="outputs", help="Hydra outputs directory"
+    )
+    ap.add_argument(
+        "--out", type=str, default="artifacts/collected", help="Output directory"
+    )
     args = ap.parse_args()
 
     runs_dir = Path(args.runs_dir)

@@ -24,15 +24,25 @@ from sglang.srt.entrypoints.engine import Engine
 from sglang.srt.model_executor.model_runner import LocalSerializedTensor
 from sglang.srt.utils import MultiprocessingSerializer
 from torch.distributed.device_mesh import DeviceMesh
-from torch.distributed.fsdp.api import FullStateDictConfig, ShardedStateDictConfig, StateDictType
-from torch.distributed.fsdp.fully_sharded_data_parallel import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.api import (
+    FullStateDictConfig,
+    ShardedStateDictConfig,
+    StateDictType,
+)
+from torch.distributed.fsdp.fully_sharded_data_parallel import (
+    FullyShardedDataParallel as FSDP,
+)
 from torch.distributed.tensor import DTensor
 
 from verl import DataProto
 from verl.protocol import all_gather_data_proto
 from verl.utils.debug import GPUMemoryLogger, log_gpu_memory_usage
 from verl.utils.debug.performance import _timer
-from verl.utils.fsdp_utils import fsdp_version, load_fsdp_model_to_gpu, offload_fsdp_model_to_cpu
+from verl.utils.fsdp_utils import (
+    fsdp_version,
+    load_fsdp_model_to_gpu,
+    offload_fsdp_model_to_cpu,
+)
 from verl.utils.model import convert_weight_keys
 from verl.utils.torch_functional import check_device_is_available
 
@@ -69,7 +79,11 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         # Full params
         self.full_params = full_params
         if full_params and fsdp_version(self.module) == 1:
-            FSDP.set_state_dict_type(self.module, state_dict_type=StateDictType.FULL_STATE_DICT, state_dict_config=FullStateDictConfig())
+            FSDP.set_state_dict_type(
+                self.module,
+                state_dict_type=StateDictType.FULL_STATE_DICT,
+                state_dict_config=FullStateDictConfig(),
+            )
         elif fsdp_version(self.module) == 1:
             FSDP.set_state_dict_type(
                 self.module,
@@ -85,7 +99,9 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         # get a random rng states
         if self.device_mesh is not None:
             gen_dp_rank = self.device_mesh["dp"].get_local_rank()
-            torch.cuda.manual_seed(gen_dp_rank + 1000)  # make sure all tp ranks have the same random states
+            torch.cuda.manual_seed(
+                gen_dp_rank + 1000
+            )  # make sure all tp ranks have the same random states
             self.gen_random_states = torch.cuda.get_rng_state()
             torch.cuda.set_rng_state(self.torch_random_states)
         else:
@@ -96,24 +112,44 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         self.timing = {}
         with _timer("reshard", self.timing):
             torch.cuda.empty_cache()
-            log_gpu_memory_usage("Before state_dict() in sharding manager memory", logger=logger)
+            log_gpu_memory_usage(
+                "Before state_dict() in sharding manager memory", logger=logger
+            )
             if self.offload_param:
                 load_fsdp_model_to_gpu(self.module)
             params = self.module.state_dict()
-            log_gpu_memory_usage("After state_dict() in sharding manager memory", logger=logger)
-            device = torch.cuda.current_device()  # used when fsdp2 set cpu_offload_policy
-            params = {k: v.to(device, non_blocking=True) if fsdp_version(self.module) == 2 else v for k, v in params.items()}
-            params = convert_weight_keys(params, getattr(self.module, "_fsdp_wrapped_module", self.module))
+            log_gpu_memory_usage(
+                "After state_dict() in sharding manager memory", logger=logger
+            )
+            device = (
+                torch.cuda.current_device()
+            )  # used when fsdp2 set cpu_offload_policy
+            params = {
+                k: (
+                    v.to(device, non_blocking=True)
+                    if fsdp_version(self.module) == 2
+                    else v
+                )
+                for k, v in params.items()
+            }
+            params = convert_weight_keys(
+                params, getattr(self.module, "_fsdp_wrapped_module", self.module)
+            )
             # Copy, not share memory
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self.update_weights(params))
-            log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            log_gpu_memory_usage(
+                "After sync model weights in sharding manager", logger=logger
+            )
 
             del params
             if self.offload_param:
                 offload_fsdp_model_to_cpu(self.module)
             torch.cuda.empty_cache()
-            log_gpu_memory_usage("After del state_dict and empty_cache in sharding manager", logger=logger)
+            log_gpu_memory_usage(
+                "After del state_dict and empty_cache in sharding manager",
+                logger=logger,
+            )
 
             # important: need to manually set the random states of each tp to be identical.
             if self.device_mesh is not None:
@@ -145,10 +181,14 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         named_tensors = [(k, v) for k, v in params.items()]
         load_format = None
         for tensor_index, (name, tensor) in enumerate(named_tensors):
-            serialized_tensor = MultiprocessingSerializer.serialize(_preprocess_tensor_for_update_weights(tensor))
+            serialized_tensor = MultiprocessingSerializer.serialize(
+                _preprocess_tensor_for_update_weights(tensor)
+            )
 
             if self.device_mesh["infer_tp"].get_local_rank() == 0:
-                gathered_serialized_tensors = [None for _ in range(self.device_mesh["infer_tp"].mesh.size()[0])]
+                gathered_serialized_tensors = [
+                    None for _ in range(self.device_mesh["infer_tp"].mesh.size()[0])
+                ]
             else:
                 gathered_serialized_tensors = None
             dist.gather_object(
@@ -177,22 +217,33 @@ class FSDPSGLangShardingManager(BaseShardingManager):
     @GPUMemoryLogger(role="FSDPSGLangShardingManager enter", logger=logger)
     async def wake_up(self):
         torch.cuda.empty_cache()
-        log_gpu_memory_usage("Before state_dict() in sharding manager memory", logger=logger)
+        log_gpu_memory_usage(
+            "Before state_dict() in sharding manager memory", logger=logger
+        )
         if self.offload_param:
             load_fsdp_model_to_gpu(self.module)
         params = self.module.state_dict()
-        log_gpu_memory_usage("After state_dict() in sharding manager memory", logger=logger)
+        log_gpu_memory_usage(
+            "After state_dict() in sharding manager memory", logger=logger
+        )
         device = torch.cuda.current_device()  # used when fsdp2 set cpu_offload_policy
-        params = {k: v.to(device, non_blocking=True) if fsdp_version(self.module) == 2 else v for k, v in params.items()}
+        params = {
+            k: v.to(device, non_blocking=True) if fsdp_version(self.module) == 2 else v
+            for k, v in params.items()
+        }
         # Copy, not share memory
         await self.update_weights(params)
-        log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+        log_gpu_memory_usage(
+            "After sync model weights in sharding manager", logger=logger
+        )
 
         del params
         if self.offload_param:
             offload_fsdp_model_to_cpu(self.module)
         torch.cuda.empty_cache()
-        log_gpu_memory_usage("After del state_dict and empty_cache in sharding manager", logger=logger)
+        log_gpu_memory_usage(
+            "After del state_dict and empty_cache in sharding manager", logger=logger
+        )
 
         # important: need to manually set the random states of each tp to be identical.
         if self.device_mesh is not None:

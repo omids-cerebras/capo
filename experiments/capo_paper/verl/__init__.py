@@ -38,7 +38,9 @@ if os.getenv("VERL_USE_MODELSCOPE", "False").lower() == "true":
     import importlib
 
     if importlib.util.find_spec("modelscope") is None:
-        raise ImportError("You are using the modelscope hub, please install modelscope by `pip install modelscope -U`")
+        raise ImportError(
+            "You are using the modelscope hub, please install modelscope by `pip install modelscope -U`"
+        )
     # Patch hub to download models from modelscope to speed up.
     from modelscope.utils.hf_util import patch_hub
 
@@ -53,6 +55,10 @@ if is_npu_available:
         required = parse_version(required_version_spec)
 
         if not installed >= required:
-            raise ValueError(f"{package_name} version >= {required_version_spec} is required on ASCEND NPU, current version is {installed}.")
+            raise ValueError(
+                f"{package_name} version >= {required_version_spec} is required on ASCEND NPU, current version is {installed}."
+            )
     except DistributionNotFound as e:
-        raise ImportError(f"package {package_name} is not installed, please run pip install {package_name}=={required_version_spec}") from e
+        raise ImportError(
+            f"package {package_name} is not installed, please run pip install {package_name}=={required_version_spec}"
+        ) from e

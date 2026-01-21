@@ -76,9 +76,7 @@ def find_maj_ans(string):
         start_pos, end_pos = find_last_box_start_end_pos(string)
         if start_pos is None:
             break
-        candidate_answers.append(
-            remove_boxed(string[start_pos:end_pos]).strip()
-        )
+        candidate_answers.append(remove_boxed(string[start_pos:end_pos]).strip())
         string = string[:start_pos]
     candidate_answers = [ans for ans in candidate_answers if ans is not None][::-1]
     if len(candidate_answers) == 0:
@@ -93,17 +91,15 @@ def find_maj_ans(string):
         ans_to_count[ans] += 1
         ans_to_last_order_index[ans] = order_index
     for ans in ans_to_count.keys():
-        ans_info_list.append({
-            "value": ans,
-            "count": ans_to_count[ans],
-            "last_order_index": ans_to_last_order_index[ans]
-        })
-    ans_info_list.sort(
-        key=lambda x: (x["count"], x["last_order_index"]),
-        reverse=True
-    )
+        ans_info_list.append(
+            {
+                "value": ans,
+                "count": ans_to_count[ans],
+                "last_order_index": ans_to_last_order_index[ans],
+            }
+        )
+    ans_info_list.sort(key=lambda x: (x["count"], x["last_order_index"]), reverse=True)
     return ans_info_list[0]["value"]
-
 
 
 def get_answer_str(s: str) -> str:

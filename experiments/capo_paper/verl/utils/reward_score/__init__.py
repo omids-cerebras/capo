@@ -17,7 +17,15 @@ from verl.utils.import_utils import deprecated
 
 first_time_of_open_reasoner_zero = True
 
-def default_compute_score(data_source, solution_str, ground_truth, extra_info=None, sandbox_fusion_url=None, concurrent_semaphore=None):
+
+def default_compute_score(
+    data_source,
+    solution_str,
+    ground_truth,
+    extra_info=None,
+    sandbox_fusion_url=None,
+    concurrent_semaphore=None,
+):
     """Compute the score for a given solution based on the data source.
 
     Args:
@@ -37,17 +45,30 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
         from . import gsm8k
 
         res = gsm8k.compute_score(solution_str, ground_truth)
-    elif data_source == "open_reasoner_zero" or data_source == "math500" or data_source == "aime2024" or data_source == "gpqa" or data_source == "minerva" or data_source == "amc":
+    elif (
+        data_source == "open_reasoner_zero"
+        or data_source == "math500"
+        or data_source == "aime2024"
+        or data_source == "gpqa"
+        or data_source == "minerva"
+        or data_source == "amc"
+    ):
         global first_time_of_open_reasoner_zero
         from . import open_reasoner_zero
+
         if first_time_of_open_reasoner_zero:
             # ensure latex work
-            assert open_reasoner_zero.compute_score("\\frac{3}{5}", "0.6", "open_reasoner_zero"), "The latex engine might not work please check"
+            assert open_reasoner_zero.compute_score(
+                "\\frac{3}{5}", "0.6", "open_reasoner_zero"
+            ), "The latex engine might not work please check"
             first_time_of_open_reasoner_zero = False
-        res = open_reasoner_zero.compute_score(solution_str, ground_truth, data_source, extra_info=extra_info)
+        res = open_reasoner_zero.compute_score(
+            solution_str, ground_truth, data_source, extra_info=extra_info
+        )
     elif data_source == "countdown":
         from . import countdown
-        res = countdown.compute_score(solution_str, ground_truth, format_score=0.)
+
+        res = countdown.compute_score(solution_str, ground_truth, format_score=0.0)
     elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval"]:
         from . import math
 
@@ -80,7 +101,13 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
             from . import sandbox_fusion
 
             # Pass the URL directly, ground_truth likely contains test cases here
-            res = sandbox_fusion.compute_score(sandbox_fusion_url, concurrent_semaphore, solution_str, ground_truth, continuous=True)
+            res = sandbox_fusion.compute_score(
+                sandbox_fusion_url,
+                concurrent_semaphore,
+                solution_str,
+                ground_truth,
+                continuous=True,
+            )
         else:
             # If no sandbox URL is provided, fall back to prime_code or raise error
             from . import prime_code
@@ -91,12 +118,22 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
         from . import geo3k
 
         res = geo3k.compute_score(solution_str, ground_truth)
-    elif data_source in ["searchR1_nq", "searchR1_triviaqa", "searchR1_popqa", "searchR1_hotpotqa", "searchR1_2wikimultihopqa", "searchR1_musique", "searchR1_bamboogle"]:
+    elif data_source in [
+        "searchR1_nq",
+        "searchR1_triviaqa",
+        "searchR1_popqa",
+        "searchR1_hotpotqa",
+        "searchR1_2wikimultihopqa",
+        "searchR1_musique",
+        "searchR1_bamboogle",
+    ]:
         from . import search_r1_like_qa_em
 
         res = search_r1_like_qa_em.compute_score(solution_str, ground_truth)
     else:
-        raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
+        raise NotImplementedError(
+            f"Reward function is not implemented for {data_source=}"
+        )
 
     if isinstance(res, dict):
         return res
@@ -107,11 +144,25 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
 
 
 @deprecated("verl.utils.reward_score.default_compute_score")
-def _default_compute_score(data_source, solution_str, ground_truth, extra_info=None, sandbox_fusion_url=None, concurrent_semaphore=None):
+def _default_compute_score(
+    data_source,
+    solution_str,
+    ground_truth,
+    extra_info=None,
+    sandbox_fusion_url=None,
+    concurrent_semaphore=None,
+):
     """
     Legacy function API to be deprecated. Please use `default_compute_score` instead.
     """
-    return default_compute_score(data_source, solution_str, ground_truth, extra_info, sandbox_fusion_url, concurrent_semaphore)
+    return default_compute_score(
+        data_source,
+        solution_str,
+        ground_truth,
+        extra_info,
+        sandbox_fusion_url,
+        concurrent_semaphore,
+    )
 
 
 __all__ = ["default_compute_score"]

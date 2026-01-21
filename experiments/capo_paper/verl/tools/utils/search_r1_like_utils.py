@@ -31,7 +31,13 @@ API_TIMEOUT = 10
 logger = logging.getLogger(__name__)
 
 
-def call_search_api(retrieval_service_url: str, query_list: List[str], topk: int = 3, return_scores: bool = True, timeout: int = DEFAULT_TIMEOUT) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def call_search_api(
+    retrieval_service_url: str,
+    query_list: List[str],
+    topk: int = 3,
+    return_scores: bool = True,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Calls the remote search API to perform retrieval with retry logic for various errors,
     using increasing delay between retries. Logs internal calls with a unique ID.
@@ -59,7 +65,9 @@ def call_search_api(retrieval_service_url: str, query_list: List[str], topk: int
 
     for attempt in range(MAX_RETRIES):
         try:
-            logger.info(f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling search API at {retrieval_service_url}")
+            logger.info(
+                f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling search API at {retrieval_service_url}"
+            )
             response = requests.post(
                 retrieval_service_url,
                 headers=headers,
@@ -81,7 +89,9 @@ def call_search_api(retrieval_service_url: str, query_list: List[str], topk: int
             response.raise_for_status()
 
             # If successful (status code 2xx)
-            logger.info(f"{log_prefix}Search API call successful on attempt {attempt + 1}")
+            logger.info(
+                f"{log_prefix}Search API call successful on attempt {attempt + 1}"
+            )
             return response.json(), None
 
         except requests.exceptions.ConnectionError as e:
@@ -113,7 +123,11 @@ def call_search_api(retrieval_service_url: str, query_list: List[str], topk: int
 
     # If loop finishes without returning success, return the last recorded error
     logger.error(f"{log_prefix}Search API call failed. Last error: {last_error}")
-    return None, last_error.replace(log_prefix, "API Call Failed: ") if last_error else "API Call Failed after retries"
+    return None, (
+        last_error.replace(log_prefix, "API Call Failed: ")
+        if last_error
+        else "API Call Failed after retries"
+    )
 
 
 def _passages2string(retrieval_result):
@@ -127,7 +141,13 @@ def _passages2string(retrieval_result):
     return format_reference.strip()
 
 
-def perform_single_search_batch(retrieval_service_url: str, query_list: List[str], topk: int = 3, concurrent_semaphore: Optional[threading.Semaphore] = None, timeout: int = DEFAULT_TIMEOUT) -> Tuple[str, Dict[str, Any]]:
+def perform_single_search_batch(
+    retrieval_service_url: str,
+    query_list: List[str],
+    topk: int = 3,
+    concurrent_semaphore: Optional[threading.Semaphore] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Tuple[str, Dict[str, Any]]:
     """
     Performs a single batch search for multiple queries (original search tool behavior).
 
@@ -151,9 +171,21 @@ def perform_single_search_batch(retrieval_service_url: str, query_list: List[str
     try:
         if concurrent_semaphore:
             with concurrent_semaphore:
-                api_response, error_msg = call_search_api(retrieval_service_url=retrieval_service_url, query_list=query_list, topk=topk, return_scores=True, timeout=timeout)
+                api_response, error_msg = call_search_api(
+                    retrieval_service_url=retrieval_service_url,
+                    query_list=query_list,
+                    topk=topk,
+                    return_scores=True,
+                    timeout=timeout,
+                )
         else:
-            api_response, error_msg = call_search_api(retrieval_service_url=retrieval_service_url, query_list=query_list, topk=topk, return_scores=True, timeout=timeout)
+            api_response, error_msg = call_search_api(
+                retrieval_service_url=retrieval_service_url,
+                query_list=query_list,
+                topk=topk,
+                return_scores=True,
+                timeout=timeout,
+            )
     except Exception as e:
         error_msg = f"API Request Exception during batch search: {e}"
         logger.error(f"Batch search: {error_msg}")
@@ -169,7 +201,9 @@ def perform_single_search_batch(retrieval_service_url: str, query_list: List[str
         "formatted_result": None,
     }
 
-    result_text = json.dumps({"result": "Search request failed or timed out after retries."})
+    result_text = json.dumps(
+        {"result": "Search request failed or timed out after retries."}
+    )
 
     if error_msg:
         metadata["status"] = "api_error"
@@ -188,14 +222,18 @@ def perform_single_search_batch(retrieval_service_url: str, query_list: List[str
                 for retrieval in raw_results:
                     formatted = _passages2string(retrieval)
                     pretty_results.append(formatted)
-                    total_results += len(retrieval) if isinstance(retrieval, list) else 1
+                    total_results += (
+                        len(retrieval) if isinstance(retrieval, list) else 1
+                    )
 
                 final_result = "\n---\n".join(pretty_results)
                 result_text = json.dumps({"result": final_result})
                 metadata["status"] = "success"
                 metadata["total_results"] = total_results
                 metadata["formatted_result"] = final_result
-                logger.info(f"Batch search: Successful, got {total_results} total results")
+                logger.info(
+                    f"Batch search: Successful, got {total_results} total results"
+                )
             else:
                 result_text = json.dumps({"result": "No search results found."})
                 metadata["status"] = "no_results"
@@ -208,7 +246,9 @@ def perform_single_search_batch(retrieval_service_url: str, query_list: List[str
             logger.error(f"Batch search: {error_msg}")
     else:
         metadata["status"] = "unknown_api_state"
-        result_text = json.dumps({"result": "Unknown API state (no response and no error message)."})
+        result_text = json.dumps(
+            {"result": "Unknown API state (no response and no error message)."}
+        )
         logger.error("Batch search: Unknown API state.")
 
     return result_text, metadata

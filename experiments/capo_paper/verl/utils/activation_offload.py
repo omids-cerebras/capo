@@ -71,18 +71,24 @@ class CpuOffloadHookWithOffloadHandler:
 
     def __enter__(self):
         self.inside_context = True
-        torch._C._autograd._push_saved_tensors_default_hooks(self.on_save_for_backward, self.on_get_saved_tensor)
+        torch._C._autograd._push_saved_tensors_default_hooks(
+            self.on_save_for_backward, self.on_get_saved_tensor
+        )
 
     def __exit__(self, *args: Any):
         self.inside_context = False
         torch._C._autograd._pop_saved_tensors_default_hooks()
 
     def on_save_for_backward(self, tensor: torch.Tensor) -> Any:
-        retrieve_identifier = self.offload_handler.tensor_push(tensor, **self.handler_extra_kwargs)
+        retrieve_identifier = self.offload_handler.tensor_push(
+            tensor, **self.handler_extra_kwargs
+        )
         return retrieve_identifier
 
     def on_get_saved_tensor(self, saved_state: Any) -> torch.Tensor:
-        tensor = self.offload_handler.tensor_pop(saved_state, **self.handler_extra_kwargs)
+        tensor = self.offload_handler.tensor_pop(
+            saved_state, **self.handler_extra_kwargs
+        )
         return tensor
 
 
@@ -94,11 +100,15 @@ class OffloadHandler:
 
     def tensor_push(self, tensor: torch.Tensor, **kwargs) -> Any:
         """Tensor push."""
-        raise NotImplementedError("`tensor_push is not implented in OffloadHandler class. Inherit this class and implement your custom tensor_push.")
+        raise NotImplementedError(
+            "`tensor_push is not implented in OffloadHandler class. Inherit this class and implement your custom tensor_push."
+        )
 
     def tensor_pop(self, tensor_tag: Any, **kwargs):
         """Tensor pop."""
-        raise NotImplementedError("`tensor_pop is not implented in OffloadHandler class. Inherit this class and implement your custom tensor_pop.")
+        raise NotImplementedError(
+            "`tensor_pop is not implented in OffloadHandler class. Inherit this class and implement your custom tensor_pop."
+        )
 
 
 class GroupCommitFunction(torch.autograd.Function):
@@ -133,7 +143,9 @@ class SynchronizedGroupOffloadHandler(OffloadHandler):
     as the computation kernels, thus the copying will block computation.
     """
 
-    def __init__(self, num_offload_group, tensor_need_offloading_checker=(lambda _: True)) -> None:
+    def __init__(
+        self, num_offload_group, tensor_need_offloading_checker=(lambda _: True)
+    ) -> None:
         super().__init__()
 
         self.num_offload_group = num_offload_group
@@ -191,7 +203,10 @@ class SynchronizedGroupOffloadHandler(OffloadHandler):
         tensor_tag = (self.current_group, self.tensor_count_current_group)
         self.tensor_count_current_group += 1
         assert tensor_tag not in self.tensor_tag_to_state
-        if self.current_group < self.num_offload_group and self.tensor_need_offloading_checker(tensor):
+        if (
+            self.current_group < self.num_offload_group
+            and self.tensor_need_offloading_checker(tensor)
+        ):
             state = SynchronizedGroupOffloadHandler.offload(tensor)
             self.tensor_tag_to_state[tensor_tag] = state
         else:
@@ -242,7 +257,9 @@ class AsyncDoubleBufferGroupOffloadHandler(SynchronizedGroupOffloadHandler):
         # for optimal CPU/GPU interconnect usage
         constant = 0
         for i in range(self.num_offload_group):
-            self.layer_window_map[i] = ((self.num_layers // self.num_offload_group) * (i + 1)) - 1
+            self.layer_window_map[i] = (
+                (self.num_layers // self.num_offload_group) * (i + 1)
+            ) - 1
             if i < (self.num_layers % self.num_offload_group):
                 self.layer_window_map[i] += i + 1
                 constant = i + 1
@@ -391,7 +408,11 @@ class AsyncDoubleBufferGroupOffloadHandler(SynchronizedGroupOffloadHandler):
             self.offloaded_group_count = 0
 
 
-def get_activation_offload_context(num_layers: int = 1, model_layers: int = 1, tensor_need_offloading_checker=(lambda t: True)):
+def get_activation_offload_context(
+    num_layers: int = 1,
+    model_layers: int = 1,
+    tensor_need_offloading_checker=(lambda t: True),
+):
     cpu_offload_handler = AsyncDoubleBufferGroupOffloadHandler(
         num_offload_group=num_layers,
         num_model_group=model_layers,
@@ -438,7 +459,9 @@ class ActivationHandler:
         return tuple(flat_args), tuple(kwarg_keys)
 
     def _unpack_kwargs(self, flat_args, kwarg_keys):
-        assert len(kwarg_keys) <= len(flat_args), f"too many keys {len(kwarg_keys)} vs. {len(flat_args)}"
+        assert len(kwarg_keys) <= len(
+            flat_args
+        ), f"too many keys {len(kwarg_keys)} vs. {len(flat_args)}"
         if len(kwarg_keys) == 0:
             return flat_args, {}
         args = flat_args[: -len(kwarg_keys)]
@@ -512,7 +535,9 @@ def enable_activation_offloading(model, strategy, enable_ckpt=False):
 
     """
 
-    assert strategy == "fsdp" or strategy == "fsdp2", "activation offloading only supports fsdp strategy"
+    assert (
+        strategy == "fsdp" or strategy == "fsdp2"
+    ), "activation offloading only supports fsdp strategy"
     layers = []
 
     def get_layers(module):
@@ -530,11 +555,15 @@ def enable_activation_offloading(model, strategy, enable_ckpt=False):
 
     get_layers(model)
     if len(layers) < 3:
-        logger.warning(f"Find only {len(layers)} fsdp layers, not neccessary to enable async activation offloading")
+        logger.warning(
+            f"Find only {len(layers)} fsdp layers, not neccessary to enable async activation offloading"
+        )
         return
 
     tensor_filter = FSDPParameterFilter()
-    context, sync_func = get_activation_offload_context(len(layers) - 1, len(layers), tensor_filter)
+    context, sync_func = get_activation_offload_context(
+        len(layers) - 1, len(layers), tensor_filter
+    )
     if enable_ckpt:
         # The implementation of activation checkpointing in transformers library is incompatible with activation offloading,
         # so it will be disabled, but this implementation supports another version of activation checkpointing, so that

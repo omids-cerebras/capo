@@ -85,11 +85,15 @@ class Qwen2_5VLModel(MegatronModule):
         super().__init__(config=language_transformer_config)
 
         # patch self_attention to use qwen2_5_vl attention
-        vision_transformer_layer_spec.submodules.self_attention.module = Qwen2_5VLSelfAttention
+        vision_transformer_layer_spec.submodules.self_attention.module = (
+            Qwen2_5VLSelfAttention
+        )
         for layer_spec in language_transformer_layer_spec.layer_specs:
             layer_spec.submodules.self_attention.module = Qwen2_5VLSelfAttention
 
-        logging.getLogger(__name__).warning("Qwen2VL model is under development and may be missing features.")
+        logging.getLogger(__name__).warning(
+            "Qwen2VL model is under development and may be missing features."
+        )
 
         self.pre_process = pre_process
         self.post_process = post_process
@@ -103,13 +107,24 @@ class Qwen2_5VLModel(MegatronModule):
         self.image_token_id = image_token_id
         self.video_token_id = video_token_id
 
-        self.square_merge_size = vision_projection_config.ffn_hidden_size // vision_transformer_config.hidden_size
+        self.square_merge_size = (
+            vision_projection_config.ffn_hidden_size
+            // vision_transformer_config.hidden_size
+        )
 
         # This attribute is needed to check if an all-reduce is required
         # on the word embeddings inside `finalize_model_grads._allreduce_word_embedding_grads`.
         self.share_embeddings_and_output_weights = False
         if self.pre_process:
-            self.vision_model = Qwen2_5VisionModel(vision_transformer_config, vision_transformer_layer_spec, vision_projection_config, vision_projection_layer_spec, projection_type=vision_projection_type, pre_process=True, post_process=True)
+            self.vision_model = Qwen2_5VisionModel(
+                vision_transformer_config,
+                vision_transformer_layer_spec,
+                vision_projection_config,
+                vision_projection_layer_spec,
+                projection_type=vision_projection_type,
+                pre_process=True,
+                post_process=True,
+            )
 
         self.language_model = GPTModel(
             config=language_transformer_config,
@@ -127,7 +142,9 @@ class Qwen2_5VLModel(MegatronModule):
             scatter_embedding_sequence_parallel=False,
         )
 
-        self.share_embeddings_and_output_weights = self.language_model.share_embeddings_and_output_weights
+        self.share_embeddings_and_output_weights = (
+            self.language_model.share_embeddings_and_output_weights
+        )
 
     def shared_embedding_or_output_weight(self):
         """This is a convenience method to surface the language model's word embeddings, which is
@@ -141,14 +158,21 @@ class Qwen2_5VLModel(MegatronModule):
         # gives us non-lists or None
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
-        assert len(input_tensor) == 1, "input_tensor should only be length 1 for Qwen2VL"
+        assert (
+            len(input_tensor) == 1
+        ), "input_tensor should only be length 1 for Qwen2VL"
 
         if self.pre_process:
             self.encoder_hidden_state = input_tensor[0]
         else:
             self.language_model.set_input_tensor(input_tensor[0])
 
-    def freeze(self, freeze_language_model: bool, freeze_vision_model: bool, freeze_vision_projection: bool):
+    def freeze(
+        self,
+        freeze_language_model: bool,
+        freeze_vision_model: bool,
+        freeze_vision_projection: bool,
+    ):
         """Freeze model modules.
 
         Make specific modules non-trainable by setting requires_grad to False for the module's parameters.
@@ -215,8 +239,14 @@ class Qwen2_5VLModel(MegatronModule):
             vision_grid_thw = torch.cat([vision_grid_thw, video_grid_thw], dim=0)
             vision_data = torch.cat([vision_data, pixel_values_videos], dim=0)
             video_start_index = image_mask.sum().item() + video_mask.sum().item()
-        use_inference_kv_cache = inference_params is not None and "image_tokens_count" in inference_params.key_value_memory_dict
-        use_inference_kv_cache = inference_params is not None and "image_tokens_count" in inference_params.key_value_memory_dict
+        use_inference_kv_cache = (
+            inference_params is not None
+            and "image_tokens_count" in inference_params.key_value_memory_dict
+        )
+        use_inference_kv_cache = (
+            inference_params is not None
+            and "image_tokens_count" in inference_params.key_value_memory_dict
+        )
         if use_inference_kv_cache:
             raise NotImplementedError()
 
@@ -255,7 +285,9 @@ class Qwen2_5VLModel(MegatronModule):
                     image_embeds = vision_embeds[:video_start_index]
                     video_embeds = vision_embeds[video_start_index:]
                 else:
-                    raise ValueError(f"Expect video token start index in range [0, {vision_embeds.shape[0]}], but got {video_start_index}")
+                    raise ValueError(
+                        f"Expect video token start index in range [0, {vision_embeds.shape[0]}], but got {video_start_index}"
+                    )
 
                 combined_embeddings = self.language_model.embedding(
                     input_ids=input_ids,
@@ -263,18 +295,28 @@ class Qwen2_5VLModel(MegatronModule):
                 )  # [text_seq_len, b, h_language]
 
                 if image_embeds is not None or video_embeds is not None:
-                    combined_embeddings = combined_embeddings.transpose(0, 1).contiguous()
+                    combined_embeddings = combined_embeddings.transpose(
+                        0, 1
+                    ).contiguous()
                     if image_embeds is not None:
                         image_mask = (input_ids == self.image_token_id).contiguous()
                         if image_mask.sum() > 0:
                             combined_embeddings = combined_embeddings.clone()
-                            combined_embeddings[image_mask] = image_embeds.to(dtype=combined_embeddings.dtype, device=combined_embeddings.device)
+                            combined_embeddings[image_mask] = image_embeds.to(
+                                dtype=combined_embeddings.dtype,
+                                device=combined_embeddings.device,
+                            )
                     if video_embeds is not None:
                         video_mask = (input_ids == self.video_token_id).contiguous()
                         if video_mask.sum() > 0:
                             combined_embeddings = combined_embeddings.clone()
-                            combined_embeddings[video_mask] = video_embeds.to(dtype=combined_embeddings.dtype, device=combined_embeddings.device)
-                    combined_embeddings = combined_embeddings.transpose(0, 1).contiguous()
+                            combined_embeddings[video_mask] = video_embeds.to(
+                                dtype=combined_embeddings.dtype,
+                                device=combined_embeddings.device,
+                            )
+                    combined_embeddings = combined_embeddings.transpose(
+                        0, 1
+                    ).contiguous()
 
             else:
                 combined_embeddings = self.language_model.embedding(
@@ -282,13 +324,22 @@ class Qwen2_5VLModel(MegatronModule):
                     position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
             if self.config.sequence_parallel:
-                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(combined_embeddings)
+                combined_embeddings = (
+                    tensor_parallel.scatter_to_sequence_parallel_region(
+                        combined_embeddings
+                    )
+                )
                 combined_embeddings = combined_embeddings.contiguous()
         else:
             combined_embeddings = None
         from .rope_utils import get_rope_index
 
-        position_ids, _ = get_rope_index(input_ids, image_grid_thw=image_grid_thw, video_grid_thw=video_grid_thw, attention_mask=attention_mask)
+        position_ids, _ = get_rope_index(
+            input_ids,
+            image_grid_thw=image_grid_thw,
+            video_grid_thw=video_grid_thw,
+            attention_mask=attention_mask,
+        )
 
         output = self.language_model(
             input_ids=None,

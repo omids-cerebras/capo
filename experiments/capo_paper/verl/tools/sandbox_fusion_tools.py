@@ -64,12 +64,16 @@ class TokenBucketWorker:
 
 class ExecutionWorker:
     def __init__(self, enable_global_rate_limit=True, rate_limit=10):
-        self.rate_limit_worker = self._init_rate_limit(rate_limit) if enable_global_rate_limit else None
+        self.rate_limit_worker = (
+            self._init_rate_limit(rate_limit) if enable_global_rate_limit else None
+        )
 
     def _init_rate_limit(self, rate_limit):
         # TODO validation for rate_limit
         # A Singleton Rate Limitor
-        return TokenBucketWorker.options(name="rate-limiter", get_if_exists=True).remote(rate_limit)
+        return TokenBucketWorker.options(
+            name="rate-limiter", get_if_exists=True
+        ).remote(rate_limit)
 
     def ping(self):
         return True
@@ -85,9 +89,20 @@ class ExecutionWorker:
                 logger.warning(f"Error when executing code: {e}")
 
 
-def init_execution_pool(num_workers: int, enable_global_rate_limit=True, rate_limit=10, mode: PoolMode = PoolMode.ThreadMode):
+def init_execution_pool(
+    num_workers: int,
+    enable_global_rate_limit=True,
+    rate_limit=10,
+    mode: PoolMode = PoolMode.ThreadMode,
+):
     if mode == PoolMode.ThreadMode:
-        return ray.remote(ExecutionWorker).options(max_concurrency=num_workers).remote(enable_global_rate_limit=enable_global_rate_limit, rate_limit=rate_limit)
+        return (
+            ray.remote(ExecutionWorker)
+            .options(max_concurrency=num_workers)
+            .remote(
+                enable_global_rate_limit=enable_global_rate_limit, rate_limit=rate_limit
+            )
+        )
     else:
         raise NotImplementedError("Process mode is not implemented yet")
         # return ray.util.multiprocessing.Pool(processes=num_workers)
@@ -131,7 +146,12 @@ class SandboxFusionTool(BaseTool):
         self.default_timeout = config.get("default_timeout", 30)
         self.default_language = config.get("default_language", "python")
         self.enable_global_rate_limit = config.get("enable_global_rate_limit", True)
-        self.execution_pool = init_execution_pool(num_workers=self.num_workers, enable_global_rate_limit=self.enable_global_rate_limit, rate_limit=self.rate_limit, mode=PoolMode.ThreadMode)
+        self.execution_pool = init_execution_pool(
+            num_workers=self.num_workers,
+            enable_global_rate_limit=self.enable_global_rate_limit,
+            rate_limit=self.rate_limit,
+            mode=PoolMode.ThreadMode,
+        )
         self.sandbox_fusion_url = config.get("sandbox_fusion_url", "")
         if self.sandbox_fusion_url == "":
             raise ValueError("sandbox_fusion_url is not set")
@@ -141,7 +161,12 @@ class SandboxFusionTool(BaseTool):
     def get_openai_tool_schema(self) -> OpenAIFunctionToolSchema:
         return self.tool_schema
 
-    async def create(self, instance_id: Optional[str] = None, ground_truth: Optional[str] = None, **kwargs) -> str:
+    async def create(
+        self,
+        instance_id: Optional[str] = None,
+        ground_truth: Optional[str] = None,
+        **kwargs,
+    ) -> str:
         if instance_id is None:
             instance_id = str(uuid4())
         self._instance_dict[instance_id] = {
@@ -151,23 +176,31 @@ class SandboxFusionTool(BaseTool):
         }
         return instance_id
 
-    async def execute(self, instance_id: str, parameters: dict[str, Any], **kwargs) -> Tuple[str, float, dict]:
+    async def execute(
+        self, instance_id: str, parameters: dict[str, Any], **kwargs
+    ) -> Tuple[str, float, dict]:
         code = parameters.get("code", "")
         timeout = parameters.get("timeout", self.default_timeout)
         language = parameters.get("language", self.default_language)
         if not isinstance(code, str):
             code = str(code)
 
-        result = await self.execution_pool.execute.remote(self.execute_code, instance_id, code, timeout, language)
+        result = await self.execution_pool.execute.remote(
+            self.execute_code, instance_id, code, timeout, language
+        )
 
         return result, result, result.strip()
 
     def execute_code(self, instance_id, code, timeout=30, language="python"):
-        result_status, metadata = _process_single_case(0, None, None, self.sandbox_fusion_url, code, timeout, language)
+        result_status, metadata = _process_single_case(
+            0, None, None, self.sandbox_fusion_url, code, timeout, language
+        )
         # we should always expect this since we don't have correct answer
         if metadata["run_status"] == "Finished":
             actual_output = metadata["stdout"] if metadata["stdout"] is not None else ""
-            logger.debug(f"actual_output from sandbox fusion: {actual_output},{instance_id}")
+            logger.debug(
+                f"actual_output from sandbox fusion: {actual_output},{instance_id}"
+            )
             return actual_output
         else:
             return "no stdout here"

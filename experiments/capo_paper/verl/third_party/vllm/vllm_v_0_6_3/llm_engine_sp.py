@@ -30,7 +30,12 @@ from vllm.config import (
     SpeculativeConfig,
 )
 from vllm.core.scheduler import Scheduler
-from vllm.engine.llm_engine import LLMEngine, SchedulerContext, SchedulerOutputState, _load_generation_config_dict
+from vllm.engine.llm_engine import (
+    LLMEngine,
+    SchedulerContext,
+    SchedulerOutputState,
+    _load_generation_config_dict,
+)
 from vllm.engine.metrics_types import StatLoggerBase
 from vllm.engine.output_processor.interfaces import SequenceGroupOutputProcessor
 from vllm.engine.output_processor.stop_checker import StopChecker
@@ -194,7 +199,9 @@ class LLMEngine(LLMEngine):
         # Ensure that the function doesn't contain a reference to self,
         # to avoid engine GC issues
         def get_tokenizer_for_seq(sequence: Sequence) -> AnyTokenizer:
-            assert tokenizer_group, "tokenizer_group cannot be None, make sure skip_tokenizer_init is False"
+            assert (
+                tokenizer_group
+            ), "tokenizer_group cannot be None, make sure skip_tokenizer_init is False"
             return tokenizer_group.get_lora_tokenizer(sequence.lora_request)
 
         self.seq_counter = Counter()
@@ -252,14 +259,25 @@ class LLMEngine(LLMEngine):
             # different process.
             self.tokenizer.ping()
 
-        self.cached_scheduler_outputs = [SchedulerOutputState() for _ in range(self.parallel_config.pipeline_parallel_size)]
+        self.cached_scheduler_outputs = [
+            SchedulerOutputState()
+            for _ in range(self.parallel_config.pipeline_parallel_size)
+        ]
 
-        self.scheduler_contexts = [SchedulerContext(multi_step_stream_outputs=self.scheduler_config.multi_step_stream_outputs) for _ in range(self.parallel_config.pipeline_parallel_size)]
+        self.scheduler_contexts = [
+            SchedulerContext(
+                multi_step_stream_outputs=self.scheduler_config.multi_step_stream_outputs
+            )
+            for _ in range(self.parallel_config.pipeline_parallel_size)
+        ]
 
         if model_config.use_async_output_proc:
             process_model_outputs = weak_bind(self._process_model_outputs)
 
-            self.async_callbacks = [partial(process_model_outputs, ctx=self.scheduler_contexts[v_id]) for v_id in range(self.parallel_config.pipeline_parallel_size)]
+            self.async_callbacks = [
+                partial(process_model_outputs, ctx=self.scheduler_contexts[v_id])
+                for v_id in range(self.parallel_config.pipeline_parallel_size)
+            ]
         else:
             self.async_callbacks = []
 
@@ -276,7 +294,11 @@ class LLMEngine(LLMEngine):
                 cache_config,
                 lora_config,
                 parallel_config.pipeline_parallel_size,
-                self.async_callbacks[v_id] if model_config.use_async_output_proc else None,
+                (
+                    self.async_callbacks[v_id]
+                    if model_config.use_async_output_proc
+                    else None
+                ),
             )
             for v_id in range(parallel_config.pipeline_parallel_size)
         ]
@@ -293,7 +315,9 @@ class LLMEngine(LLMEngine):
                 from vllm.engine.metrics import LoggingStatLogger, PrometheusStatLogger
 
                 self.stat_loggers = {
-                    "logging": LoggingStatLogger(local_interval=_LOCAL_LOGGING_INTERVAL_SEC),
+                    "logging": LoggingStatLogger(
+                        local_interval=_LOCAL_LOGGING_INTERVAL_SEC
+                    ),
                     "prometheus": PrometheusStatLogger(
                         local_interval=_LOCAL_LOGGING_INTERVAL_SEC,
                         labels=dict(model_name=model_config.served_model_name),
@@ -304,7 +328,9 @@ class LLMEngine(LLMEngine):
 
         self.tracer = None
         if self.observability_config.otlp_traces_endpoint:
-            self.tracer = init_tracer("vllm.llm_engine", self.observability_config.otlp_traces_endpoint)
+            self.tracer = init_tracer(
+                "vllm.llm_engine", self.observability_config.otlp_traces_endpoint
+            )
 
         # Create sequence output processor, e.g. for beam search or
         # speculative decoding.
@@ -322,7 +348,11 @@ class LLMEngine(LLMEngine):
 
     # TODO(sgm): add for verl but we may not tokenizer in Rollout
     def _init_tokenizer(self, tokenizer, **tokenizer_init_kwargs):
-        init_kwargs = dict(enable_lora=bool(self.lora_config), max_num_seqs=self.scheduler_config.max_num_seqs, max_input_length=None)
+        init_kwargs = dict(
+            enable_lora=bool(self.lora_config),
+            max_num_seqs=self.scheduler_config.max_num_seqs,
+            max_input_length=None,
+        )
         init_kwargs.update(tokenizer_init_kwargs)
         return TokenizerGroup(tokenizer, **init_kwargs)
 
@@ -339,7 +369,9 @@ class LLMEngine(LLMEngine):
     @classmethod
     def _get_executor_cls(cls, engine_config: EngineConfig) -> Type[ExecutorBase]:
         # Initialize the cluster and specify the executor class.]
-        assert engine_config.device_config.device_type == "cuda", "Currently, the vllm in verl only support running on GPU"
+        assert (
+            engine_config.device_config.device_type == "cuda"
+        ), "Currently, the vllm in verl only support running on GPU"
 
         # print('Waiting for debugger'); import os,debugpy; debugpy.listen(('localhost', 5678 + int(os.getenv('RANK', '0')))); debugpy.wait_for_client()
         if engine_config.parallel_config.world_size == 1:
@@ -365,7 +397,9 @@ class LLMEngine(LLMEngine):
         engine_config = engine_args.create_engine_config()
         executor_class = cls._get_executor_cls(engine_config)
         # Initialize the cluster and specify the executor class.
-        assert engine_config.device_config.device_type == "cuda", "Currently, the vllm in verl only support running on GPU"
+        assert (
+            engine_config.device_config.device_type == "cuda"
+        ), "Currently, the vllm in verl only support running on GPU"
 
         from .spmd_gpu_executor import SPMDGPUExecutor
 
@@ -384,7 +418,9 @@ class LLMEngine(LLMEngine):
         return engine
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.model_executor.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.model_executor.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
     def offload_model_weights(self) -> None:
         self.model_executor.offload_model_weights()

@@ -47,9 +47,14 @@ class CompletionCallback(ABC):
         # Initialize tools from config file
         self.max_turns = config.actor_rollout_ref.rollout.multi_turn.max_turns
         tool_config_path = config.actor_rollout_ref.rollout.multi_turn.tool_config_path
-        tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
+        tool_list = (
+            initialize_tools_from_config(tool_config_path) if tool_config_path else []
+        )
         self.tools = {tool.name: tool for tool in tool_list}
-        self._tool_schemas = [tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True) for tool in tool_list]
+        self._tool_schemas = [
+            tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True)
+            for tool in tool_list
+        ]
         print(f"Initialized tools: {self.tools}", flush=True)
 
         local_path = copy_to_local(config.actor_rollout_ref.model.path)
@@ -66,7 +71,12 @@ class CompletionCallback(ABC):
         return None
 
     @abstractmethod
-    async def __call__(self, messages: List[Dict[str, str]], completions: ChatCompletion, info: Dict[str, Any]):
+    async def __call__(
+        self,
+        messages: List[Dict[str, str]],
+        completions: ChatCompletion,
+        info: Dict[str, Any],
+    ):
         """Call back function to process completions.
 
         Args:
@@ -77,7 +87,9 @@ class CompletionCallback(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def postprocess(self, batch: DataProto, batch_conversations: List[List[Dict[str, str]]], n: int) -> DataProto:
+    def postprocess(
+        self, batch: DataProto, batch_conversations: List[List[Dict[str, str]]], n: int
+    ) -> DataProto:
         """Post process batch data.
 
         Args:
@@ -99,8 +111,15 @@ class ToolCompletionCallback(CompletionCallback):
 
         # TODO: add reward manager to calculate reward score once a sample finish
 
-    async def __call__(self, messages: List[Dict[str, str]], completions: ChatCompletion, info: Dict[str, Any]):
-        message = completions.choices[0].message.model_dump(exclude_unset=True, exclude_none=True)
+    async def __call__(
+        self,
+        messages: List[Dict[str, str]],
+        completions: ChatCompletion,
+        info: Dict[str, Any],
+    ):
+        message = completions.choices[0].message.model_dump(
+            exclude_unset=True, exclude_none=True
+        )
         if "content" not in message:
             message["content"] = ""
         messages.append(message)
@@ -108,28 +127,38 @@ class ToolCompletionCallback(CompletionCallback):
 
         # STEP 0: check if we reach max turns
         if self.max_turns and len(messages) >= self.max_turns:
-            print(f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Reach max turns, done!")
+            print(
+                f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Reach max turns, done!"
+            )
             return
 
         # STEP 1: check if the model called tools
         if finish_reason != "tool_calls":
-            print(f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] No tool called, done!")
+            print(
+                f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] No tool called, done!"
+            )
             return
 
         # STEP 2: call tools
         tool_calls = completions.choices[0].message.tool_calls
-        print(f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Call {len(tool_calls)} tools")
+        print(
+            f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Call {len(tool_calls)} tools"
+        )
         tasks = []
         for tool_call in tool_calls:
             tasks.append(self._call_tool(tool_call))
         tool_responses = await asyncio.gather(*tasks)
         if any(isinstance(item, Exception) for item in tool_responses):
-            print(f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Error when calling tools, done!")
+            print(
+                f"[id={completions.id},turn={len(messages)},finish_reason={finish_reason}] Error when calling tools, done!"
+            )
             return
         messages.extend(tool_responses)
 
         # STEP 3: resubmit completion request with tool responses
-        self.scheduler.submit_chat_completions(messages=messages, request_id=completions.id, info=info)
+        self.scheduler.submit_chat_completions(
+            messages=messages, request_id=completions.id, info=info
+        )
 
     async def _call_tool(self, tool_call) -> Dict[str, str]:
         """Call tool and return tool response."""
@@ -139,7 +168,9 @@ class ToolCompletionCallback(CompletionCallback):
 
         instance_id = await tool.create()
         try:
-            tool_response, tool_reward_score, tool_metrics = await tool.execute(instance_id, tool_args)
+            tool_response, tool_reward_score, tool_metrics = await tool.execute(
+                instance_id, tool_args
+            )
         except Exception as e:
             logger.exception(f"Error when executing tool: {e}")
             return e
@@ -152,7 +183,9 @@ class ToolCompletionCallback(CompletionCallback):
             "tool_call_id": tool_call.id,
         }
 
-    def postprocess(self, batch: DataProto, batch_conversations: List[List[Dict[str, str]]], n: int) -> DataProto:
+    def postprocess(
+        self, batch: DataProto, batch_conversations: List[List[Dict[str, str]]], n: int
+    ) -> DataProto:
         # NOTE: consistent with batch version of generate_sequences in vllm_rollout_spmd.py
         # prompts: left pad
         # responses: right pad
@@ -161,26 +194,57 @@ class ToolCompletionCallback(CompletionCallback):
         # position_ids:   [0,0,0,0,0,1,2,3, | 4,5,6,7,8,9,10,11]
 
         # prompts: [prompt] from input dataset
-        prompts = [self.tokenizer.apply_chat_template(prompt, tools=self.tool_schemas, add_generation_prompt=True, tokenize=False) for prompt in batch.non_tensor_batch["raw_prompt"]]
+        prompts = [
+            self.tokenizer.apply_chat_template(
+                prompt,
+                tools=self.tool_schemas,
+                add_generation_prompt=True,
+                tokenize=False,
+            )
+            for prompt in batch.non_tensor_batch["raw_prompt"]
+        ]
         assert len(batch_conversations) == len(prompts) * n
 
         # sequences: [prompt + response]
-        sequences = [self.tokenizer.apply_chat_template(conversation, tools=self.tool_schemas, add_generation_prompt=False, tokenize=False) for conversation in batch_conversations]
+        sequences = [
+            self.tokenizer.apply_chat_template(
+                conversation,
+                tools=self.tool_schemas,
+                add_generation_prompt=False,
+                tokenize=False,
+            )
+            for conversation in batch_conversations
+        ]
 
         # responses: [response]
-        responses = [sequence[len(prompts[i // n]) :] for i, sequence in enumerate(sequences)]
+        responses = [
+            sequence[len(prompts[i // n]) :] for i, sequence in enumerate(sequences)
+        ]
 
-        prompts = self.tokenizer(prompts, return_tensors="pt", padding="longest", padding_side="left")
-        responses = self.tokenizer(responses, return_tensors="pt", padding="longest", padding_side="right")
+        prompts = self.tokenizer(
+            prompts, return_tensors="pt", padding="longest", padding_side="left"
+        )
+        responses = self.tokenizer(
+            responses, return_tensors="pt", padding="longest", padding_side="right"
+        )
         if n > 1:
             prompts["input_ids"] = prompts["input_ids"].repeat_interleave(n, dim=0)
-            prompts["attention_mask"] = prompts["attention_mask"].repeat_interleave(n, dim=0)
+            prompts["attention_mask"] = prompts["attention_mask"].repeat_interleave(
+                n, dim=0
+            )
 
         # response_mask: response mask with tools calling masked out
-        response_mask = self._mask_out_tools_calling_tokens(batch.non_tensor_batch["raw_prompt"].repeat(n, axis=0), batch_conversations, responses["input_ids"], responses["attention_mask"])
+        response_mask = self._mask_out_tools_calling_tokens(
+            batch.non_tensor_batch["raw_prompt"].repeat(n, axis=0),
+            batch_conversations,
+            responses["input_ids"],
+            responses["attention_mask"],
+        )
 
         input_ids = torch.cat([prompts["input_ids"], responses["input_ids"]], dim=1)
-        attention_mask = torch.cat([prompts["attention_mask"], responses["attention_mask"]], dim=1)
+        attention_mask = torch.cat(
+            [prompts["attention_mask"], responses["attention_mask"]], dim=1
+        )
         position_ids = (attention_mask.cumsum(dim=1) - 1) * attention_mask
 
         batch = TensorDict(
@@ -195,7 +259,9 @@ class ToolCompletionCallback(CompletionCallback):
             batch_size=len(input_ids),
         )
 
-        num_turns = np.array([len(conversation) for conversation in batch_conversations], dtype=np.int32)
+        num_turns = np.array(
+            [len(conversation) for conversation in batch_conversations], dtype=np.int32
+        )
         return DataProto(batch=batch, non_tensor_batch={"__num_turns__": num_turns})
 
     def _mask_out_tools_calling_tokens(
@@ -218,7 +284,9 @@ class ToolCompletionCallback(CompletionCallback):
         """
         batch_size = input_ids.size(0)
         assert len(raw_prompts) == batch_size, f"{len(raw_prompts)} != {batch_size}"
-        assert len(batch_conversations) == batch_size, f"{len(batch_conversations)} != {batch_size}"
+        assert (
+            len(batch_conversations) == batch_size
+        ), f"{len(batch_conversations)} != {batch_size}"
 
         # Deduplicate adjacent tool calls, since they're merged into one turn.
         # [user, assistant, tool, tool, assistant] -> [user, assistant, tool, assistant]
@@ -237,9 +305,16 @@ class ToolCompletionCallback(CompletionCallback):
             responses = batch_conversations[i][len(raw_prompts[i]) :]
             assert len(responses) > 0, f"responses is empty: {responses}"
 
-            roles = deduplicate_adjacent_tool_calls([response["role"] for response in responses])
+            roles = deduplicate_adjacent_tool_calls(
+                [response["role"] for response in responses]
+            )
             # Each turn should be: [BOS]...[EOS]
-            eos_indices = input_ids[i].eq(self.tokenizer.eos_token_id).nonzero().squeeze(1)[: len(roles)]
+            eos_indices = (
+                input_ids[i]
+                .eq(self.tokenizer.eos_token_id)
+                .nonzero()
+                .squeeze(1)[: len(roles)]
+            )
             for j in range(len(roles)):
                 if roles[j] == "tool":
                     bos = eos_indices[j - 1] + 1 if j > 0 else 0
@@ -278,11 +353,15 @@ class ChatCompletionScheduler:
             self.completion_callback = ToolCompletionCallback(config, self)
             logger.warning("completion_callback is None, use ToolCompletionCallback")
         else:
-            module_path, class_name = self.config.multi_turn.completion_callback.rsplit(".", 1)
+            module_path, class_name = self.config.multi_turn.completion_callback.rsplit(
+                ".", 1
+            )
             module = importlib.import_module(module_path)
             self.completion_callback = getattr(module, class_name)(config, self)
 
-    def submit_chat_completions(self, *, messages: List[Dict[str, str]], request_id: str, info: Dict[str, Any]):
+    def submit_chat_completions(
+        self, *, messages: List[Dict[str, str]], request_id: str, info: Dict[str, Any]
+    ):
         """Submit chat completion request without wait, completion_callback will be called when the request is done.
 
         Args:
@@ -291,7 +370,9 @@ class ChatCompletionScheduler:
             info: Any other auxiliary information pass across multi-turn.
         """
         info["__depth__"] += 1
-        task = asyncio.create_task(self._submit_chat_completions_and_callback(messages, request_id, info))
+        task = asyncio.create_task(
+            self._submit_chat_completions_and_callback(messages, request_id, info)
+        )
 
         # “fire-and-forget” background tasks
         self.background_tasks.add(task)
@@ -346,11 +427,20 @@ class ChatCompletionScheduler:
         if info["__depth__"] == 0:
             info["__done__"].set()
 
-    async def _chat_completions_openai(self, address: str, **chat_complete_request) -> ChatCompletion:
-        client = AsyncOpenAI(base_url=f"http://{address}/v1", api_key="token-abc123", timeout=None, max_retries=0)
+    async def _chat_completions_openai(
+        self, address: str, **chat_complete_request
+    ) -> ChatCompletion:
+        client = AsyncOpenAI(
+            base_url=f"http://{address}/v1",
+            api_key="token-abc123",
+            timeout=None,
+            max_retries=0,
+        )
         return await client.chat.completions.create(**chat_complete_request)
 
-    async def _chat_completions_aiohttp(self, address: str, **chat_complete_request) -> ChatCompletion:
+    async def _chat_completions_aiohttp(
+        self, address: str, **chat_complete_request
+    ) -> ChatCompletion:
         try:
             extra_body = chat_complete_request.pop("extra_body", {})
             chat_complete_request.update(extra_body or {})
@@ -386,7 +476,9 @@ class ChatCompletionScheduler:
         # validation dataset has already been repeated in `PPOTrainer._validate`.
         n = 1 if batch.meta_info.get("validate", False) else self.config.n
         tasks, batch_conversations = [], [None] * len(batch) * n
-        for batch_index, conversation in enumerate(batch.non_tensor_batch["raw_prompt"].repeat(n, axis=0)):
+        for batch_index, conversation in enumerate(
+            batch.non_tensor_batch["raw_prompt"].repeat(n, axis=0)
+        ):
             # raw_prompt: [{"role": "user", "content": ""}, ["role": "assistant", "content"], ...]
             batch_conversations[batch_index] = conversation.tolist()
 
@@ -401,12 +493,19 @@ class ChatCompletionScheduler:
             )
 
         await asyncio.gather(*tasks)
-        output_batch = self.completion_callback.postprocess(batch, batch_conversations, n=n)
+        output_batch = self.completion_callback.postprocess(
+            batch, batch_conversations, n=n
+        )
         output_batch.meta_info["timing"] = {"generate_sequences": time.time() - t_start}
         print("[ChatCompletionScheduler] generate_sequences done")
         return output_batch
 
-    async def _submit_chat_completions_semaphore(self, messages: List[Dict[str, str]], request_id: str, sampling_params: Dict[str, Any]):
+    async def _submit_chat_completions_semaphore(
+        self,
+        messages: List[Dict[str, str]],
+        request_id: str,
+        sampling_params: Dict[str, Any],
+    ):
         done = asyncio.Event()
 
         info = {
@@ -415,7 +514,9 @@ class ChatCompletionScheduler:
             "__sampling_params__": sampling_params,
         }
 
-        self.submit_chat_completions(messages=messages, request_id=request_id, info=info)
+        self.submit_chat_completions(
+            messages=messages, request_id=request_id, info=info
+        )
 
         # Wait until all completion requests are done
         await done.wait()

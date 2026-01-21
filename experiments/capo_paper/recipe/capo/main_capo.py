@@ -83,12 +83,17 @@ class TaskRunner:
         elif config.actor_rollout_ref.actor.strategy == "megatron":
             assert config.actor_rollout_ref.actor.strategy == config.critic.strategy
             from verl.single_controller.ray.megatron import NVMegatronRayWorkerGroup
-            from verl.workers.megatron_workers import ActorRolloutRefWorker, CriticWorker
+            from verl.workers.megatron_workers import (
+                ActorRolloutRefWorker,
+                CriticWorker,
+            )
 
             ray_worker_group_cls = NVMegatronRayWorkerGroup
 
         else:
-            raise NotImplementedError(f"Unknown strategy: {config.actor_rollout_ref.actor.strategy}")
+            raise NotImplementedError(
+                f"Unknown strategy: {config.actor_rollout_ref.actor.strategy}"
+            )
 
         from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
 
@@ -98,7 +103,9 @@ class TaskRunner:
         }
 
         global_pool_id = "global_pool"
-        resource_pool_spec = {global_pool_id: [config.trainer.n_gpus_per_node] * config.trainer.nnodes}
+        resource_pool_spec = {
+            global_pool_id: [config.trainer.n_gpus_per_node] * config.trainer.nnodes
+        }
         mapping = {
             Role.ActorRollout: global_pool_id,
             Role.Critic: global_pool_id,
@@ -116,7 +123,10 @@ class TaskRunner:
             mapping[Role.RewardModel] = global_pool_id
 
         # reference model
-        if config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
+        if (
+            config.algorithm.use_kl_in_reward
+            or config.actor_rollout_ref.actor.use_kl_loss
+        ):
             role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
             mapping[Role.RefPolicy] = global_pool_id
 
@@ -144,7 +154,9 @@ class TaskRunner:
             overlong_buffer_cfg=config.reward_model.overlong_buffer,
         )
 
-        resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
+        resource_pool_manager = ResourcePoolManager(
+            resource_pool_spec=resource_pool_spec, mapping=mapping
+        )
 
         trainer = RayPPOTrainer(
             config=config,

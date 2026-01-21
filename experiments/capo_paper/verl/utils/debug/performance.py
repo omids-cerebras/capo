@@ -44,7 +44,9 @@ def _get_current_mem_info(unit: str = "GB", precision: int = 2) -> Tuple[str]:
     return mem_allocated, mem_reserved, mem_used, mem_total
 
 
-def log_gpu_memory_usage(head: str, logger: logging.Logger = None, level=logging.DEBUG, rank: int = 0):
+def log_gpu_memory_usage(
+    head: str, logger: logging.Logger = None, level=logging.DEBUG, rank: int = 0
+):
     if (not dist.is_initialized()) or (rank is None) or (dist.get_rank() == rank):
         mem_allocated, mem_reserved, mem_used, mem_total = _get_current_mem_info()
         message = f"{head}, memory allocated (GB): {mem_allocated}, memory reserved (GB): {mem_reserved}, device memory used/total (GB): {mem_used}/{mem_total}"
@@ -66,7 +68,13 @@ class GPUMemoryLogger(DecoratorLoggerBase):
         ...     return
     """
 
-    def __init__(self, role: str, logger: logging.Logger = None, level=logging.DEBUG, log_only_rank_0: bool = True):
+    def __init__(
+        self,
+        role: str,
+        logger: logging.Logger = None,
+        level=logging.DEBUG,
+        log_only_rank_0: bool = True,
+    ):
         if dist.is_initialized() and dist.get_world_size() > 1:
             rank = dist.get_rank()
         else:
@@ -144,7 +152,9 @@ def reduce_timing(timing_raw: Dict[str, float]) -> Dict[str, float]:
     for key in sorted(timing_raw.keys()):
         key_list.append(key)
         timing_list.append(timing_raw[key])
-    timing_list = torch.tensor(timing_list, dtype=torch.float32, device=get_torch_device().current_device())
+    timing_list = torch.tensor(
+        timing_list, dtype=torch.float32, device=get_torch_device().current_device()
+    )
     torch.distributed.all_reduce(timing_list, op=torch.distributed.ReduceOp.AVG)
     timing_list = [tensor.item() for tensor in timing_list.to("cpu")]
     timing_generate = {key_list[i]: timing_list[i] for i in range(len(key_list))}

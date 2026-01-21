@@ -103,11 +103,15 @@ class ModelRunner(ModelRunner):
                 cache_config=self.cache_config,
             )
         self.model_memory_usage = m.consumed_memory
-        logger.info("Loading model weights took %.4f GB", self.model_memory_usage / float(2**30))
+        logger.info(
+            "Loading model weights took %.4f GB", self.model_memory_usage / float(2**30)
+        )
 
         if self.lora_config:
             assert supports_lora(self.model), "Model does not support LoRA"
-            assert not supports_vision(self.model), "To be tested: vision language model with LoRA settings."
+            assert not supports_vision(
+                self.model
+            ), "To be tested: vision language model with LoRA settings."
 
             self.lora_manager = LRUCacheWorkerLoRAManager(
                 self.scheduler_config.max_num_seqs,
@@ -128,7 +132,9 @@ class ModelRunner(ModelRunner):
                 self.device,
                 self.prompt_adapter_config,
             )
-            self.model = self.prompt_adapter_manager.create_prompt_adapter_manager(self.model)
+            self.model = self.prompt_adapter_manager.create_prompt_adapter_manager(
+                self.model
+            )
 
         if self.kv_cache_dtype == "fp8" and is_hip():
             # Currently only ROCm accepts kv-cache scaling factors
@@ -141,15 +147,22 @@ class ModelRunner(ModelRunner):
                         FutureWarning,
                         stacklevel=2,
                     )
-                    self.model.load_kv_cache_scales(self.model_config.quantization_param_path)
-                    logger.info("Loaded KV cache scaling factors from %s", self.model_config.quantization_param_path)
+                    self.model.load_kv_cache_scales(
+                        self.model_config.quantization_param_path
+                    )
+                    logger.info(
+                        "Loaded KV cache scaling factors from %s",
+                        self.model_config.quantization_param_path,
+                    )
                 else:
                     raise RuntimeError(
                         "Using FP8 KV cache and scaling factors provided but model %s does not support loading scaling factors.",
                         self.model.__class__,
                     )
             else:
-                logger.warning("Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!")
+                logger.warning(
+                    "Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!"
+                )
 
         if envs.VLLM_TEST_DYNAMO_GRAPH_CAPTURE:
             self.model = torch.compile(self.model, fullgraph=True, backend="eager")

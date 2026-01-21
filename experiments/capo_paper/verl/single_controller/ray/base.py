@@ -24,10 +24,18 @@ import ray
 from ray.experimental.state.api import get_actor
 from ray.util import list_named_actors
 from ray.util.placement_group import PlacementGroup, placement_group
-from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy, PlacementGroupSchedulingStrategy
+from ray.util.scheduling_strategies import (
+    NodeAffinitySchedulingStrategy,
+    PlacementGroupSchedulingStrategy,
+)
 
 from verl.protocol import DataProto, _padding_size_key
-from verl.single_controller.base import ClassWithInitArgs, ResourcePool, Worker, WorkerGroup
+from verl.single_controller.base import (
+    ClassWithInitArgs,
+    ResourcePool,
+    Worker,
+    WorkerGroup,
+)
 from verl.single_controller.base.decorator import MAGIC_ATTR, Dispatch
 
 __all__ = ["Worker"]
@@ -95,16 +103,24 @@ class RayResourcePool(ResourcePool):
         super().__init__(process_on_nodes, max_colocate_count)
         self.use_gpu = use_gpu
         # print(f"in RayProcessDispatchConfiguration: name_prefix = {name_prefix}")
-        self.name_prefix = get_random_string(length=6) if name_prefix is None else name_prefix
+        self.name_prefix = (
+            get_random_string(length=6) if name_prefix is None else name_prefix
+        )
         self.pgs = None
         self.detached = detached
         self.accelerator_type = accelerator_type
 
-    def get_placement_groups(self, strategy="STRICT_PACK", name=None, device_name="cuda"):
+    def get_placement_groups(
+        self, strategy="STRICT_PACK", name=None, device_name="cuda"
+    ):
         if self.pgs is not None:
             return self.pgs
 
-        pg_name_prefix = name if name else f"{self.name_prefix}verl_group_{'_'.join([str(count) for count in self._store])}:"
+        pg_name_prefix = (
+            name
+            if name
+            else f"{self.name_prefix}verl_group_{'_'.join([str(count) for count in self._store])}:"
+        )
         # print(f"pg_name_prefix = {pg_name_prefix}")
         if device_name == "npu":
             device_name = "NPU"
@@ -116,11 +132,22 @@ class RayResourcePool(ResourcePool):
             bundle[device_name] = 1
             if self.accelerator_type is not None:
                 bundle[self.accelerator_type] = 1e-4
-        pg_scheme = [[bundle.copy() for _ in range(process_count)] for process_count in self._store]
+        pg_scheme = [
+            [bundle.copy() for _ in range(process_count)]
+            for process_count in self._store
+        ]
 
         lifetime = "detached" if self.detached else None
 
-        pgs = [placement_group(bundles=bundles, strategy=strategy, name=pg_name_prefix + str(idx), lifetime=lifetime) for idx, bundles in enumerate(pg_scheme)]
+        pgs = [
+            placement_group(
+                bundles=bundles,
+                strategy=strategy,
+                name=pg_name_prefix + str(idx),
+                lifetime=lifetime,
+            )
+            for idx, bundles in enumerate(pg_scheme)
+        ]
 
         ray.get([pg.ready() for pg in pgs])
 
@@ -128,17 +155,32 @@ class RayResourcePool(ResourcePool):
         return pgs
 
 
-def extract_pg_from_exist(resource_pools: Dict[str, RayResourcePool], src_role_names: List[str], resource_pool: RayResourcePool) -> List:
-    src_pgs = [pg for role_name, resource_pool in resource_pools.items() for pg in resource_pool.get_placement_groups() if role_name in src_role_names]
+def extract_pg_from_exist(
+    resource_pools: Dict[str, RayResourcePool],
+    src_role_names: List[str],
+    resource_pool: RayResourcePool,
+) -> List:
+    src_pgs = [
+        pg
+        for role_name, resource_pool in resource_pools.items()
+        for pg in resource_pool.get_placement_groups()
+        if role_name in src_role_names
+    ]
 
     sorted_src_pgs = sorted(src_pgs, key=lambda pg: pg.bundle_count, reverse=True)
-    sorted_process_on_nodes = sorted([(val, idx) for idx, val in enumerate(resource_pool.store)], reverse=True)
+    sorted_process_on_nodes = sorted(
+        [(val, idx) for idx, val in enumerate(resource_pool.store)], reverse=True
+    )
 
     unsorted_pgs: List[Tuple[int, PlacementGroup]] = []
     searching_idx = 0
     for request_process, original_idx in sorted_process_on_nodes:
-        assert searching_idx < len(sorted_src_pgs), f"no enough nodes for request: searching {searching_idx} th node"
-        assert request_process <= sorted_src_pgs[searching_idx].bundle_count, f"requesting {request_process} processes, bundle count cannot satisfy"
+        assert searching_idx < len(
+            sorted_src_pgs
+        ), f"no enough nodes for request: searching {searching_idx} th node"
+        assert (
+            request_process <= sorted_src_pgs[searching_idx].bundle_count
+        ), f"requesting {request_process} processes, bundle count cannot satisfy"
         unsorted_pgs.append((original_idx, sorted_src_pgs[searching_idx]))
         searching_idx += 1
 
@@ -147,9 +189,15 @@ def extract_pg_from_exist(resource_pools: Dict[str, RayResourcePool], src_role_n
 
 def merge_resource_pool(rp1: RayResourcePool, rp2: RayResourcePool) -> RayResourcePool:
     assert rp1.use_gpu == rp2.use_gpu, "Both RayResourcePool must either use_gpu or not"
-    assert rp1.max_colocate_count == rp2.max_colocate_count, "Both RayResourcePool must has the same max_colocate_count"
-    assert rp1.n_gpus_per_node == rp2.n_gpus_per_node, "Both RayResourcePool must has the same n_gpus_per_node"
-    assert rp1.detached == rp2.detached, "Detached ResourcePool cannot be merged with non-detached ResourcePool"
+    assert (
+        rp1.max_colocate_count == rp2.max_colocate_count
+    ), "Both RayResourcePool must has the same max_colocate_count"
+    assert (
+        rp1.n_gpus_per_node == rp2.n_gpus_per_node
+    ), "Both RayResourcePool must has the same n_gpus_per_node"
+    assert (
+        rp1.detached == rp2.detached
+    ), "Detached ResourcePool cannot be merged with non-detached ResourcePool"
 
     new_store = rp1.store + rp2.store
 
@@ -189,7 +237,15 @@ class RayClassWithInitArgs(ClassWithInitArgs):
         """
         self._options.update(options)
 
-    def __call__(self, placement_group, placement_group_bundle_idx, use_gpu: bool = True, num_gpus=1, sharing_with=None, device_name="cuda") -> Any:
+    def __call__(
+        self,
+        placement_group,
+        placement_group_bundle_idx,
+        use_gpu: bool = True,
+        num_gpus=1,
+        sharing_with=None,
+        device_name="cuda",
+    ) -> Any:
         """Create and return a Ray actor with the configured options.
 
         Args:
@@ -205,11 +261,24 @@ class RayClassWithInitArgs(ClassWithInitArgs):
         """
         if sharing_with is not None:
             target_node_id = ray.get(sharing_with.get_node_id.remote())
-            cuda_visible_devices = ray.get(sharing_with.get_cuda_visible_devices.remote())
-            options = {"scheduling_strategy": NodeAffinitySchedulingStrategy(node_id=target_node_id, soft=False)}
-            return self.cls.options(**options).remote(*self.args, cuda_visible_devices=cuda_visible_devices, **self.kwargs)
+            cuda_visible_devices = ray.get(
+                sharing_with.get_cuda_visible_devices.remote()
+            )
+            options = {
+                "scheduling_strategy": NodeAffinitySchedulingStrategy(
+                    node_id=target_node_id, soft=False
+                )
+            }
+            return self.cls.options(**options).remote(
+                *self.args, cuda_visible_devices=cuda_visible_devices, **self.kwargs
+            )
 
-        options = {"scheduling_strategy": PlacementGroupSchedulingStrategy(placement_group=placement_group, placement_group_bundle_index=placement_group_bundle_idx)}
+        options = {
+            "scheduling_strategy": PlacementGroupSchedulingStrategy(
+                placement_group=placement_group,
+                placement_group_bundle_index=placement_group_bundle_idx,
+            )
+        }
         options.update(self._options)
 
         if use_gpu and device_name == "cuda":
@@ -262,7 +331,9 @@ class RayWorkerGroup(WorkerGroup):
         """
         super().__init__(resource_pool=resource_pool, **kwargs)
         self.ray_cls_with_init = ray_cls_with_init
-        self.name_prefix = get_random_string(length=6) if name_prefix is None else name_prefix
+        self.name_prefix = (
+            get_random_string(length=6) if name_prefix is None else name_prefix
+        )
         self._ray_wait_register_center_timeout = ray_wait_register_center_timeout
         # Whether the WorkerGroup is a Colocate WorkerGroup created by FusedWorker.
         self.fused_worker_used = ray_cls_with_init.fused_worker_used
@@ -275,9 +346,16 @@ class RayWorkerGroup(WorkerGroup):
             self._worker_names = worker_names
 
         if self._is_init_with_detached_workers:
-            self._init_with_detached_workers(worker_names=worker_names, worker_handles=worker_handles)
+            self._init_with_detached_workers(
+                worker_names=worker_names, worker_handles=worker_handles
+            )
         else:
-            self._init_with_resource_pool(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init, bin_pack=bin_pack, detached=detached)
+            self._init_with_resource_pool(
+                resource_pool=resource_pool,
+                ray_cls_with_init=ray_cls_with_init,
+                bin_pack=bin_pack,
+                detached=detached,
+            )
 
         if ray_cls_with_init is not None:
             self._bind_worker_method(self.ray_cls_with_init.cls, func_generator)
@@ -295,18 +373,28 @@ class RayWorkerGroup(WorkerGroup):
             bool: True if the worker is alive, False otherwise
         """
         worker_state_dict = get_actor(worker._actor_id.hex())
-        return worker_state_dict.get("state", "undefined") == "ALIVE" if worker_state_dict is not None else False
+        return (
+            worker_state_dict.get("state", "undefined") == "ALIVE"
+            if worker_state_dict is not None
+            else False
+        )
 
     def _init_with_detached_workers(self, worker_names, worker_handles):
         # ray.get_actor holds a weak reference to the actor, which causes actors garbage collected unexpectedly
         # if we only hold spawn RayWorkerGroup. By passing actor handle explicitly, spawn RayWorkerGroup have
         # strong reference to these actors.
         # https://github.com/ray-project/ray/pull/45699
-        workers = worker_handles if worker_handles else [ray.get_actor(name=name) for name in worker_names]
+        workers = (
+            worker_handles
+            if worker_handles
+            else [ray.get_actor(name=name) for name in worker_names]
+        )
         self._workers = workers
         self._world_size = len(worker_names)
 
-    def _init_with_resource_pool(self, resource_pool, ray_cls_with_init, bin_pack, detached):
+    def _init_with_resource_pool(
+        self, resource_pool, ray_cls_with_init, bin_pack, detached
+    ):
         """Initialize the worker group by creating new workers from a resource pool.
 
         Args:
@@ -320,7 +408,9 @@ class RayWorkerGroup(WorkerGroup):
         strategy = "PACK"
         if bin_pack:
             strategy = "STRICT_PACK"
-        pgs = resource_pool.get_placement_groups(strategy=strategy, device_name=self.device_name)
+        pgs = resource_pool.get_placement_groups(
+            strategy=strategy, device_name=self.device_name
+        )
         world_size = resource_pool.world_size
         self._world_size = world_size
         # cia.add_kwarg("_world_size", world_size)
@@ -329,7 +419,9 @@ class RayWorkerGroup(WorkerGroup):
         rank = -1
         local_world_size = resource_pool.store[0]
         for pg_idx, pg in enumerate(sort_placement_group_by_node_ip(pgs)):
-            assert local_world_size <= pg.bundle_count, f"when generating for {self.name_prefix}, for the "
+            assert (
+                local_world_size <= pg.bundle_count
+            ), f"when generating for {self.name_prefix}, for the "
             for local_rank in range(local_world_size):
                 rank += 1
 
@@ -349,17 +441,29 @@ class RayWorkerGroup(WorkerGroup):
                 import re
 
                 cia_name = type(ray_cls_with_init.cls).__name__
-                match = re.search(r"ActorClass\(([^)]+)\)", cia_name)  # ray.remote(Obj) -> "ActorClass(Obj)"
-                cia_name = match.group(1) if match else cia_name  # "ActorClass(Obj)" -> "Obj"
+                match = re.search(
+                    r"ActorClass\(([^)]+)\)", cia_name
+                )  # ray.remote(Obj) -> "ActorClass(Obj)"
+                cia_name = (
+                    match.group(1) if match else cia_name
+                )  # "ActorClass(Obj)" -> "Obj"
                 name = f"{self.name_prefix}{cia_name}_{pg_idx}:{local_rank}"  # e.g. Worker_2:5
 
-                ray_cls_with_init.update_options({"runtime_env": {"env_vars": env_vars}, "name": name})
+                ray_cls_with_init.update_options(
+                    {"runtime_env": {"env_vars": env_vars}, "name": name}
+                )
 
                 if detached:
                     ray_cls_with_init.update_options({"lifetime": "detached"})
 
                 # create a worker
-                worker = ray_cls_with_init(placement_group=pg, placement_group_bundle_idx=local_rank, use_gpu=use_gpu, num_gpus=num_gpus, device_name=self.device_name)
+                worker = ray_cls_with_init(
+                    placement_group=pg,
+                    placement_group_bundle_idx=local_rank,
+                    use_gpu=use_gpu,
+                    num_gpus=num_gpus,
+                    device_name=self.device_name,
+                )
                 self._workers.append(worker)
                 self._worker_names.append(name)
 
@@ -368,7 +472,10 @@ class RayWorkerGroup(WorkerGroup):
                     actor_name = f"{self.name_prefix}_register_center"
                     start_time = time.time()
 
-                    while time.time() - start_time < self._ray_wait_register_center_timeout:
+                    while (
+                        time.time() - start_time
+                        < self._ray_wait_register_center_timeout
+                    ):
                         if actor_name in list_named_actors():
                             register_center_actor = ray.get_actor(actor_name)
                             break
@@ -394,8 +501,13 @@ class RayWorkerGroup(WorkerGroup):
                             "`trainer.ray_wait_register_center_timeout`."
                         )
 
-                    rank_zero_info = ray.get(register_center_actor.get_rank_zero_info.remote())
-                    self._master_addr, self._master_port = rank_zero_info["MASTER_ADDR"], rank_zero_info["MASTER_PORT"]
+                    rank_zero_info = ray.get(
+                        register_center_actor.get_rank_zero_info.remote()
+                    )
+                    self._master_addr, self._master_port = (
+                        rank_zero_info["MASTER_ADDR"],
+                        rank_zero_info["MASTER_PORT"],
+                    )
                     # print(f"rank_zero_info: {rank_zero_info}")
                     # print(f"master_addr: {self._master_addr}, master_port: {self._master_port}")
 
@@ -421,7 +533,13 @@ class RayWorkerGroup(WorkerGroup):
         Returns:
             A new RayWorkerGroup instance
         """
-        worker_group = cls(resource_pool=None, ray_cls_with_init=ray_cls_with_init, name_prefix=name_prefix, worker_names=worker_names, worker_handles=worker_handles)
+        worker_group = cls(
+            resource_pool=None,
+            ray_cls_with_init=ray_cls_with_init,
+            name_prefix=name_prefix,
+            worker_names=worker_names,
+            worker_handles=worker_handles,
+        )
         return worker_group
 
     def spawn(self, prefix_set):
@@ -470,7 +588,9 @@ class RayWorkerGroup(WorkerGroup):
         wg_dict = dict()
         for key in prefix_set:
             new_wg = deepcopy(self)
-            new_wg._bind_worker_method(self.ray_cls_with_init.cls.raw_cls_dict[key], func_generator)
+            new_wg._bind_worker_method(
+                self.ray_cls_with_init.cls.raw_cls_dict[key], func_generator
+            )
             new_wg.sub_cls_name = key
             wg_dict[key] = new_wg
         return wg_dict
@@ -485,7 +605,9 @@ class RayWorkerGroup(WorkerGroup):
             self.wg_dict = self.spawn(prefix_set)
         for role_name, role_wg in self.wg_dict.items():
             setattr(self, role_name, role_wg)
-        self.method_names = self._bind_worker_method(self.ray_cls_with_init.cls, func_generator)
+        self.method_names = self._bind_worker_method(
+            self.ray_cls_with_init.cls, func_generator
+        )
 
     def _execute_remote_single_worker(self, worker, method_name: str, *args, **kwargs):
         """Execute a method on a single worker remotely.
@@ -501,7 +623,9 @@ class RayWorkerGroup(WorkerGroup):
         """
         if self.fused_worker_used and method_name not in self.method_names:
             remote_call = getattr(worker, self.fused_worker_execute_fn_name)
-            return remote_call.remote(f"{self.sub_cls_name}_fwmn_{method_name}", *args, **kwargs)
+            return remote_call.remote(
+                f"{self.sub_cls_name}_fwmn_{method_name}", *args, **kwargs
+            )
         # fused worker not used
         remote_call = getattr(worker, method_name)
         return remote_call.remote(*args, **kwargs)
@@ -530,7 +654,9 @@ class RayWorkerGroup(WorkerGroup):
         Returns:
             Remote object reference to the method execution
         """
-        return self._execute_remote_single_worker(self._workers[0], method_name, *args, **kwargs)
+        return self._execute_remote_single_worker(
+            self._workers[0], method_name, *args, **kwargs
+        )
 
     def execute_rank_zero(self, method_name: str, *args, **kwargs):
         """Alias for execute_rank_zero_async.
@@ -587,17 +713,28 @@ class RayWorkerGroup(WorkerGroup):
         # element in these lists to the corresponding worker
         # print(f"execute_all_async: method {method_name}({args}, {kwargs})")
         length = len(self._workers)
-        if all(isinstance(arg, list) for arg in args) and all(isinstance(kwarg, list) for kwarg in kwargs.values()):
-            if all(len(arg) == length for arg in args) and all(len(kwarg) == length for kwarg in kwargs.values()):
+        if all(isinstance(arg, list) for arg in args) and all(
+            isinstance(kwarg, list) for kwarg in kwargs.values()
+        ):
+            if all(len(arg) == length for arg in args) and all(
+                len(kwarg) == length for kwarg in kwargs.values()
+            ):
                 # print(f"splitting args and kwargs into {length} shards")
                 result = []
                 for i in range(length):
                     sliced_args = tuple(arg[i] for arg in args)
                     sliced_kwargs = {k: v[i] for k, v in kwargs.items()}
-                    result.append(self._execute_remote_single_worker(self._workers[i], method_name, *sliced_args, **sliced_kwargs))
+                    result.append(
+                        self._execute_remote_single_worker(
+                            self._workers[i], method_name, *sliced_args, **sliced_kwargs
+                        )
+                    )
                 return result
 
-        return [self._execute_remote_single_worker(worker, method_name, *args, **kwargs) for worker in self._workers]
+        return [
+            self._execute_remote_single_worker(worker, method_name, *args, **kwargs)
+            for worker in self._workers
+        ]
 
     @property
     def master_address(self):
@@ -632,7 +769,9 @@ def _bind_workers_method_to_parent(cls, key, user_defined_cls):
     for method_name in dir(user_defined_cls):
         try:
             method = getattr(user_defined_cls, method_name)
-            assert callable(method), f"{method_name} in {user_defined_cls} is not callable"
+            assert callable(
+                method
+            ), f"{method_name} in {user_defined_cls} is not callable"
         except Exception:
             # if it is a property, it will fail because Class doesn't have instance property
             continue
@@ -648,7 +787,9 @@ def _bind_workers_method_to_parent(cls, key, user_defined_cls):
                     # dispatch to the actual worker
                     return await getattr(self.worker_dict[key], name)(*args, **kwargs)
 
-                wrapper = async_func if inspect.iscoroutinefunction(method) else func  # noqa: B023
+                wrapper = (
+                    async_func if inspect.iscoroutinefunction(method) else func
+                )  # noqa: B023
 
                 return wrapper
 
@@ -658,8 +799,13 @@ def _bind_workers_method_to_parent(cls, key, user_defined_cls):
             setattr(func, MAGIC_ATTR, attrs)
             try:
                 # bind direct rollout method to class without prefix
-                if attrs["dispatch_mode"] == Dispatch.DIRECT_ROLLOUT_METHOD and "rollout" in key:
-                    assert not hasattr(cls, method_name), f"conflict direct rollout method {method_name} with role {key}"
+                if (
+                    attrs["dispatch_mode"] == Dispatch.DIRECT_ROLLOUT_METHOD
+                    and "rollout" in key
+                ):
+                    assert not hasattr(
+                        cls, method_name
+                    ), f"conflict direct rollout method {method_name} with role {key}"
                     setattr(cls, method_name, func)
                     print(f"bind role {key} method {method_name} to class {cls}")
                 else:
@@ -696,8 +842,12 @@ def create_colocated_worker_cls(class_dict: dict[str, RayClassWithInitArgs]):
     """
     cls_dict = {}
     init_args_dict = {}
-    worker_cls = _determine_fsdp_megatron_base_class([cls.cls.__ray_actor_class__.__mro__ for cls in class_dict.values()])
-    assert issubclass(worker_cls, Worker), f"worker_cls {worker_cls} should be a subclass of Worker"
+    worker_cls = _determine_fsdp_megatron_base_class(
+        [cls.cls.__ray_actor_class__.__mro__ for cls in class_dict.values()]
+    )
+    assert issubclass(
+        worker_cls, Worker
+    ), f"worker_cls {worker_cls} should be a subclass of Worker"
     print(f"colocated worker base class {worker_cls}")
 
     for key, cls in class_dict.items():
@@ -717,7 +867,10 @@ def create_colocated_worker_cls(class_dict: dict[str, RayClassWithInitArgs]):
                 # in worker class, e.g. <verl.single_controller.base.worker.Worker>
                 # when DISABLE_WORKER_INIT == 1 it will return immediately
                 with patch.dict(os.environ, {"DISABLE_WORKER_INIT": "1"}):
-                    self.worker_dict[key] = user_defined_cls(*init_args_dict[key].get("args", ()), **init_args_dict[key].get("kwargs", {}))
+                    self.worker_dict[key] = user_defined_cls(
+                        *init_args_dict[key].get("args", ()),
+                        **init_args_dict[key].get("kwargs", {}),
+                    )
 
     # now monkey-patch the methods from inner class to WorkerDict
     for key, user_defined_cls in cls_dict.items():
@@ -750,7 +903,9 @@ def create_colocated_worker_raw_cls(class_dict: dict[str, RayClassWithInitArgs])
         The same as `FusedWorker.fused_worker_dict`, enables underlying class to access other
         underlying classes.
     """
-    raw_cls_dict = {cls_name: _unwrap_ray_remote(cia.cls) for cls_name, cia in class_dict.items()}
+    raw_cls_dict = {
+        cls_name: _unwrap_ray_remote(cia.cls) for cls_name, cia in class_dict.items()
+    }
     init_args_dict = {cls_name: cia.args for cls_name, cia in class_dict.items()}
     init_kwargs_dict = {cls_name: cia.kwargs for cls_name, cia in class_dict.items()}
     cls_names = list(class_dict.keys())
@@ -766,10 +921,19 @@ def create_colocated_worker_raw_cls(class_dict: dict[str, RayClassWithInitArgs])
             self.init_args_dict = init_args_dict
             self.init_kwargs_dict = init_kwargs_dict
 
-            for cls_name, udc, ud_args, ud_kwargs in zip(self.cls_names, self.raw_cls_dict.values(), self.init_args_dict.values(), self.init_kwargs_dict.values()):
+            for cls_name, udc, ud_args, ud_kwargs in zip(
+                self.cls_names,
+                self.raw_cls_dict.values(),
+                self.init_args_dict.values(),
+                self.init_kwargs_dict.values(),
+            ):
                 with patch.dict(os.environ, {"DISABLE_WORKER_INIT": "1"}):
-                    udc._get_ray_actor_cls_name = lambda x, name_renamed=class_name_renamed: name_renamed
-                    udc._get_ray_method_prefix = lambda x, name_prefixed=cls_name: f"{name_prefixed}_"
+                    udc._get_ray_actor_cls_name = (
+                        lambda x, name_renamed=class_name_renamed: name_renamed
+                    )
+                    udc._get_ray_method_prefix = (
+                        lambda x, name_prefixed=cls_name: f"{name_prefixed}_"
+                    )
                     # cls_name = "actor", "critic", udc = ActorWorker, CriticWorker
                     self.fused_worker_dict[cls_name] = udc(*ud_args, **ud_kwargs)
                     setattr(self, cls_name, self.fused_worker_dict[cls_name])
@@ -785,7 +949,9 @@ def create_colocated_worker_raw_cls(class_dict: dict[str, RayClassWithInitArgs])
             cls_name = names[0]
             method_name = names[1]
 
-            assert cls_name in self.fused_worker_dict, f"calling {cls_name}'s {method_name}, but {cls_name} not in fused_worker_dict"
+            assert (
+                cls_name in self.fused_worker_dict
+            ), f"calling {cls_name}'s {method_name}, but {cls_name} not in fused_worker_dict"
             udc_method = getattr(self.fused_worker_dict[cls_name], method_name)
             return udc_method(*args, **kwargs)
 

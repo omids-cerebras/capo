@@ -146,7 +146,9 @@ class ModelConfig(ModelConfig):
         self.quantization_param_path = quantization_param_path
         self.enforce_eager = enforce_eager
         if max_context_len_to_capture is not None:
-            raise ValueError("`max_context_len_to_capture` is deprecated. Use `max_seq_len_to_capture` instead.")
+            raise ValueError(
+                "`max_context_len_to_capture` is deprecated. Use `max_seq_len_to_capture` instead."
+            )
         self.max_seq_len_to_capture = max_seq_len_to_capture
         self.max_logprobs = max_logprobs
         self.disable_sliding_window = disable_sliding_window
@@ -160,8 +162,14 @@ class ModelConfig(ModelConfig):
         #                                                served_model_name)
         # self._verify_load_format()
         # self._verify_tokenizer_mode()
-        if not self.disable_sliding_window and self.hf_text_config.model_type == "gemma2" and self.hf_text_config.sliding_window is not None:
-            print_warning_once(f"Gemma 2 uses sliding window attention for every odd layer, which is currently not supported by vLLM. Disabling sliding window and capping the max length to the sliding window size ({self.hf_text_config.sliding_window}).")
+        if (
+            not self.disable_sliding_window
+            and self.hf_text_config.model_type == "gemma2"
+            and self.hf_text_config.sliding_window is not None
+        ):
+            print_warning_once(
+                f"Gemma 2 uses sliding window attention for every odd layer, which is currently not supported by vLLM. Disabling sliding window and capping the max length to the sliding window size ({self.hf_text_config.sliding_window})."
+            )
             self.disable_sliding_window = True
 
         self.max_model_len = _get_and_verify_max_len(
@@ -230,7 +238,10 @@ class LoadConfig:
         self._verify_load_format()
 
         if self.ignore_patterns is not None and len(self.ignore_patterns) > 0:
-            logger.info("Ignoring the following patterns when downloading weights: %s", self.ignore_patterns)
+            logger.info(
+                "Ignoring the following patterns when downloading weights: %s",
+                self.ignore_patterns,
+            )
         else:
             self.ignore_patterns = ["original/**/*"]
 
@@ -243,5 +254,11 @@ class LoadConfig:
 
         rocm_not_supported_load_format: List[str] = []
         if is_hip() and load_format in rocm_not_supported_load_format:
-            rocm_supported_load_format = [f for f in LoadFormat.__members__ if (f not in rocm_not_supported_load_format)]
-            raise ValueError(f"load format '{load_format}' is not supported in ROCm. Supported load formats are {rocm_supported_load_format}")
+            rocm_supported_load_format = [
+                f
+                for f in LoadFormat.__members__
+                if (f not in rocm_not_supported_load_format)
+            ]
+            raise ValueError(
+                f"load format '{load_format}' is not supported in ROCm. Supported load formats are {rocm_supported_load_format}"
+            )

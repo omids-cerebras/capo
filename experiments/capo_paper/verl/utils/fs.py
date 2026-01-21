@@ -144,12 +144,16 @@ def copy_to_shm(src: str):
     """
     shm_model_root = "/dev/shm/verl-cache/"
     src_abs = os.path.abspath(os.path.normpath(src))
-    dest = os.path.join(shm_model_root, hashlib.md5(src_abs.encode("utf-8")).hexdigest())
+    dest = os.path.join(
+        shm_model_root, hashlib.md5(src_abs.encode("utf-8")).hexdigest()
+    )
     os.makedirs(dest, exist_ok=True)
     dest = os.path.join(dest, os.path.basename(src_abs))
     if os.path.exists(dest) and verify_copy(src, dest):
         # inform user and depends on him
-        print(f"[WARNING]: The memory model path {dest} already exists. If it is not you want, please clear it and restart the task.")
+        print(
+            f"[WARNING]: The memory model path {dest} already exists. If it is not you want, please clear it and restart the task."
+        )
     else:
         if os.path.isdir(src):
             shutil.copytree(src, dest, symlinks=False, dirs_exist_ok=True)
@@ -163,11 +167,15 @@ def _record_directory_structure(folder_path):
     with open(record_file, "w") as f:
         for root, dirs, files in os.walk(folder_path):
             for dir_name in dirs:
-                relative_dir = os.path.relpath(os.path.join(root, dir_name), folder_path)
+                relative_dir = os.path.relpath(
+                    os.path.join(root, dir_name), folder_path
+                )
                 f.write(f"dir:{relative_dir}\n")
             for file_name in files:
                 if file_name != ".directory_record.txt":
-                    relative_file = os.path.relpath(os.path.join(root, file_name), folder_path)
+                    relative_file = os.path.relpath(
+                        os.path.join(root, file_name), folder_path
+                    )
                     f.write(f"file:{relative_file}\n")
     return record_file
 
@@ -182,14 +190,23 @@ def _check_directory_structure(folder_path, record_file):
             existing_entries.add(f"dir:{relative_dir}")
         for file_name in files:
             if file_name != ".directory_record.txt":
-                relative_file = os.path.relpath(os.path.join(root, file_name), folder_path)
+                relative_file = os.path.relpath(
+                    os.path.join(root, file_name), folder_path
+                )
                 existing_entries.add(f"file:{relative_file}")
     with open(record_file) as f:
         recorded_entries = set(f.read().splitlines())
     return existing_entries == recorded_entries
 
 
-def copy_to_local(src: str, cache_dir=None, filelock=".file.lock", verbose=False, always_recopy=False, use_shm: bool = False) -> str:
+def copy_to_local(
+    src: str,
+    cache_dir=None,
+    filelock=".file.lock",
+    verbose=False,
+    always_recopy=False,
+    use_shm: bool = False,
+) -> str:
     """Copy files/directories from HDFS to local cache with validation.
 
     Args:
@@ -204,18 +221,24 @@ def copy_to_local(src: str, cache_dir=None, filelock=".file.lock", verbose=False
         str: Local filesystem path to copied resource
     """
     # Save to a local path for persistence.
-    local_path = copy_local_path_from_hdfs(src, cache_dir, filelock, verbose, always_recopy)
+    local_path = copy_local_path_from_hdfs(
+        src, cache_dir, filelock, verbose, always_recopy
+    )
     # Load into shm to improve efficiency.
     if use_shm:
         return copy_to_shm(local_path)
     return local_path
 
 
-def copy_local_path_from_hdfs(src: str, cache_dir=None, filelock=".file.lock", verbose=False, always_recopy=False) -> str:
+def copy_local_path_from_hdfs(
+    src: str, cache_dir=None, filelock=".file.lock", verbose=False, always_recopy=False
+) -> str:
     """Deprecated. Please use copy_to_local instead."""
     from filelock import FileLock
 
-    assert src[-1] != "/", f"Make sure the last char in src is not / because it will cause error. Got {src}"
+    assert (
+        src[-1] != "/"
+    ), f"Make sure the last char in src is not / because it will cause error. Got {src}"
 
     if is_non_local(src):
         # download from hdfs to local
@@ -245,7 +268,9 @@ def copy_local_path_from_hdfs(src: str, cache_dir=None, filelock=".file.lock", v
                 record_file = os.path.join(local_path, ".directory_record.txt")
                 if not _check_directory_structure(local_path, record_file):
                     if verbose:
-                        print(f"Recopy from {src} to {local_path} due to missing files or directories.")
+                        print(
+                            f"Recopy from {src} to {local_path} due to missing files or directories."
+                        )
                     shutil.rmtree(local_path, ignore_errors=True)
                     copy(src, local_path)
                     _record_directory_structure(local_path)

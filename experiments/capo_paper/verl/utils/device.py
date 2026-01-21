@@ -53,5 +53,7 @@ def get_torch_device() -> any:
     try:
         return getattr(torch, device_name)
     except AttributeError:
-        logger.warning(f"Device namespace '{device_name}' not found in torch, try to load torch.cuda.")
+        logger.warning(
+            f"Device namespace '{device_name}' not found in torch, try to load torch.cuda."
+        )
         return torch.cuda

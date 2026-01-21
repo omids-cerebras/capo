@@ -71,7 +71,9 @@ class SPMDGPUExecutor(ExecutorBase):
 
     # TODO(sgm): verl not support speculative decode now
     def _init_executor(self, model, distributed_init_method) -> None:
-        assert not self.speculative_config, "Speculative decoding not yet supported for multi-GPU backend."
+        assert (
+            not self.speculative_config
+        ), "Speculative decoding not yet supported for multi-GPU backend."
 
         # Create the parallel worker for each GPU.
         self._init_workers_sp(model, distributed_init_method)
@@ -137,16 +139,24 @@ class SPMDGPUExecutor(ExecutorBase):
         # NOTE: We log here to avoid multiple logs when number of workers is
         # greater than one. We could log in the engine, but not all executors
         # have GPUs.
-        logger.info("# GPU blocks: %d, # CPU blocks: %d", num_gpu_blocks, num_cpu_blocks)
+        logger.info(
+            "# GPU blocks: %d, # CPU blocks: %d", num_gpu_blocks, num_cpu_blocks
+        )
 
         self.cache_config.num_gpu_blocks = num_gpu_blocks
         self.cache_config.num_cpu_blocks = num_cpu_blocks
 
         if torch.distributed.get_rank() == 0:
-            print(f"before init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB")
-        self.worker.initialize_cache(num_gpu_blocks=num_gpu_blocks, num_cpu_blocks=num_cpu_blocks)
+            print(
+                f"before init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB"
+            )
+        self.worker.initialize_cache(
+            num_gpu_blocks=num_gpu_blocks, num_cpu_blocks=num_cpu_blocks
+        )
         if torch.distributed.get_rank() == 0:
-            print(f"after init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB")
+            print(
+                f"after init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB"
+            )
 
     # NOTE(sgm): This will not profile & capture the model(CUDAGraph) when rebuilding KVCache
     def init_cache_engine(self) -> None:
@@ -183,7 +193,9 @@ class SPMDGPUExecutor(ExecutorBase):
     from vllm.prompt_adapter.request import PromptAdapterRequest
 
     def add_prompt_adapter(self, prompt_adapter_request: PromptAdapterRequest) -> bool:
-        assert prompt_adapter_request.prompt_adapter_id > 0, "prompt_adapter_id must be greater than 0."
+        assert (
+            prompt_adapter_request.prompt_adapter_id > 0
+        ), "prompt_adapter_id must be greater than 0."
         return self.worker.add_prompt_adapter(prompt_adapter_request)
 
     def list_prompt_adapters(self) -> Set[int]:
@@ -206,7 +218,9 @@ class SPMDGPUExecutor(ExecutorBase):
         self.worker.offload_model_weights()
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.worker.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.worker.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
 
 def initialize_cluster(
@@ -240,7 +254,9 @@ def get_open_port():
 
 # TODO(sgm): not implemented async executor yet
 class SPMDGPUExecutorAsync(SPMDGPUExecutor, ExecutorAsyncBase):
-    async def execute_model_async(self, execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:
+    async def execute_model_async(
+        self, execute_model_req: ExecuteModelRequest
+    ) -> List[SamplerOutput]:
         """Executes one model step on the given sequences."""
         raise NotImplementedError
 

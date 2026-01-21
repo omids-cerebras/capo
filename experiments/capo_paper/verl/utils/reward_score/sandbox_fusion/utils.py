@@ -31,10 +31,47 @@ API_TIMEOUT = 10
 logger = logging.getLogger(__name__)
 
 # Define supported languages list (optional, for documentation or validation)
-SUPPORTED_LANGUAGES = ["python", "cpp", "nodejs", "go", "go_test", "java", "php", "csharp", "bash", "typescript", "sql", "rust", "cuda", "lua", "R", "perl", "D_ut", "ruby", "scala", "julia", "pytest", "junit", "kotlin_script", "jest", "verilog", "python_gpu", "lean", "swift", "racket"]
+SUPPORTED_LANGUAGES = [
+    "python",
+    "cpp",
+    "nodejs",
+    "go",
+    "go_test",
+    "java",
+    "php",
+    "csharp",
+    "bash",
+    "typescript",
+    "sql",
+    "rust",
+    "cuda",
+    "lua",
+    "R",
+    "perl",
+    "D_ut",
+    "ruby",
+    "scala",
+    "julia",
+    "pytest",
+    "junit",
+    "kotlin_script",
+    "jest",
+    "verilog",
+    "python_gpu",
+    "lean",
+    "swift",
+    "racket",
+]
 
 
-def call_sandbox_api(sandbox_fusion_url: str, code: str, stdin: str, compile_timeout: int, run_timeout: int, language: str = "python") -> Tuple[Optional[Dict[str, Any]], Optional[str]]:  # <-- Remove request_id parameter
+def call_sandbox_api(
+    sandbox_fusion_url: str,
+    code: str,
+    stdin: str,
+    compile_timeout: int,
+    run_timeout: int,
+    language: str = "python",
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:  # <-- Remove request_id parameter
     """
     Calls the remote sandbox API to execute code with retry logic for Gateway Timeout,
     using increasing delay between retries. Logs internal calls with a unique ID.
@@ -79,7 +116,9 @@ def call_sandbox_api(sandbox_fusion_url: str, code: str, stdin: str, compile_tim
 
     for attempt in range(MAX_RETRIES):
         try:
-            logger.info(f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling sandbox API at {sandbox_fusion_url}")  # <-- Use internal log_prefix
+            logger.info(
+                f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling sandbox API at {sandbox_fusion_url}"
+            )  # <-- Use internal log_prefix
             response = requests.post(
                 sandbox_fusion_url,
                 headers=headers,
@@ -95,8 +134,12 @@ def call_sandbox_api(sandbox_fusion_url: str, code: str, stdin: str, compile_tim
                     # Calculate increasing delay (e.g., 1s, 2s, 4s, ...) or (1s, 2s, 3s, ...)
                     # Simple linear increase: delay = INITIAL_RETRY_DELAY * (attempt + 1)
                     # Exponential backoff: delay = INITIAL_RETRY_DELAY * (2 ** attempt)
-                    delay = INITIAL_RETRY_DELAY * (attempt + 1)  # Using linear increase for simplicity
-                    logger.info(f"{log_prefix}Retrying after {delay} seconds...")  # <-- Use internal log_prefix
+                    delay = INITIAL_RETRY_DELAY * (
+                        attempt + 1
+                    )  # Using linear increase for simplicity
+                    logger.info(
+                        f"{log_prefix}Retrying after {delay} seconds..."
+                    )  # <-- Use internal log_prefix
                     time.sleep(delay)
                 continue  # Go to the next retry attempt
 
@@ -104,28 +147,50 @@ def call_sandbox_api(sandbox_fusion_url: str, code: str, stdin: str, compile_tim
             response.raise_for_status()
 
             # If successful (status code 2xx)
-            logger.info(f"{log_prefix}Sandbox API call successful on attempt {attempt + 1}")  # <-- Use internal log_prefix
+            logger.info(
+                f"{log_prefix}Sandbox API call successful on attempt {attempt + 1}"
+            )  # <-- Use internal log_prefix
             return response.json(), None
 
         except requests.exceptions.RequestException as e:
-            last_error = f"{log_prefix}API Request Error: {e}"  # <-- Use internal log_prefix
+            last_error = (
+                f"{log_prefix}API Request Error: {e}"  # <-- Use internal log_prefix
+            )
             break  # Exit retry loop on non-504 request errors
         except json.JSONDecodeError as e:
             raw_response_text = response.text if "response" in locals() else "N/A"
             last_error = f"{log_prefix}API Response JSON Decode Error: {e}"  # <-- Use internal log_prefix
             break  # Exit retry loop on JSON decode errors
         except Exception as e:
-            last_error = f"{log_prefix}Unexpected Error: {e}"  # <-- Use internal log_prefix
+            last_error = (
+                f"{log_prefix}Unexpected Error: {e}"  # <-- Use internal log_prefix
+            )
             break  # Exit retry loop on other unexpected errors
 
     # If loop finishes without returning success, return the last recorded error
-    logger.error(f"{log_prefix}Sandbox API call failed. Last error: {last_error}")  # <-- Use internal log_prefix
+    logger.error(
+        f"{log_prefix}Sandbox API call failed. Last error: {last_error}"
+    )  # <-- Use internal log_prefix
     # Return the error message without the prefix, as the caller doesn't need the internal ID
     # Ensure API call failure returns error message, leading to -1 in check_correctness
-    return None, last_error.replace(log_prefix, "API Call Failed: ") if last_error else "API Call Failed after retries"
+    return None, (
+        last_error.replace(log_prefix, "API Call Failed: ")
+        if last_error
+        else "API Call Failed after retries"
+    )
 
 
-def _process_single_case(case_index: int, stdin_data: Any, expected_output: Any, sandbox_fusion_url: str, generation: str, timeout: int, language: str, concurrent_semaphore: Optional[threading.Semaphore] = None, fn_name: Optional[str] = None) -> Tuple[int, Dict[str, Any]]:
+def _process_single_case(
+    case_index: int,
+    stdin_data: Any,
+    expected_output: Any,
+    sandbox_fusion_url: str,
+    generation: str,
+    timeout: int,
+    language: str,
+    concurrent_semaphore: Optional[threading.Semaphore] = None,
+    fn_name: Optional[str] = None,
+) -> Tuple[int, Dict[str, Any]]:
     """Helper function to process a single test case."""
     api_response = None
     error_msg = None
@@ -237,10 +302,24 @@ if __name__ == '__main__':
             # logger.debug(f"Case {case_index + 1}: Attempting to acquire semaphore.")
             with concurrent_semaphore:
                 # logger.debug(f"Case {case_index + 1}: Semaphore acquired. Calling API.")
-                api_response, error_msg = call_sandbox_api(sandbox_fusion_url=sandbox_fusion_url, code=current_generation_code, stdin=str(stdin_data), compile_timeout=timeout, run_timeout=timeout, language=language)
+                api_response, error_msg = call_sandbox_api(
+                    sandbox_fusion_url=sandbox_fusion_url,
+                    code=current_generation_code,
+                    stdin=str(stdin_data),
+                    compile_timeout=timeout,
+                    run_timeout=timeout,
+                    language=language,
+                )
             # logger.debug(f"Case {case_index + 1}: Semaphore released.")
         else:
-            api_response, error_msg = call_sandbox_api(sandbox_fusion_url=sandbox_fusion_url, code=current_generation_code, stdin=str(stdin_data), compile_timeout=timeout, run_timeout=timeout, language=language)
+            api_response, error_msg = call_sandbox_api(
+                sandbox_fusion_url=sandbox_fusion_url,
+                code=current_generation_code,
+                stdin=str(stdin_data),
+                compile_timeout=timeout,
+                run_timeout=timeout,
+                language=language,
+            )
     except Exception as e:
         error_msg = f"API Request Exception during check_correctness for case {case_index + 1}: {e}"
         logger.error(f"Case {case_index + 1}: {error_msg}")
@@ -270,7 +349,9 @@ if __name__ == '__main__':
         result_status = -1  # API request itself failed (includes timeout after retries)
         logger.error(f"Case {case_index}: API error occurred: {error_msg}")
         # Log code and input only on error for brevity
-        generation_to_log = generation[:200] + "..." if len(generation) > 200 else generation
+        generation_to_log = (
+            generation[:200] + "..." if len(generation) > 200 else generation
+        )
         logger.error(f"Case {case_index}: code: {generation_to_log}")
         logger.error(f"Case {case_index}: input: {str(stdin_data)}")
     elif api_response:
@@ -308,7 +389,13 @@ if __name__ == '__main__':
             logger.debug(f"Run Result: {run_result}")
             # --- Check the logic here ---
             # Compile failed or timed out
-            is_compile_error = compile_result and (metadata["compile_status"] in ["Error", "TimeLimitExceeded"] or (metadata["compile_status"] == "Finished" and compile_result.get("return_code") != 0))
+            is_compile_error = compile_result and (
+                metadata["compile_status"] in ["Error", "TimeLimitExceeded"]
+                or (
+                    metadata["compile_status"] == "Finished"
+                    and compile_result.get("return_code") != 0
+                )
+            )
             if is_compile_error:
                 # Differentiate between compile_error and compile_timeout based on specific status
                 if metadata["compile_status"] == "TimeLimitExceeded":
@@ -319,7 +406,14 @@ if __name__ == '__main__':
             # Run failed or timed out
             elif run_result:
                 # Modified condition: Check for TimeLimitExceeded OR (Finished with non-zero exit code) OR Error status
-                is_runtime_error = metadata["run_status"] == "TimeLimitExceeded" or metadata["run_status"] == "Error" or (metadata["run_status"] == "Finished" and run_result.get("return_code") != 0)
+                is_runtime_error = (
+                    metadata["run_status"] == "TimeLimitExceeded"
+                    or metadata["run_status"] == "Error"
+                    or (
+                        metadata["run_status"] == "Finished"
+                        and run_result.get("return_code") != 0
+                    )
+                )
                 if is_runtime_error:
                     if metadata["run_status"] == "TimeLimitExceeded":
                         metadata["status"] = "timeout"  # Runtime timeout
@@ -329,18 +423,24 @@ if __name__ == '__main__':
                         result_status = -2
                 else:
                     # Other Failed status with run_result, classify as unknown failure
-                    logger.warning(f"Unknown run_status '{metadata['run_status']}' or state within Failed API status.")
+                    logger.warning(
+                        f"Unknown run_status '{metadata['run_status']}' or state within Failed API status."
+                    )
                     metadata["status"] = "unknown_failure"
                     result_status = -1  # Default to -1
             else:
                 # Status is Failed but neither a clear compile error nor run_result exists
-                logger.warning("API status Failed but cannot determine specific error type (compile/run).")
+                logger.warning(
+                    "API status Failed but cannot determine specific error type (compile/run)."
+                )
                 metadata["status"] = "unknown_failure_state"
                 result_status = -1  # Default to -1
         elif api_status == "Success":
             # Run completed successfully, now check the answer
             if run_result and metadata["run_status"] == "Finished":
-                actual_output = metadata["stdout"] if metadata["stdout"] is not None else ""
+                actual_output = (
+                    metadata["stdout"] if metadata["stdout"] is not None else ""
+                )
                 # Note: Output might contain trailing newlines, need normalization
                 if str(actual_output).rstrip("\n") == str(expected_output).rstrip("\n"):
                     result_status = True
@@ -360,11 +460,20 @@ if __name__ == '__main__':
     else:  # api_response is None and no error_msg (Should not happen with current call_sandbox_api logic)
         metadata["status"] = "unknown_api_state"
         result_status = -1
-        logger.error(f"Case {case_index}: Unknown API state (no response and no error message).")
+        logger.error(
+            f"Case {case_index}: Unknown API state (no response and no error message)."
+        )
     return result_status, metadata
 
 
-def check_correctness(sandbox_fusion_url: str, in_outs: Optional[dict], generation: str, timeout: int = DEFAULT_TIMEOUT, language: str = "python", concurrent_semaphore: Optional[threading.Semaphore] = None) -> Tuple[List[Any], List[Dict[str, Any]]]:
+def check_correctness(
+    sandbox_fusion_url: str,
+    in_outs: Optional[dict],
+    generation: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    language: str = "python",
+    concurrent_semaphore: Optional[threading.Semaphore] = None,
+) -> Tuple[List[Any], List[Dict[str, Any]]]:
     """
     Checks the correctness of code generation using the remote sandbox API,
     processing test cases concurrently.
@@ -402,16 +511,37 @@ def check_correctness(sandbox_fusion_url: str, in_outs: Optional[dict], generati
         return [], []
 
     if len(inputs) != len(expected_outputs):
-        logger.warning(f"Mismatch between number of inputs ({len(inputs)}) and outputs ({len(expected_outputs)}).")
+        logger.warning(
+            f"Mismatch between number of inputs ({len(inputs)}) and outputs ({len(expected_outputs)})."
+        )
         # Return error based on the number of inputs provided
-        return [-1] * num_cases, [{"error": "Input/output count mismatch", "case_index": i} for i in range(num_cases)]
+        return [-1] * num_cases, [
+            {"error": "Input/output count mismatch", "case_index": i}
+            for i in range(num_cases)
+        ]
 
     first_compile_error_index = -1
 
     # max_workers is limited by sandbox_fusion_max_concurrent from concurrent_semaphore
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max(32, os.cpu_count() * 5)) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(32, os.cpu_count() * 5)
+    ) as executor:
         # Submit all tasks, passing the concurrent_semaphore to _process_single_case
-        future_to_index = {executor.submit(_process_single_case, i, stdin_data, expected_outputs[i], sandbox_fusion_url, generation, timeout, language, concurrent_semaphore, fn_name): i for i, stdin_data in enumerate(inputs)}
+        future_to_index = {
+            executor.submit(
+                _process_single_case,
+                i,
+                stdin_data,
+                expected_outputs[i],
+                sandbox_fusion_url,
+                generation,
+                timeout,
+                language,
+                concurrent_semaphore,
+                fn_name,
+            ): i
+            for i, stdin_data in enumerate(inputs)
+        }
 
         # Process results as they complete
         for future in concurrent.futures.as_completed(future_to_index):
@@ -423,7 +553,10 @@ def check_correctness(sandbox_fusion_url: str, in_outs: Optional[dict], generati
 
                 # Check for compile error (-4)
                 if result_status == -4:
-                    if first_compile_error_index == -1 or index < first_compile_error_index:
+                    if (
+                        first_compile_error_index == -1
+                        or index < first_compile_error_index
+                    ):
                         first_compile_error_index = index
                     # Optimization: could potentially cancel futures for index > first_compile_error_index
                     # However, cancellation is not guaranteed. Post-processing is safer.
@@ -442,13 +575,17 @@ def check_correctness(sandbox_fusion_url: str, in_outs: Optional[dict], generati
 
     # Post-processing for compile errors
     if first_compile_error_index != -1:
-        logger.warning(f"Compile error detected in case {first_compile_error_index}. Marking subsequent cases as compile errors.")
+        logger.warning(
+            f"Compile error detected in case {first_compile_error_index}. Marking subsequent cases as compile errors."
+        )
         for i in range(first_compile_error_index + 1, num_cases):
             # Only update if not already processed (though it should be None or have a result)
             if results[i] != -4:  # Avoid overwriting if it somehow already got -4
                 results[i] = -4
                 # Update or create metadata for skipped cases due to compile error
-                if metadata_list[i] is None:  # If future failed before returning metadata
+                if (
+                    metadata_list[i] is None
+                ):  # If future failed before returning metadata
                     metadata_list[i] = {
                         "case_index": i,
                         "input": str(inputs[i]),

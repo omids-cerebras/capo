@@ -51,8 +51,16 @@ class BaseCheckpointManager:
         processing_class: Union[PreTrainedTokenizer, ProcessorMixin] = None,
         checkpoint_contents: DictConfig = None,
     ):
-        checkpoint_load_contents = checkpoint_contents.get("load_contents", None) if checkpoint_contents else None
-        checkpoint_save_contents = checkpoint_contents.get("save_contents", None) if checkpoint_contents else None
+        checkpoint_load_contents = (
+            checkpoint_contents.get("load_contents", None)
+            if checkpoint_contents
+            else None
+        )
+        checkpoint_save_contents = (
+            checkpoint_contents.get("save_contents", None)
+            if checkpoint_contents
+            else None
+        )
         if checkpoint_load_contents is None:
             checkpoint_load_contents = ["model", "optimizer", "extra"]
         if checkpoint_save_contents is None:
@@ -119,16 +127,28 @@ class BaseCheckpointManager:
         """
         return "extra" in self.checkpoint_load_contents
 
-    def load_checkpoint(self, local_path: str, hdfs_path: str = None, del_local_after_load: bool = False):
+    def load_checkpoint(
+        self, local_path: str, hdfs_path: str = None, del_local_after_load: bool = False
+    ):
         raise NotImplementedError
 
-    def save_checkpoint(self, local_path: str, hdfs_path: str = None, global_step: int = 0, max_ckpt_to_keep: int = None):
+    def save_checkpoint(
+        self,
+        local_path: str,
+        hdfs_path: str = None,
+        global_step: int = 0,
+        max_ckpt_to_keep: int = None,
+    ):
         raise NotImplementedError
 
     @staticmethod
     def checkpath(local_path: str, hdfs_path: str):
-        assert local_path is not None or hdfs_path is not None, "local_path and hdfs_path cannot be both None"
-        return local_path is not None, local_path if local_path is not None else hdfs_path
+        assert (
+            local_path is not None or hdfs_path is not None
+        ), "local_path and hdfs_path cannot be both None"
+        return local_path is not None, (
+            local_path if local_path is not None else hdfs_path
+        )
 
     def remove_previous_save_local_path(self, path):
         if isinstance(path, str):

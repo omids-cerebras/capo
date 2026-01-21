@@ -46,7 +46,10 @@ def _sympy_parse(expr: str):
     py_expr = expr.replace("^", "**")
     return sympy_parser.parse_expr(
         py_expr,
-        transformations=(sympy_parser.standard_transformations + (sympy_parser.implicit_multiplication_application,)),
+        transformations=(
+            sympy_parser.standard_transformations
+            + (sympy_parser.implicit_multiplication_application,)
+        ),
     )
 
 
@@ -231,7 +234,12 @@ def split_tuple(expr: str):
     expr = _strip_properly_formatted_commas(expr)
     if len(expr) == 0:
         return []
-    if len(expr) > 2 and expr[0] in TUPLE_CHARS and expr[-1] in TUPLE_CHARS and all([ch not in expr[1:-1] for ch in TUPLE_CHARS]):
+    if (
+        len(expr) > 2
+        and expr[0] in TUPLE_CHARS
+        and expr[-1] in TUPLE_CHARS
+        and all([ch not in expr[1:-1] for ch in TUPLE_CHARS])
+    ):
         elems = [elem.strip() for elem in expr[1:-1].split(",")]
     else:
         elems = [expr]
@@ -270,7 +278,14 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
     ground_truth_elems = split_tuple(ground_truth_normalized)
     given_elems = split_tuple(given_normalized)
 
-    if len(ground_truth_elems) > 1 and (ground_truth_normalized[0] != given_normalized[0] or ground_truth_normalized[-1] != given_normalized[-1]) or len(ground_truth_elems) != len(given_elems):
+    if (
+        len(ground_truth_elems) > 1
+        and (
+            ground_truth_normalized[0] != given_normalized[0]
+            or ground_truth_normalized[-1] != given_normalized[-1]
+        )
+        or len(ground_truth_elems) != len(given_elems)
+    ):
         is_correct = False
     else:
         for ground_truth_elem, given_elem in zip(ground_truth_elems, given_elems):
@@ -287,7 +302,9 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
                 except Exception as e:
                     # if there's an error, we'll just say it's not correct
                     is_correct = False
-                    print(f"Error: {e} from are_equal_under_sympy, {ground_truth_elem}, {given_elem}")
+                    print(
+                        f"Error: {e} from are_equal_under_sympy, {ground_truth_elem}, {given_elem}"
+                    )
             if not is_correct:
                 break
 
@@ -363,7 +380,19 @@ def match_answer(response):
         if dot_idx != -1:
             response = response[:dot_idx].strip()
 
-    for ans_marker in ["be ", "is ", "are ", "=", ": ", "get ", "be\n", "is\n", "are\n", ":\n", "get\n"]:
+    for ans_marker in [
+        "be ",
+        "is ",
+        "are ",
+        "=",
+        ": ",
+        "get ",
+        "be\n",
+        "is\n",
+        "are\n",
+        ":\n",
+        "get\n",
+    ]:
         ans_idx = response.lower().rfind(ans_marker)
         if ans_idx != -1:
             is_matched = True
@@ -371,7 +400,9 @@ def match_answer(response):
             if response.endswith("\n"):
                 response = response[:-2]
 
-    is_matched = is_matched if any([c.isdigit() for c in response]) else False  # answer must have a digit
+    is_matched = (
+        is_matched if any([c.isdigit() for c in response]) else False
+    )  # answer must have a digit
     # Grade
     return is_matched, response
 
@@ -391,7 +422,11 @@ def compute_score(model_output: str, ground_truth: str) -> bool:
         if "\pi" in extracted_model_output or "\pi" in ground_truth:
             equivs = []
             for pi in [math.pi, 3.14]:
-                equivs.append(math_equal(extracted_model_output, ground_truth, timeout=True, pi=pi))
+                equivs.append(
+                    math_equal(
+                        extracted_model_output, ground_truth, timeout=True, pi=pi
+                    )
+                )
             is_correct = any(equivs)
         else:
             is_correct = math_equal(extracted_model_output, ground_truth, timeout=True)

@@ -40,7 +40,12 @@ class BaseTool:
         self.tool_schema = tool_schema or self.get_openai_tool_schema()
         assert self.tool_schema is not None, "Tool schema is not set!"
         self.name = self.tool_schema.function.name
-        print(json.dumps(self.tool_schema.model_dump(exclude_unset=True, exclude_none=True), indent=2))
+        print(
+            json.dumps(
+                self.tool_schema.model_dump(exclude_unset=True, exclude_none=True),
+                indent=2,
+            )
+        )
 
     def get_openai_tool_schema(self) -> OpenAIFunctionToolSchema:
         return self.tool_schema
@@ -59,7 +64,9 @@ class BaseTool:
         else:
             return instance_id
 
-    async def execute(self, instance_id: str, parameters: dict[str, Any], **kwargs) -> Tuple[str, float, dict]:
+    async def execute(
+        self, instance_id: str, parameters: dict[str, Any], **kwargs
+    ) -> Tuple[str, float, dict]:
         """Execute the tool.
 
         Args:
@@ -122,10 +129,15 @@ def initialize_tools_from_config(tools_config_file) -> List[BaseTool]:
         if tool_config.get("tool_schema", None) is None:
             tool_schema = None
         else:
-            tool_schema_dict = OmegaConf.to_container(tool_config.tool_schema, resolve=True)
+            tool_schema_dict = OmegaConf.to_container(
+                tool_config.tool_schema, resolve=True
+            )
             tool_schema = OpenAIFunctionToolSchema.parse_obj(tool_schema_dict)
 
-        tool = tool_cls(config=OmegaConf.to_container(tool_config.config, resolve=True), tool_schema=tool_schema)
+        tool = tool_cls(
+            config=OmegaConf.to_container(tool_config.config, resolve=True),
+            tool_schema=tool_schema,
+        )
         tool_list.append(tool)
 
     return tool_list

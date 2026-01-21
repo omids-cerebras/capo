@@ -17,7 +17,10 @@
 # use mcore transformer config to initialize the model
 from abc import ABC, abstractmethod
 
-from megatron.core.models.gpt.gpt_layer_specs import get_gpt_decoder_block_spec, get_gpt_mtp_block_spec
+from megatron.core.models.gpt.gpt_layer_specs import (
+    get_gpt_decoder_block_spec,
+    get_gpt_mtp_block_spec,
+)
 from megatron.core.models.gpt.gpt_model import GPTModel
 
 from .config_converter import PretrainedConfig, TransformerConfig
@@ -33,7 +36,8 @@ class BaseModelInitializer(ABC):
     @abstractmethod
     def get_transformer_layer_spec(self):
         """Get the transformer layer specification.
-        https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/models/gpt/gpt_layer_specs.py"""
+        https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/models/gpt/gpt_layer_specs.py
+        """
         pass
 
     def get_rope_scaling_args(self) -> dict:
@@ -42,7 +46,9 @@ class BaseModelInitializer(ABC):
         if "rope_scaling" in self.hf_config:
             if self.hf_config.rope_scaling is not None:
                 # assert self.hf_config.rope_scaling["type"] == "linear", "only linear scaling is supported for now"
-                rope_scaling_args["seq_len_interpolation_factor"] = self.hf_config.rope_scaling["factor"]
+                rope_scaling_args["seq_len_interpolation_factor"] = (
+                    self.hf_config.rope_scaling["factor"]
+                )
         return rope_scaling_args
 
     def initialize(
@@ -83,9 +89,15 @@ class BaseModelInitializer(ABC):
         )
 
         if post_process and value:
-            from verl.models.llama.megatron.layers.parallel_linear import LinearForLastLayer
+            from verl.models.llama.megatron.layers.parallel_linear import (
+                LinearForLastLayer,
+            )
 
-            model.output_layer = LinearForLastLayer(input_size=self.tfconfig.hidden_size, output_size=1, config=self.tfconfig)
+            model.output_layer = LinearForLastLayer(
+                input_size=self.tfconfig.hidden_size,
+                output_size=1,
+                config=self.tfconfig,
+            )
 
         return model
 
@@ -94,7 +106,9 @@ class DenseModel(BaseModelInitializer):
     """Initializer for dense models like Llama and Qwen2."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
         return get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
 
 
@@ -102,12 +116,18 @@ class Qwen2MoEModel(BaseModelInitializer):
     """Initializer for Qwen2 MoE models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
-        transformer_layer_spec = get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
+        transformer_layer_spec = get_gpt_decoder_block_spec(
+            self.tfconfig, use_transformer_engine=True
+        )
 
         # Patch layer spec for shared experts
         for i in range(len(transformer_layer_spec.layer_specs)):
-            transformer_layer_spec.layer_specs[i].submodules.mlp.submodules.shared_experts.params["gate"] = True
+            transformer_layer_spec.layer_specs[
+                i
+            ].submodules.mlp.submodules.shared_experts.params["gate"] = True
 
         return transformer_layer_spec
 
@@ -125,8 +145,12 @@ class MixtralModel(BaseModelInitializer):
     """Initializer for Mixtral models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
-        transformer_layer_spec = get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
+        transformer_layer_spec = get_gpt_decoder_block_spec(
+            self.tfconfig, use_transformer_engine=True
+        )
         return transformer_layer_spec
 
     def initialize(self, **kwargs):
@@ -142,8 +166,12 @@ class Qwen3MoEModel(BaseModelInitializer):
     """Initializer for Qwen3 MoE models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
-        transformer_layer_spec = get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
+        transformer_layer_spec = get_gpt_decoder_block_spec(
+            self.tfconfig, use_transformer_engine=True
+        )
         return transformer_layer_spec
 
     def initialize(self, **kwargs):
@@ -160,7 +188,9 @@ class DeepseekV3Model(BaseModelInitializer):
     """Initializer for DeepseekV3 models."""
 
     def get_transformer_layer_spec(self):
-        transformer_layer_spec = get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
+        transformer_layer_spec = get_gpt_decoder_block_spec(
+            self.tfconfig, use_transformer_engine=True
+        )
         return transformer_layer_spec
 
     def get_rope_scaling_args(self) -> dict:
@@ -178,7 +208,9 @@ class DeepseekV3Model(BaseModelInitializer):
         # MTP
         if self.tfconfig.mtp_num_layers is not None:
             transformer_layer_spec = self.get_transformer_layer_spec()
-            mtp_block_spec = get_gpt_mtp_block_spec(self.tfconfig, transformer_layer_spec, use_transformer_engine=True)
+            mtp_block_spec = get_gpt_mtp_block_spec(
+                self.tfconfig, transformer_layer_spec, use_transformer_engine=True
+            )
             kwargs["mtp_block_spec"] = mtp_block_spec
 
         model = super().initialize(**kwargs)
@@ -193,7 +225,9 @@ class Qwen25VLModel(BaseModelInitializer):
     """Initializer for Qwen2.5 VL models."""
 
     def get_transformer_layer_spec(self):
-        transformer_layer_spec = get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
+        transformer_layer_spec = get_gpt_decoder_block_spec(
+            self.tfconfig, use_transformer_engine=True
+        )
         return transformer_layer_spec
 
     def initialize(
@@ -211,17 +245,30 @@ class Qwen25VLModel(BaseModelInitializer):
 
         transformer_layer_spec = self.get_transformer_layer_spec()
 
-        from megatron.core.extensions.transformer_engine import TEColumnParallelLinear, TERowParallelLinear
+        from megatron.core.extensions.transformer_engine import (
+            TEColumnParallelLinear,
+            TERowParallelLinear,
+        )
         from megatron.core.models.gpt.moe_module_specs import MLPSubmodules
-        from megatron.core.models.vision.vit_layer_specs import get_vit_layer_with_transformer_engine_spec
+        from megatron.core.models.vision.vit_layer_specs import (
+            get_vit_layer_with_transformer_engine_spec,
+        )
 
-        from .qwen2_5_vl import Qwen2_5VLModel, get_vision_model_config, get_vision_projection_config
+        from .qwen2_5_vl import (
+            Qwen2_5VLModel,
+            get_vision_model_config,
+            get_vision_projection_config,
+        )
 
         vision_transformer_config = get_vision_model_config(deepcopy(tfconfig))
         vision_transformer_config.pipeline_model_parallel_size = 1
         vision_transformer_config.first_pipeline_num_layers = None
 
-        vision_projection_config = get_vision_projection_config(deepcopy(tfconfig), vision_transformer_config.hidden_size, spatial_merge_size=hf_config.vision_config.spatial_merge_size)
+        vision_projection_config = get_vision_projection_config(
+            deepcopy(tfconfig),
+            vision_transformer_config.hidden_size,
+            spatial_merge_size=hf_config.vision_config.spatial_merge_size,
+        )
         vision_projection_layer_spec = MLPSubmodules(
             linear_fc1=TEColumnParallelLinear,
             linear_fc2=TERowParallelLinear,
@@ -248,8 +295,12 @@ class Qwen25VLModel(BaseModelInitializer):
         )
 
         if post_process and value:
-            from verl.models.llama.megatron.layers.parallel_linear import LinearForLastLayer
+            from verl.models.llama.megatron.layers.parallel_linear import (
+                LinearForLastLayer,
+            )
 
-            qwen25_vl_model.language_model.output_layer = LinearForLastLayer(input_size=tfconfig.hidden_size, output_size=1, config=tfconfig)
+            qwen25_vl_model.language_model.output_layer = LinearForLastLayer(
+                input_size=tfconfig.hidden_size, output_size=1, config=tfconfig
+            )
 
         return qwen25_vl_model
