@@ -28,6 +28,11 @@ from verl.utils.megatron import tensor_parallel as tp_utils
 
 
 class ParallelQwen2MLP(nn.Module):
+    """
+    Parallel implementation of the Qwen2 MLP (Multi-Layer Perceptron) module.
+    This module consists of a gate-up projection followed by a down projection,
+    with an activation function applied to the gate output.
+    """
     def __init__(self, config, megatron_config: ModelParallelConfig = None) -> None:
         super().__init__()
         self.config = config

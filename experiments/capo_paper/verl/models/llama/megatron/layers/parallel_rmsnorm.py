@@ -24,6 +24,10 @@ from verl.utils.megatron import sequence_parallel as sp_utils
 
 
 class ParallelLlamaRMSNorm(nn.Module):
+    """
+    Parallel implementation of Llama RMSNorm (Root Mean Square Layer Normalization).
+    This is equivalent to T5LayerNorm.
+    """
     def __init__(self, config: LlamaConfig, megatron_config: ModelParallelConfig):
         """
         LlamaRMSNorm is equivalent to T5LayerNorm

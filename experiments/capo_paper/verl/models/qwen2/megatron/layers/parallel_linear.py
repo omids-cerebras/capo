@@ -18,6 +18,11 @@ from megatron.core import tensor_parallel
 
 
 class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
+    """
+    Parallel implementation of a QKV (Query, Key, Value) linear layer.
+    This layer splits the output into query, key, and value tensors for
+    multi-head attention mechanisms.
+    """
     def __init__(
         self,
         input_size,
