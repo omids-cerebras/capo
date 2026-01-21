@@ -18,6 +18,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from megatron.core import ModelParallelConfig, tensor_parallel
 from megatron.core import parallel_state as mpu
 from torch import nn
@@ -69,6 +70,15 @@ class ParallelLlamaMLP(nn.Module):
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, x):
+        """
+        Forward pass of the parallel Llama MLP.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, seq_len, hidden_size].
+
+        Returns:
+            torch.Tensor: Output tensor of shape [batch_size, seq_len, hidden_size].
+        """
         gate_up = self.gate_up_proj(x)[0]
         gate, up = gate_up.split(self.gate_size, dim=-1)
         return self.down_proj(self.act_fn(gate) * up)[0]
