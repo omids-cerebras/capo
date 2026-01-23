@@ -1,0 +1,691 @@
+% =========================================================
+% §4  Algorithms: CAPO with Empirical Bayes length & dependence estimation
+% Place this as a separate top-level section after Methods.
+% Requires: \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+% =========================================================
+\section{Algorithms: CAPO with Empirical Bayes length and dependence estimation}
+\label{sec:alg-eb-capo}
+
+\subsection*{Workflow overview (precise step-by-step)}
+We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) and dependence shape \(\xi\) directly into the CAPO training loop, using the notation and objects introduced in \S\ref{sec:eb-theory} (in particular, the precisions \(\omega_i(\beta,\xi)\), weights \(w_i(\beta,\xi)\), aggregator \(m(\beta,\xi)\), and summaries \(\Lambda_\omega(\beta,\xi)\), \(\mathrm{RSS}_\omega(\beta,\xi)\)).
+
+\begin{enumerate}
+  \item \textbf{Rollout collection.} At optimization step \(t\), sample trajectories under the current policy \(\pi_{\theta_t}\). This yields a batch
+  \[
+  \mathcal B_t=\big\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\big\}_{i=1}^{G_t},
+  \]
+  where \(L_i\in\mathbb N\) is the trajectory length, \(g_i\in\mathbb R\) is a scalarized trajectory return (e.g., episode reward or aggregated advantage), and \(Y_{i,\tau}\in\mathbb R\) are per-token scalar increments used for estimating within-trajectory dependence.
+
+  \item \textbf{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\)).} Using the current EB parameters \((\beta_{t-1},\xi_{t-1})\), compute per-trajectory precisions and normalized weights as
+  \[
+  \omega_i^{(t)} \;=\; \omega_i(\beta_{t-1},\xi_{t-1})
+  \;=\; \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1},\qquad
+  w_i^{(t)} \;=\; \frac{\omega_i^{(t)}}{\sum_{j\in\mathcal B_t}\omega_j^{(t)}}.
+  \]
+  Form the batch aggregator (the empirical version of \(m(\beta,\xi)\)),
+  \[
+  m_t \;=\; \sum_{i\in\mathcal B_t} w_i^{(t)} g_i,
+  \]
+  the residuals \(e_i^{(t)}=g_i-m_t\), and the summaries
+  \[
+  \Lambda_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)},
+  \qquad
+  \mathrm{RSS}_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)}\big(e_i^{(t)}\big)^2.
+  \]
+
+  \item \textbf{M-step on EB objective.} Using the EB objective \(\ell(\beta,\xi)\) from \eqref{eq:EB-obj} and its gradients from Proposition~\ref{prop:grad} and Corollary~\ref{cor:grad-beta}, take damped/EMA-smoothed ascent steps on \(\beta\) and \(\xi\). For \(\xi\), either
+  \begin{itemize}
+    \item[(i)] use the \emph{ACF-moment} estimator (Algorithm~\ref{alg:acf-moment}), which fits the dependence family \(s(L;\rho,k,\eta)\) of Definition~\ref{def:kband} to empirical autocorrelations, or
+    \item[(ii)] directly use the EB gradient \(\nabla_\xi \ell(\beta,\xi)\) in combination with the derivatives from Lemma~\ref{lem:kband-deriv}.
+  \end{itemize}
+
+  \item \textbf{Reweight and update policy.} After updating to \((\beta_t,\xi_t)\), recompute trajectory weights
+  \[
+  w_i^{(t)} \;\propto\; \omega_i(\beta_t,\xi_t)
+  \;=\; \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1},
+  \]
+  and feed these into CAPO’s policy/teacher update (e.g., reweighted SFT/OPD losses or variance-aware policy gradients).
+
+  \item \textbf{Stabilization \& diagnostics.} Apply exponential moving averages (EMA) to \((\beta,\xi)\), enforce simple box constraints such as \(|\rho|\le \rho_{\max}<1\), \(\eta\ge 0\), and clip extreme weights (e.g., the largest \(0.5\%\) of \(w_i\)). Monitor weight entropy and coefficient of variation as diagnostics, and update \((\beta,\xi)\) every \(2\!-\!4\) outer steps for additional stability.
+\end{enumerate}
+
+\subsection*{Algorithm~\ref{alg:eb-capo}: EB--CAPO in the CAPO training loop}
+Algorithm~\ref{alg:eb-capo} implements the full EB–CAPO loop described above.  
+At each outer step \(t\), it:
+\begin{enumerate}
+  \item collects a batch \(\mathcal B_t\) of trajectories \((g_i,L_i,\{Y_{i,\tau}\})\);
+  \item computes the E-step statistics under the current hyperparameters \((\beta_{t-1},\xi_{t-1})\), namely the precisions \(\omega_i^{(t)}\), normalized weights \(w_i^{(t)}\), weighted mean \(m_t\), residuals \(e_i^{(t)}\), and summaries \(\Lambda_\omega^{(t)},\mathrm{RSS}_\omega^{(t)}\);
+  \item performs an M-step for the length exponent \(\beta\) using the EB gradient \(\partial_\beta \ell(\beta,\xi)\) in Corollary~\ref{cor:grad-beta}, with EMA and box-constraint stabilization;
+  \item updates the dependence parameter \(\xi\) either via a plug-in ACF-moment fit (Algorithm~\ref{alg:acf-moment}) or via the EB gradient \(\nabla_\xi \ell(\beta,\xi)\) from Proposition~\ref{prop:grad} and Lemma~\ref{lem:kband-deriv};
+  \item recomputes weights at the updated \((\beta_t,\xi_t)\) and passes them to the CAPO policy/teacher loss.
+\end{enumerate}
+Thus Algorithm~\ref{alg:eb-capo} provides an online, amortized approximation to maximizing the EB objective \(\ell(\beta,\xi)\) while simultaneously using the resulting precision weights in the CAPO optimizer.
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+\label{alg:eb-capo}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Initial EB parameters \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA coefficients \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\) for the banded family).}
+\Output{Streaming EB estimates \(\{(\beta_t,\xi_t)\}_{t\ge 0}\) and trajectory weights \(w_i^{(t)}\propto \omega_i(\beta_t,\xi_t)\).}
+
+\For{\(t=1,2,\dots\)}{
+  \textbf{Collect} batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\).\;
+
+  \tcp{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\))}
+  \ForEach{\(i\in\mathcal B_t\)}{
+    \(\omega_i^{(t)} \gets \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1}\).\;
+  }
+  \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
+  \ForEach{\(i\in\mathcal B_t\)}{
+    \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
+  }
+
+  \(m_t\gets \sum_{i\in\mathcal B_t} w_i^{(t)} g_i\);\quad
+  \ForEach{\(i\in\mathcal B_t\)}{
+    \(e_i^{(t)}\gets g_i-m_t\).\;
+  }
+  \(\Lambda_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)}\);\quad
+  \(\mathrm{RSS}_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2\).\;
+
+  \tcp{M-step: update \(\beta\) using Cor.~\ref{cor:grad-beta}}
+  \(g_\beta \gets \frac{1}{2}\Big[-\sum_{i\in\mathcal B_t} \log L_i + \frac{\sum_{i\in\mathcal B_t} \omega_i^{(t)} \log L_i}{\Lambda_\omega^{(t)}}\Big]
+  + \frac{G_t-1}{2}\frac{1}{\mathrm{RSS}_\omega^{(t)}}\sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2 \log L_i
+  + \partial_\beta \log \pi_\beta(\beta_{t-1})\).\;
+  \(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\;
+  \(\beta_t \gets (1-\gamma_\beta)\beta_{t-1} + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\).\;
+
+  \tcp{M-step: update \(\xi\) either by ACF-moment (Alg.~\ref{alg:acf-moment}) or EB gradient (Prop.~\ref{prop:grad}, Lem.~\ref{lem:kband-deriv})}
+  \uIf{ACF-moment update}{
+    \(\tilde\xi_t \gets \mathrm{ACF\_Moment\_Fit}\big(\{Y_{i,\tau}\}_{i\in\mathcal B_t,\tau},k\big)\).\;
+  }
+  \Else{\tcp{EB gradient update}
+    \(g_\xi \gets \nabla_\xi \ell(\beta_{t-1},\xi_{t-1})\) evaluated on \(\mathcal B_t\) via \eqref{eq:EB-grad-general}.\;
+    \(\tilde\xi_t \gets \xi_{t-1} + \eta_\xi\, g_\xi\).\;
+  }
+  \(\xi_t \gets (1-\gamma_\xi)\xi_{t-1} + \gamma_\xi\, \mathrm{proj}_\Xi(\tilde\xi_t)\) \tcp*{project to \(|\rho|\le\rho_{\max}<1,\ \eta\ge 0\)}
+
+  \tcp{Reweight and pass to CAPO update}
+  \ForEach{\(i\in\mathcal B_t\)}{
+     \(\omega_i^{(t)} \gets \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1}\).\;
+  }
+  \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
+  \ForEach{\(i\in\mathcal B_t\)}{
+     \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
+  }
+  Use \(\{w_i^{(t)}\}_{i\in\mathcal B_t}\) as trajectory weights in the CAPO policy/teacher loss.\;
+
+  \tcp{Diagnostics and update schedule}
+  Clip extreme \(w_i^{(t)}\) (e.g., the largest \(0.5\%\)); monitor weight entropy and coefficient of variation; optionally update \((\beta_t,\xi_t)\) only every \(2\)–\(4\) outer steps.\;
+}
+\end{algorithm}
+
+\subsection*{Algorithm~\ref{alg:acf-moment}: ACF-moment estimator for dependence}
+Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).  
+It operates at the \emph{token} level \(Y_{i,\tau}\) and:
+\begin{enumerate}
+  \item computes per-trajectory empirical autocovariances \(\hat\gamma_i(h)\) up to lag \(k\), centered by the within-trajectory mean \(\bar Y_i\);
+  \item forms a pooled autocovariance \(\bar\gamma(h)\) by weighting each trajectory \(i\) by the number of contributing pairs \(L_i-h\);
+  \item converts to a pooled autocorrelation \(\bar r(h)=\bar\gamma(h)/\bar\gamma(0)\);
+  \item fits \((\rho,\eta)\) by least squares against the theoretical correlation \(\rho^{h^\eta}\) implied by the stretched-geometric model.
+\end{enumerate}
+The resulting \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) can be used directly in the variance law \(v_i(\vartheta)=\sigma^2 L_i^\beta s(L_i;\xi)\), or as a warm start for subsequent EB gradient updates in Algorithm~\ref{alg:eb-capo} or Algorithm~\ref{alg:joint-eb-kband}.
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{ACF-moment estimator for dependence shape (used inside Algorithm~\ref{alg:eb-capo})}
+\label{alg:acf-moment}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Token-level increments \(\{Y_{i,\tau}\}_{\tau=1}^{L_i}\) for each trajectory \(i\); maximum lag \(k\).}
+\Output{Shape estimate \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) for the family \(s(L;\rho,k,\eta)\) in Definition~\ref{def:kband}.}
+
+\ForEach{trajectory \(i\)}{
+  \(\bar Y_i \gets \dfrac{1}{L_i}\sum_{\tau=1}^{L_i} Y_{i,\tau}\);\;
+  \For{\(h=0,1,\dots,k\)}{
+    \(\hat\gamma_i(h)\gets \dfrac{1}{L_i-h}\sum_{\tau=1}^{L_i-h} (Y_{i,\tau}-\bar Y_i)(Y_{i,\tau+h}-\bar Y_i)\).\;
+  }
+}
+\(\bar\gamma(h)\gets \dfrac{\sum_i (L_i-h)\hat\gamma_i(h)}{\sum_i (L_i-h)}\) for \(h=0,\dots,k\);\quad
+\(\bar r(h)\gets \bar\gamma(h)/\bar\gamma(0)\) for \(h\ge 1\).\;
+
+\(\tilde\xi\gets \arg\min_{\rho,\eta}\sum_{h=1}^k\big(\bar r(h)-\rho^{\,h^{\eta}}\big)^2\)\;
+\tcp*{Optionally downweight large \(h\) to reduce noise}
+\end{algorithm}
+
+\subsection*{Algorithm~\ref{alg:eb-lite}: EB-lite length-only estimator}
+Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).  
+It is based on the approximation
+\[
+\log\big((g_i-m)^2\big) \approx c - \beta \log L_i,
+\]
+which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).  
+The algorithm:
+\begin{enumerate}
+  \item initializes \(m^{(0)}\) as the unweighted mean or median of \(\{g_i\}\);
+  \item iteratively regresses \(z_i = \log(e_i^2+\varepsilon)\) on \(\log L_i\) to obtain \(\hat\beta\) from the (negative) slope;
+  \item reweights trajectories as \(w_i\propto L_i^{-\hat\beta}\) and updates \(m\) as the precision-weighted mean;
+  \item repeats until convergence of \(\hat\beta\) and \(m\).
+\end{enumerate}
+This yields a single-parameter EB estimate \(\hat\beta\) that can be used as a prior or initialization for the full EB updates with dependence.
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{EB-lite (no dependence): single-parameter length fit}
+\label{alg:eb-lite}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Trajectory pairs \(\{(g_i,L_i)\}_{i=1}^G\); small regularization constant \(\varepsilon>0\).}
+\Output{Estimate \(\hat\beta\) and weights \(w_i \propto L_i^{-\hat\beta}\).}
+
+Initialize \(m^{(0)}\gets \dfrac{1}{G}\sum_{i=1}^G g_i\) or \(m^{(0)}\gets \mathrm{median}\{g_i\}\).\;
+\Repeat{converged}{
+  \For{\(i=1,\dots,G\)}{
+    \(e_i \gets g_i - m^{(k)}\);\quad
+    \(z_i \gets \log(e_i^2+\varepsilon)\).\;
+  }
+  Fit the regression model \(z_i = c - \beta \log L_i + \varepsilon_i\) by (optionally weighted) least squares; set \(\hat\beta^{(k+1)}\gets -\) (estimated slope).\;
+  Set provisional weights \(w_i \propto L_i^{-\hat\beta^{(k+1)}}\), then normalize \(w_i\gets w_i / \sum_j w_j\).\;
+  Update the aggregator \(m^{(k+1)}\gets \sum_{i=1}^G w_i g_i\).\;
+}
+Set \(\hat\beta\gets \hat\beta^{(k+1)}\).\;
+\end{algorithm}
+
+\subsection*{Algorithm~\ref{alg:kband-weights}: $k$-banded covariance weights}
+Algorithm~\ref{alg:kband-weights} specializes the general EB weighting rule to the $k$-banded stretched-geometric dependence model of Definition~\ref{def:kband}.  
+Given a batch \(\mathcal B_t\), a current length exponent \(\beta_t\), and dependence parameters \((\rho_t,\eta_t)\), it:
+\begin{enumerate}
+  \item optionally refreshes \((\rho_t,\eta_t)\) using the ACF-moment estimator (Algorithm~\ref{alg:acf-moment});
+  \item computes, for each trajectory \(i\), the shape factor
+  \[
+  s_i = s(L_i;\rho_t,k,\eta_t)
+  = 1 + \frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\rho_t^{\,h^{\eta_t}},
+  \qquad m_i=\min\{k,L_i-1\};
+  \]
+  \item forms the precision \(\omega_i^{(t)} = \big(L_i^{\beta_t} s_i\big)^{-1}\) and normalizes to obtain \(w_i^{(t)}\);
+  \item returns the dependence-corrected weights \(\{w_i^{(t)}\}\) and the shape factors \(\{s_i\}\).
+\end{enumerate}
+This gives an explicit implementation of the weighting rule in Proposition~\ref{prop:weights-kband-eta}.
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{k-banded covariance weights (stretched-geometric dependence)}
+\label{alg:kband-weights}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\);\newline
+       current length exponent \(\beta_t\);\newline
+       current $k$-banded dependence parameters \((\rho_t,\eta_t)\);\newline
+       maximum lag \(k\) for the $k$-band family in Definition~\ref{def:kband}.}
+\Output{Shape factors \(s_i = s(L_i;\rho_t,k,\eta_t)\) and trajectory weights
+        \(w_i^{(t)} \propto [L_i^{\beta_t}\,s(L_i;\rho_t,k,\eta_t)]^{-1}\).}
+
+\tcp{Optional: refresh $(\rho_t,\eta_t)$ from token-level ACFs}
+\If{update dependence parameters}{
+  \(\tilde\xi_t=(\tilde\rho_t,\tilde\eta_t) \gets
+    \mathrm{ACF\_Moment\_Fit}\big(\{Y_{i,\tau}\}_{i\in\mathcal B_t,\tau},k\big)\) \tcp*{Alg.~\ref{alg:acf-moment}}
+  \((\rho_t,\eta_t) \gets \mathrm{proj}_\Xi(\tilde\rho_t,\tilde\eta_t)\)\;
+}
+
+\tcp{Compute $k$-banded shape factors $s_i$ and precisions $\omega_i$}
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(m_i \gets \min\{k,\,L_i-1\}\)\;
+  \(s_i \gets 1 + \dfrac{2}{L_i}
+           \sum_{h=1}^{m_i} (L_i-h)\,\rho_t^{\,h^{\eta_t}}\)
+    \tcp*{Definition~\ref{def:kband}}
+  \(\omega_i^{(t)} \gets \big(L_i^{\beta_t}\,s_i\big)^{-1}\)\;
+}
+
+\tcp{Normalize to obtain Bayes/precision weights}
+\(Z_t \gets \sum_{j\in\mathcal B_t} \omega_j^{(t)}\)\;
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\)\;
+}
+
+\tcp{Return $k$-banded dependence-corrected weights}
+\Return \(\{s_i\}_{i\in\mathcal B_t},\ \{w_i^{(t)}\}_{i\in\mathcal B_t}\)\;
+\end{algorithm}
+
+\subsection*{Algorithm~\ref{alg:joint-eb-kband}: Joint EB update for \(\beta\), \(\rho\), and \(\eta\)}
+Algorithm~\ref{alg:joint-eb-kband} combines the EB updates for the length exponent \(\beta\) and the $k$-banded dependence parameters \((\rho,\eta)\) into a single joint gradient-ascent step on the EB objective \(\ell(\beta,\rho,\eta)\), under the stretched-geometric dependence model \(s(L;\rho,k,\eta)\).  
+For a given batch \(\mathcal B_t\), it:
+\begin{enumerate}
+  \item computes the E-step statistics \(\omega_i, w_i, m_t, e_i, \Lambda_\omega, \mathrm{RSS}_\omega\) under current hyperparameters \((\beta_{t-1},\rho_{t-1},\eta_{t-1})\);
+  \item uses Corollary~\ref{cor:grad-beta} to obtain \(g_\beta = \partial_\beta \ell\) and Lemma~\ref{lem:kband-deriv} together with Proposition~\ref{prop:grad} to obtain \(g_\rho = \partial_\rho \ell\) and \(g_\eta = \partial_\eta \ell\);
+  \item performs projected gradient-ascent steps on \(\beta,\rho,\eta\), followed by EMA smoothing with \(\gamma_\beta,\gamma_\xi\);
+  \item recomputes dependence-corrected weights \(w_i^{(t)}\propto [L_i^{\beta_t}s(L_i;\rho_t,k,\eta_t)]^{-1}\) for use in the CAPO update.
+\end{enumerate}
+This algorithm is the most direct implementation of the EB theory in \S\ref{sec:eb-theory} when the practitioner is comfortable optimizing the full parameter vector \((\beta,\rho,\eta)\).
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{Joint EB update for length \(\beta\) and \(k\)-banded dependence \((\rho,\eta)\)}
+\label{alg:joint-eb-kband}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\);\;
+       current parameters \(\beta_{t-1},\rho_{t-1},\eta_{t-1}\);\;
+       learning rates \(\eta_\beta,\eta_\rho,\eta_\eta>0\);\;
+       EMA \(\gamma_\beta,\gamma_\xi\in(0,1]\);\;
+       constraints \(\beta\in[\beta_{\min},\beta_{\max}],\ |\rho|\le\rho_{\max}<1,\ \eta\ge 0\);\;
+       max lag \(k\) for \(s(L;\rho,k,\eta)\) (Def.~\ref{def:kband});\;
+       priors \(\pi_\beta,\pi_\rho,\pi_\eta\).}
+\Output{Updated \(\beta_t,\rho_t,\eta_t\) and weights
+        \(w_i^{(t)} \propto [L_i^{\beta_t}s(L_i;\rho_t,k,\eta_t)]^{-1}\).}
+
+\tcp{Optional warm-start for $(\rho,\eta)$ from ACF moments (Alg.~\ref{alg:acf-moment})}
+\If{warm-start}{
+  \((\rho_{t-1},\eta_{t-1}) \gets
+    \mathrm{proj}_\Xi\big(\mathrm{ACF\_Moment\_Fit}(\{Y_{i,\tau}\},k)\big)\)\;
+}
+
+\tcp{E-step: EB statistics under current $(\beta_{t-1},\rho_{t-1},\eta_{t-1})$}
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(m_i \gets \min\{k,\,L_i-1\}\);\;
+  \(s_i \gets 1 + \dfrac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho_{t-1}^{\,h^{\eta_{t-1}}}\);\;
+  \(\omega_i \gets \big(L_i^{\beta_{t-1}}\,s_i\big)^{-1}\)\;
+}
+\(\Lambda_\omega \gets \sum_{i\in\mathcal B_t} \omega_i\);\;
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(w_i \gets \omega_i / \Lambda_\omega\)\;
+}
+\(m_t \gets \sum_{i\in\mathcal B_t} w_i g_i\);\;
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(e_i \gets g_i - m_t\)\;
+}
+\(\mathrm{RSS}_\omega \gets \sum_{i\in\mathcal B_t} \omega_i e_i^2\)\;
+
+\tcp{M-step: gradients of EB objective $\ell(\beta,\rho,\eta)$}
+Compute \(g_\beta = \partial_\beta \ell\) from Cor.~\ref{cor:grad-beta}
+(using current \(\{\omega_i,e_i,L_i\}\))\;
+Compute \(g_\rho = \partial_\rho \ell\) and \(g_\eta = \partial_\eta \ell\)
+from Prop.~\ref{prop:grad} and Lem.~\ref{lem:kband-deriv}
+(using current \(\{\omega_i,e_i,s_i\}\))\;
+
+\tcp{Gradient-ascent updates with projection and EMA}
+\(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\(\tilde\rho_t \gets \rho_{t-1} + \eta_\rho\, g_\rho\);\(\tilde\eta_t \gets \eta_{t-1} + \eta_\eta\, g_\eta\);\;
+
+\(\beta_t \gets (1-\gamma_\beta)\beta_{t-1}
+  + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\);\;
+\(\rho_t \gets (1-\gamma_\xi)\rho_{t-1}
+  + \gamma_\xi\,\mathrm{clip}(\tilde\rho_t;[-\rho_{\max},\rho_{\max}])\);\;
+\(\eta_t \gets (1-\gamma_\xi)\eta_{t-1}
+  + \gamma_\xi\,\max\{\tilde\eta_t,\,0\}\);\;
+
+\tcp{Recompute $k$-banded weights at $(\beta_t,\rho_t,\eta_t)$ for CAPO}
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(m_i \gets \min\{k,\,L_i-1\}\);\;
+  \(s_i \gets 1 + \dfrac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho_t^{\,h^{\eta_t}}\);\;
+  \(\omega_i \gets \big(L_i^{\beta_t}\,s_i\big)^{-1}\)\;
+}
+\(\Lambda_\omega \gets \sum_{j\in\mathcal B_t} \omega_j\);\;
+\ForEach{\(i\in\mathcal B_t\)}{
+  \(w_i^{(t)} \gets \omega_i / \Lambda_\omega\)\;
+}
+
+\Return \(\beta_t,\rho_t,\eta_t,\{w_i^{(t)}\}_{i\in\mathcal B_t}\)\;
+\end{algorithm}
+
+\paragraph{Complexity and implementation notes.}
+Per outer step \(t\), computing the EB statistics \(\{\omega_i^{(t)},w_i^{(t)},m_t,e_i^{(t)},\Lambda_\omega^{(t)},\mathrm{RSS}_\omega^{(t)}\}\) has cost \(O(G_t)\) for a batch of \(G_t\) trajectories.
+The ACF-moment estimator with maximum lag \(k\) has cost \(O\big(\sum_{i\in\mathcal B_t} L_i\,k\big)\), which is typically dominated by the rollout generation cost.
+In practice, small EMA coefficients \(\gamma_\beta,\gamma_\xi\in[0.05,0.3]\), a bound \(|\rho|\le 0.9\), and clipping of the largest \(w_i^{(t)}\) (e.g., at the 99.5th percentile) are sufficient to prevent any single trajectory from dominating the update.
+
+
+% % =========================================================
+% % §4  Algorithms: CAPO with Empirical Bayes length & dependence estimation
+% % Place this as a separate top-level section after Methods.
+% % Requires: \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+% % =========================================================
+% \section{Algorithms: CAPO with Empirical Bayes length and dependence estimation}
+% \label{sec:alg-eb-capo}
+
+% \subsection*{Workflow overview (precise step-by-step)}
+% We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) and dependence shape \(\xi\) directly into the CAPO training loop, using the notation and objects introduced in \S\ref{sec:eb-theory} (in particular, the precisions \(\omega_i(\beta,\xi)\), weights \(w_i(\beta,\xi)\), aggregator \(m(\beta,\xi)\), and summaries \(\Lambda_\omega(\beta,\xi)\), \(\mathrm{RSS}_\omega(\beta,\xi)\)).
+
+% \begin{enumerate}
+%   \item \textbf{Rollout collection.} At optimization step \(t\), sample trajectories under the current policy \(\pi_{\theta_t}\). This yields a batch
+%   \[
+%   \mathcal B_t=\big\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\big\}_{i=1}^{G_t},
+%   \]
+%   where \(L_i\) is the trajectory length, \(g_i\) is a scalarized trajectory return (e.g., episode reward or aggregated advantage), and \(Y_{i,\tau}\) are per-token scalar increments used for estimating within-trajectory dependence.
+
+%   \item \textbf{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\)).} Using the current EB parameters \((\beta_{t-1},\xi_{t-1})\), compute per-trajectory precisions and normalized weights as
+%   \[
+%   \omega_i^{(t)} \;=\; \omega_i(\beta_{t-1},\xi_{t-1})
+%   \;=\; \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1},\qquad
+%   w_i^{(t)} \;=\; \frac{\omega_i^{(t)}}{\sum_{j\in\mathcal B_t}\omega_j^{(t)}}.
+%   \]
+%   Form the batch aggregator (the empirical version of \(m(\beta,\xi)\)),
+%   \[
+%   m_t \;=\; \sum_{i\in\mathcal B_t} w_i^{(t)} g_i,
+%   \]
+%   the residuals \(e_i^{(t)}=g_i-m_t\), and the summaries
+%   \[
+%   \Lambda_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)},
+%   \qquad
+%   \mathrm{RSS}_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)}\big(e_i^{(t)}\big)^2.
+%   \]
+
+%   \item \textbf{M-step on EB objective.} Using the EB objective \(\ell(\beta,\xi)\) from \eqref{eq:EB-obj} and its gradients from Proposition~\ref{prop:grad} and Corollary~\ref{cor:grad-beta}, take damped/EMA-smoothed ascent steps on \(\beta\) and \(\xi\). For \(\xi\), either
+%   \begin{itemize}
+%     \item[(i)] use the \emph{ACF-moment} estimator (Algorithm~\ref{alg:acf-moment}), which fits the dependence family \(s(L;\rho,k,\eta)\) of Definition~\ref{def:kband} to empirical autocorrelations, or
+%     \item[(ii)] directly use the EB gradient \(\nabla_\xi \ell(\beta,\xi)\) in combination with the derivatives from Lemma~\ref{lem:kband-deriv}.
+%   \end{itemize}
+
+%   \item \textbf{Reweight and update policy.} After updating to \((\beta_t,\xi_t)\), recompute trajectory weights
+%   \[
+%   w_i^{(t)} \;\propto\; \omega_i(\beta_t,\xi_t)
+%   \;=\; \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1},
+%   \]
+%   and feed these into CAPO’s policy/teacher update (e.g., reweighted SFT/OPD losses or variance-aware policy gradients).
+
+%   \item \textbf{Stabilization \& diagnostics.} Apply exponential moving averages (EMA) to \((\beta,\xi)\), enforce simple box constraints such as \(|\rho|\le \rho_{\max}<1\), \(\eta\ge 0\), and clip extreme weights (e.g., the largest \(0.5\%\) of \(w_i\)). Monitor weight entropy and coefficient of variation as diagnostics, and update \((\beta,\xi)\) every \(2\!-\!4\) outer steps for additional stability.
+% \end{enumerate}
+
+% \begin{algorithm}
+% \DontPrintSemicolon
+% \caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+% \label{alg:eb-capo}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Initial EB parameters \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA coefficients \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\) for the banded family).}
+% \Output{Streaming EB estimates \(\{(\beta_t,\xi_t)\}_{t\ge 0}\) and trajectory weights \(w_i^{(t)}\propto \omega_i(\beta_t,\xi_t)\).}
+
+% \For{\(t=1,2,\dots\)}{
+%   \textbf{Collect} batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\).\;
+
+%   \tcp{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\))}
+%   \ForEach{\(i\in\mathcal B_t\)}{
+%     \(\omega_i^{(t)} \gets \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1}\).\;
+%   }
+%   \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
+%   \ForEach{\(i\in\mathcal B_t\)}{
+%     \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
+%   }
+
+%   \(m_t\gets \sum_{i\in\mathcal B_t} w_i^{(t)} g_i\);\quad
+%   \ForEach{\(i\in\mathcal B_t\)}{
+%     \(e_i^{(t)}\gets g_i-m_t\).\;
+%   }
+%   \(\Lambda_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)}\);\quad
+%   \(\mathrm{RSS}_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2\).\;
+
+%   \tcp{M-step: update \(\beta\) using Cor.~\ref{cor:grad-beta}}
+%   \(g_\beta \gets \frac{1}{2}\Big[-\sum_{i\in\mathcal B_t} \log L_i + \frac{\sum_{i\in\mathcal B_t} \omega_i^{(t)} \log L_i}{\Lambda_\omega^{(t)}}\Big]
+%   + \frac{G_t-1}{2}\frac{1}{\mathrm{RSS}_\omega^{(t)}}\sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2 \log L_i
+%   + \partial_\beta \log \pi_\beta(\beta_{t-1})\).\;
+%   \(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\;
+%   \(\beta_t \gets (1-\gamma_\beta)\beta_{t-1} + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\).\;
+
+%   \tcp{M-step: update \(\xi\) either by ACF-moment (Alg.~\ref{alg:acf-moment}) or EB gradient (Prop.~\ref{prop:grad}, Lem.~\ref{lem:kband-deriv})}
+%   \uIf{ACF-moment update}{
+%     \(\tilde\xi_t \gets \mathrm{ACF\_Moment\_Fit}\big(\{Y_{i,\tau}\}_{i\in\mathcal B_t,\tau},k\big)\).\;
+%   }
+%   \Else{\tcp{EB gradient update}
+%     \(g_\xi \gets \nabla_\xi \ell(\beta_{t-1},\xi_{t-1})\) evaluated on \(\mathcal B_t\) via \eqref{eq:EB-grad-general}.\;
+%     \(\tilde\xi_t \gets \xi_{t-1} + \eta_\xi\, g_\xi\).\;
+%   }
+%   \(\xi_t \gets (1-\gamma_\xi)\xi_{t-1} + \gamma_\xi\, \mathrm{proj}_\Xi(\tilde\xi_t)\) \tcp*{project to \(|\rho|\le\rho_{\max}<1,\ \eta\ge 0\)}
+
+%   \tcp{Reweight and pass to CAPO update}
+%   \ForEach{\(i\in\mathcal B_t\)}{
+%      \(\omega_i^{(t)} \gets \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1}\).\;
+%   }
+%   \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
+%   \ForEach{\(i\in\mathcal B_t\)}{
+%      \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
+%   }
+%   Use \(\{w_i^{(t)}\}_{i\in\mathcal B_t}\) as trajectory weights in the CAPO policy/teacher loss.\;
+
+%   \tcp{Diagnostics and update schedule}
+%   Clip extreme \(w_i^{(t)}\) (e.g., the largest \(0.5\%\)); monitor weight entropy and coefficient of variation; optionally update \((\beta_t,\xi_t)\) only every \(2\)–\(4\) outer steps.\;
+% }
+% \end{algorithm}
+
+% \begin{algorithm}
+% \DontPrintSemicolon
+% \caption{ACF-moment estimator for dependence shape (used inside Algorithm~\ref{alg:eb-capo})}
+% \label{alg:acf-moment}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Token-level increments \(\{Y_{i,\tau}\}_{\tau=1}^{L_i}\) for each trajectory \(i\); maximum lag \(k\).}
+% \Output{Shape estimate \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) for the family \(s(L;\rho,k,\eta)\) in Definition~\ref{def:kband}.}
+
+% \ForEach{trajectory \(i\)}{
+%   \(\bar Y_i \gets \dfrac{1}{L_i}\sum_{\tau=1}^{L_i} Y_{i,\tau}\);\;
+%   \For{\(h=0,1,\dots,k\)}{
+%     \(\hat\gamma_i(h)\gets \dfrac{1}{L_i-h}\sum_{\tau=1}^{L_i-h} (Y_{i,\tau}-\bar Y_i)(Y_{i,\tau+h}-\bar Y_i)\).\;
+%   }
+% }
+% \(\bar\gamma(h)\gets \dfrac{\sum_i (L_i-h)\hat\gamma_i(h)}{\sum_i (L_i-h)}\) for \(h=0,\dots,k\);\quad
+% \(\bar r(h)\gets \bar\gamma(h)/\bar\gamma(0)\) for \(h\ge 1\).\;
+
+% \(\tilde\xi\gets \arg\min_{\rho,\eta}\sum_{h=1}^k\big(\bar r(h)-\rho^{\,h^{\eta}}\big)^2\)\;
+% \tcp*{Optionally downweight large \(h\) to reduce noise}
+% \end{algorithm}
+
+% \begin{algorithm}
+% \DontPrintSemicolon
+% \caption{EB-lite (no dependence): single-parameter length fit}
+% \label{alg:eb-lite}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Trajectory pairs \(\{(g_i,L_i)\}_{i=1}^G\); small regularization constant \(\varepsilon>0\).}
+% \Output{Estimate \(\hat\beta\) and weights \(w_i \propto L_i^{-\hat\beta}\).}
+
+% Initialize \(m^{(0)}\gets \dfrac{1}{G}\sum_{i=1}^G g_i\) or \(m^{(0)}\gets \mathrm{median}\{g_i\}\).\;
+% \Repeat{converged}{
+%   \For{\(i=1,\dots,G\)}{
+%     \(e_i \gets g_i - m^{(k)}\);\quad
+%     \(z_i \gets \log(e_i^2+\varepsilon)\).\;
+%   }
+%   Fit the regression model \(z_i = c - \beta \log L_i + \varepsilon_i\) by (optionally weighted) least squares; set \(\hat\beta^{(k+1)}\gets -\) (estimated slope).\;
+%   Set provisional weights \(w_i \propto L_i^{-\hat\beta^{(k+1)}}\), then normalize \(w_i\gets w_i / \sum_j w_j\).\;
+%   Update the aggregator \(m^{(k+1)}\gets \sum_{i=1}^G w_i g_i\).\;
+% }
+% Set \(\hat\beta\gets \hat\beta^{(k+1)}\).\;
+% \end{algorithm}
+
+% \begin{algorithm}
+% \DontPrintSemicolon
+% \caption{k-banded covariance weights (stretched-geometric dependence)}
+% \label{alg:kband-weights}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\);\newline
+%        current length exponent \(\beta_t\);\newline
+%        current $k$-banded dependence parameters \((\rho_t,\eta_t)\);\newline
+%        maximum lag \(k\) for the $k$-band family in Definition~\ref{def:kband}.}
+% \Output{Shape factors \(s_i = s(L_i;\rho_t,k,\eta_t)\) and trajectory weights
+%         \(w_i^{(t)} \propto [L_i^{\beta_t}\,s(L_i;\rho_t,k,\eta_t)]^{-1}\).}
+
+% \tcp{Optional: refresh $(\rho_t,\eta_t)$ from token-level ACFs}
+% \If{update dependence parameters}{
+%   \(\tilde\xi_t=(\tilde\rho_t,\tilde\eta_t) \gets
+%     \mathrm{ACF\_Moment\_Fit}\big(\{Y_{i,\tau}\}_{i\in\mathcal B_t,\tau},k\big)\) \tcp*{Alg.~\ref{alg:acf-moment}}
+%   \((\rho_t,\eta_t) \gets \mathrm{proj}_\Xi(\tilde\rho_t,\tilde\eta_t)\)\;
+% }
+
+% \tcp{Compute $k$-banded shape factors $s_i$ and precisions $\omega_i$}
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(m_i \gets \min\{k,\,L_i-1\}\)\;
+%   \(s_i \gets 1 + \dfrac{2}{L_i}
+%            \sum_{h=1}^{m_i} (L_i-h)\,\rho_t^{\,h^{\eta_t}}\)
+%     \tcp*{Definition~\ref{def:kband}}
+%   \(\omega_i^{(t)} \gets \big(L_i^{\beta_t}\,s_i\big)^{-1}\)\;
+% }
+
+% \tcp{Normalize to obtain Bayes/precision weights}
+% \(Z_t \gets \sum_{j\in\mathcal B_t} \omega_j^{(t)}\)\;
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\)\;
+% }
+
+% \tcp{Return $k$-banded dependence-corrected weights}
+% \Return \(\{s_i\}_{i\in\mathcal B_t},\ \{w_i^{(t)}\}_{i\in\mathcal B_t}\)\;
+% \end{algorithm}
+
+
+
+% \begin{algorithm}
+% \DontPrintSemicolon
+% \caption{Joint EB update for length \(\beta\) and \(k\)-banded dependence \((\rho,\eta)\)}
+% \label{alg:joint-eb-kband}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\);\;
+%        current parameters \(\beta_{t-1},\rho_{t-1},\eta_{t-1}\);\;
+%        learning rates \(\eta_\beta,\eta_\rho,\eta_\eta>0\);\;
+%        EMA \(\gamma_\beta,\gamma_\xi\in(0,1]\);\;
+%        constraints \(\beta\in[\beta_{\min},\beta_{\max}],\ |\rho|\le\rho_{\max}<1,\ \eta\ge 0\);\;
+%        max lag \(k\) for \(s(L;\rho,k,\eta)\) (Def.~\ref{def:kband});\;
+%        priors \(\pi_\beta,\pi_\rho,\pi_\eta\).}
+% \Output{Updated \(\beta_t,\rho_t,\eta_t\) and weights
+%         \(w_i^{(t)} \propto [L_i^{\beta_t}s(L_i;\rho_t,k,\eta_t)]^{-1}\).}
+
+% \tcp{Optional warm-start for $(\rho,\eta)$ from ACF moments (Alg.~\ref{alg:acf-moment})}
+% \If{warm-start}{
+%   \((\rho_{t-1},\eta_{t-1}) \gets
+%     \mathrm{proj}_\Xi\big(\mathrm{ACF\_Moment\_Fit}(\{Y_{i,\tau}\},k)\big)\)\;
+% }
+
+% \tcp{E-step: EB statistics under current $(\beta_{t-1},\rho_{t-1},\eta_{t-1})$}
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(m_i \gets \min\{k,\,L_i-1\}\);\;
+%   \(s_i \gets 1 + \dfrac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho_{t-1}^{\,h^{\eta_{t-1}}}\);\;
+%   \(\omega_i \gets \big(L_i^{\beta_{t-1}}\,s_i\big)^{-1}\)\;
+% }
+% \(\Lambda_\omega \gets \sum_{i\in\mathcal B_t} \omega_i\);\;
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(w_i \gets \omega_i / \Lambda_\omega\)\;
+% }
+% \(m_t \gets \sum_{i\in\mathcal B_t} w_i g_i\);\;
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(e_i \gets g_i - m_t\)\;
+% }
+% \(\mathrm{RSS}_\omega \gets \sum_{i\in\mathcal B_t} \omega_i e_i^2\)\;
+
+% \tcp{M-step: gradients of EB objective $\ell(\beta,\rho,\eta)$}
+% Compute \(g_\beta = \partial_\beta \ell\) from Cor.~\ref{cor:grad-beta}
+% (using current \(\{\omega_i,e_i,L_i\}\))\;
+% Compute \(g_\rho = \partial_\rho \ell\) and \(g_\eta = \partial_\eta \ell\)
+% from Prop.~\ref{prop:grad} and Lem.~\ref{lem:kband-deriv}
+% (using current \(\{\omega_i,e_i,s_i\}\))\;
+
+% \tcp{Gradient-ascent updates with projection and EMA}
+% \(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\(\tilde\rho_t \gets \rho_{t-1} + \eta_\rho\, g_\rho\);\(\tilde\eta_t \gets \eta_{t-1} + \eta_\eta\, g_\eta\);\;
+
+% \(\beta_t \gets (1-\gamma_\beta)\beta_{t-1}
+%   + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\);\;
+% \(\rho_t \gets (1-\gamma_\xi)\rho_{t-1}
+%   + \gamma_\xi\,\mathrm{clip}(\tilde\rho_t;[-\rho_{\max},\rho_{\max}])\);\;
+% \(\eta_t \gets (1-\gamma_\xi)\eta_{t-1}
+%   + \gamma_\xi\,\max\{\tilde\eta_t,\,0\}\);\;
+
+% \tcp{Recompute $k$-banded weights at $(\beta_t,\rho_t,\eta_t)$ for CAPO}
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(m_i \gets \min\{k,\,L_i-1\}\);\;
+%   \(s_i \gets 1 + \dfrac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho_t^{\,h^{\eta_t}}\);\;
+%   \(\omega_i \gets \big(L_i^{\beta_t}\,s_i\big)^{-1}\)\;
+% }
+% \(\Lambda_\omega \gets \sum_{j\in\mathcal B_t} \omega_j\);\;
+% \ForEach{\(i\in\mathcal B_t\)}{
+%   \(w_i^{(t)} \gets \omega_i / \Lambda_\omega\)\;
+% }
+
+% \Return \(\beta_t,\rho_t,\eta_t,\{w_i^{(t)}\}_{i\in\mathcal B_t}\)\;
+% \end{algorithm}
+
+
+
+% \paragraph{Complexity and implementation notes.}
+% Per outer step \(t\), computing the EB statistics \(\{\omega_i^{(t)},w_i^{(t)},m_t,e_i^{(t)},\Lambda_\omega^{(t)},\mathrm{RSS}_\omega^{(t)}\}\) has cost \(O(G_t)\) for a batch of \(G_t\) trajectories.
+% The ACF-moment estimator with maximum lag \(k\) has cost \(O\big(\sum_{i\in\mathcal B_t} L_i\,k\big)\), which is typically dominated by the rollout generation cost.
+% In practice, small EMA coefficients \(\gamma_\beta,\gamma_\xi\in[0.05,0.3]\), a bound \(|\rho|\le 0.9\), and clipping of the largest \(w_i^{(t)}\) (e.g., at the 99.5th percentile) are sufficient to prevent any single trajectory from dominating the update.
+
+
+
+% \section{Algorithms: CAPO with Empirical Bayes length and dependence estimation}
+% \label{sec:alg-eb-capo}
+
+% \subsection*{Workflow overview (precise step-by-step)}
+% We integrate EB estimation of the length exponent \(\beta\) and dependence shape \(\xi\) directly into the CAPO training loop:
+
+% \begin{enumerate}
+%   \item \textbf{Rollout collection.} At step \(t\), sample trajectories under the current policy \(\pi_{\theta_t}\): obtain \(\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\), where \(g_i\) is a scalarized trajectory return (e.g., episode reward or aggregated advantage) and \(Y_{i,\tau}\) are per-token scalar increments used for dependence estimation.
+%   \item \textbf{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\)).} Compute precisions \(\omega_i=(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1}))^{-1}\), normalized weights \(w_i=\omega_i/\sum_j\omega_j\), the aggregator \(\widehat\mu_t=\sum_i w_i g_i\), residuals \(e_i=g_i-\widehat\mu_t\), and the summaries \(\Lambda_\omega=\sum_i\omega_i\), \(\mathrm{RSS}_\omega=\sum_i \omega_i e_i^2\).
+%   \item \textbf{M-step on EB objective.} Using the EB objective \(\ell(\beta,\xi)\) and its gradients (theory section), take damped/EMA-smoothed ascent steps on \(\beta\) and \(\xi\). For \(\xi\), either (i) use the \emph{ACF-moment} estimator (Algorithm~\ref{alg:acf-moment}) for a low-variance plug-in, or (ii) use the EB gradient with the dependence derivatives.
+%   \item \textbf{Reweight and update policy.} Recompute \(w_i\propto (L_i^{\beta_t} s(L_i;\xi_t))^{-1}\) and feed them into CAPO’s policy update (e.g., reweighted SFT/OPD losses or variance-aware policy gradients).
+%   \item \textbf{Stabilization \& diagnostics.} Apply EMA to \((\beta,\xi)\), bound \(|\rho|\le \rho_{\max}<1\), clip extreme \(w_i\) (e.g., top \(0.5\%\)), and monitor weight entropy/CV. Update \((\beta,\xi)\) every \(2\!-\!4\) steps for stability.
+% \end{enumerate}
+
+% \begin{algorithm}[h]
+% \DontPrintSemicolon
+% \caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+% \label{alg:eb-capo}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Initial \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\)).}
+% \Output{Streaming estimates \(\{\beta_t,\xi_t\}\) and weights \(w_i^{(t)}\propto \omega_i(\beta_t,\xi_t)\).}
+% \For{\(t=1,2,\dots\)}{
+%   \textbf{Collect} batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\})\}_{i=1}^{G_t}\).\;
+%   \tcp{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\))}
+%   \(\omega_i^{(t)}\gets (L_i^{\beta_{t-1}} s(L_i;\xi_{t-1}))^{-1}\), \quad
+%   \(w_i^{(t)}\gets \omega_i^{(t)} / \sum_{j\in\mathcal B_t}\omega_j^{(t)}\).\;
+%   \(\widehat\mu_t\gets \sum_{i\in\mathcal B_t} w_i^{(t)} g_i\), \quad
+%   \(e_i^{(t)}\gets g_i-\widehat\mu_t\), \quad
+%   \(\Lambda_\omega^{(t)}\gets \sum_i \omega_i^{(t)}\), \quad
+%   \(\mathrm{RSS}_\omega^{(t)}\gets \sum_i \omega_i^{(t)} (e_i^{(t)})^2\).\;
+
+%   \tcp{M-step: update \(\beta\) (use gradient from theory section)}
+%   \(g_\beta \gets \frac{1}{2}\Big[-\sum_i \log L_i + \frac{\sum_i \omega_i^{(t)} \log L_i}{\Lambda_\omega^{(t)}}\Big]
+%   + \frac{G_t-1}{2}\frac{1}{\mathrm{RSS}_\omega^{(t)}}\sum_i \omega_i^{(t)} (e_i^{(t)})^2 \log L_i
+%   + \partial_\beta \log \pi_\beta(\beta_{t-1})\).\;
+%   \(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\;
+%   \(\beta_t \gets (1-\gamma_\beta)\beta_{t-1} + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\).\;
+
+%   \tcp{M-step: update \(\xi\) either by ACF-moment or EB gradient (blend allowed)}
+%   \uIf{ACF-moment update (Algorithm~\ref{alg:acf-moment})}{
+%     \(\tilde\xi_t \gets \text{ACF\_Moment\_Fit}(\{Y_{i,\tau}\},k)\).\;
+%   }
+%   \Else{\tcp{EB gradient using theory-section derivatives}
+%     \(g_\xi \gets \nabla_\xi \ell(\beta_{t-1},\xi_{t-1})\);\;
+%     \(\tilde\xi_t \gets \xi_{t-1} + \eta_\xi\, g_\xi\).\;
+%   }
+%   \(\xi_t \gets (1-\gamma_\xi)\xi_{t-1} + \gamma_\xi\, \mathrm{proj}_\Xi(\tilde\xi_t)\) \tcp*{project to \(|\rho|\le\rho_{\max}<1,\ \eta\ge 0\)}
+%   \tcp{Reweight and pass to CAPO update}
+%   Update \(w_i^{(t)} \propto (L_i^{\beta_t} s(L_i;\xi_t))^{-1}\) and use in CAPO’s policy/teacher loss.\;
+%   \tcp{Diagnostics}
+%   Clip extreme \(w_i^{(t)}\) (e.g., top \(0.5\%\)); track weight entropy/CV; update \((\beta,\xi)\) every \(2\!-\!4\) steps.\;
+% }
+% \end{algorithm}
+
+% \begin{algorithm}[h]
+% \DontPrintSemicolon
+% \caption{ACF-moment estimator for dependence shape (used inside Algorithm~\ref{alg:eb-capo})}
+% \label{alg:acf-moment}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Token-level increments \(\{Y_{i,\tau}\}_{\tau=1}^{L_i}\) for each trajectory \(i\); maximum lag \(k\).}
+% \Output{Shape estimate \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\).}
+% \ForEach{trajectory \(i\)}{
+%   \(\bar Y_i \gets \frac{1}{L_i}\sum_{\tau=1}^{L_i} Y_{i,\tau}\);\;
+%   \For{\(h=0,1,\dots,k\)}{
+%     \(\hat\gamma_i(h)\gets \frac{1}{L_i-h}\sum_{\tau=1}^{L_i-h} (Y_{i,\tau}-\bar Y_i)(Y_{i,\tau+h}-\bar Y_i)\).\;
+%   }
+% }
+% \(\bar\gamma(h)\gets \frac{\sum_i (L_i-h)\hat\gamma_i(h)}{\sum_i (L_i-h)}\) for \(h=0,\dots,k\);\quad
+% \(\bar r(h)\gets \bar\gamma(h)/\bar\gamma(0)\) for \(h\ge 1\).\;
+% \(\tilde\xi\gets \arg\min_{\rho,\eta}\sum_{h=1}^k\big(\bar r(h)-\rho^{\,h^{\eta}}\big)^2\) \tcp*{optionally shrink large \(h\)}
+% \end{algorithm}
+
+% \begin{algorithm}[h]
+% \DontPrintSemicolon
+% \caption{EB-lite (no dependence): single-parameter length fit}
+% \label{alg:eb-lite}
+% \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+% \Input{Trajectory pairs \(\{(g_i,L_i)\}\); small \(\varepsilon>0\).}
+% \Output{\(\hat\beta\) and weights \(w_i \propto L_i^{-\hat\beta}\).}
+% Initialize \(m\gets \frac{1}{G}\sum_i g_i\) or \(m\gets \mathrm{median}\{g_i\}\).\;
+% \Repeat{converged}{
+%   \(e_i\gets g_i-m\);\quad \(z_i\gets \log(e_i^2+\varepsilon)\);\;
+%   Fit \(z_i = c - \beta \log L_i\) by (weighted) least squares \(\Rightarrow \hat\beta\gets -\)slope.\;
+%   Set \(w_i\propto L_i^{-\hat\beta}\), normalize \(w_i\gets w_i/\sum_j w_i\);\;
+%   Update \(m\gets \sum_i w_i g_i\).\;
+% }
+% \end{algorithm}
+
+% \paragraph{Complexity and implementation notes.}
+% Per step, computing \(\{\omega_i,w_i,\widehat\mu_t,e_i,\Lambda_\omega,\mathrm{RSS}_\omega\}\) is \(O(G_t)\).
+% The ACF-moment estimator with lag \(k\) costs \(O(\sum_i L_i\,k)\) and is typically dominated by rollout collection.
+% Use small \(\gamma_\beta,\gamma_\xi\in[0.05,0.3]\), cap \(|\rho|\le 0.9\), and clip the largest \(w_i\) to prevent single-trajectory dominance.

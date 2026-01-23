@@ -23,6 +23,7 @@ class QKVParallelLinear(tensor_parallel.ColumnParallelLinear):
     This layer splits the output into query, key, and value tensors for
     multi-head attention mechanisms.
     """
+
     def __init__(
         self,
         input_size,

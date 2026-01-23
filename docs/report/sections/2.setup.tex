@@ -1,0 +1,445 @@
+\section{Problem Setup}\label{sec:setup}
+
+\paragraph{Goal.}
+Given a batch of trajectories with heterogeneous lengths and within-trajectory token dependence, we seek an unbiased linear aggregate of trajectory-level gradients that is statistically efficient. We cast the aggregation problem as estimation of a common mean under heteroscedastic noise whose variance scales with trajectory length and dependence structure, setting up a Bayesian treatment that will later recover and generalize the $\Delta L$ family of weights \citep{he2025deltal}.
+
+\subsection{Observed Entities and Target Quantity}
+We observe $G$ trajectories indexed by $i\in\{1,\dots,G\}$. Trajectory $i$ has length $L_i\in\mathbb{N}$ tokens and produces the un-normalized trajectory-level gradient.
+\begin{equation}
+  \boldsymbol{g}_i \;=\; \sum_{t=1}^{L_i} \boldsymbol{Z}_{i,t}\ \in\ \mathbb{R}^{p},
+  \qquad
+  \mathbb{E}\!\left[\,\boldsymbol{g}_i\,\right] \;=\; \boldsymbol{\mu}\ \in\ \mathbb{R}^{p},
+  \label{eq:traj-grad}
+\end{equation}
+where $\boldsymbol{Z}_{i,t}$ is the token-level score contribution (e.g., advantage-weighted policy-score increment). The learning signal $\boldsymbol{\mu}$ is common across trajectories in a batch.
+
+\subsection{A Statistically Efficient, Linear, Unbiased Estimator}
+Training aggregates the per-trajectory gradients linearly,
+\begin{equation}
+  \widehat{\boldsymbol{g}}
+  \;=\;
+  \sum_{i=1}^{G} x_i\,\boldsymbol{g}_i,
+  \qquad
+  \sum_{i=1}^{G} x_i \;=\; \frac{1}{M},
+  \label{eq:linear-agg}
+\end{equation}
+for a fixed scaling constant $M>0$. Under \eqref{eq:traj-grad}, any choice of weights satisfying the normalization in \eqref{eq:linear-agg} yields an unbiased estimate, $\mathbb{E}[\widehat{\boldsymbol{g}}]=\boldsymbol{\mu}/M$. The design problem is to choose $\{x_i\}$ to minimize the dispersion of $\widehat{\boldsymbol{g}}$ subject to unbiasedness.
+
+\subsection{Non-iid Tokens}
+Token contributions within a trajectory are dependent. Define the auto-covariance function,
+\begin{equation}
+  \boldsymbol{\Gamma}_i(k)
+  \;:=\;
+  \mathrm{Cov}\!\big(\boldsymbol{Z}_{i,t},\,\boldsymbol{Z}_{i,t-k}\big)\in\mathbb{R}^{p\times p},
+  \qquad k\in\mathbb{Z}.
+\end{equation}
+Then the trajectory covariance, under stationarity condition, consult Appendix \ref{app:bartlett}, is
+\begin{equation}
+  \mathrm{Var}(\boldsymbol{g}_i)
+  \;=\;
+  \sum_{k=-(L_i-1)}^{L_i-1} (L_i-|k|)\,\boldsymbol{\Gamma}_i(k).
+  \label{eq:var-sum}
+\end{equation}
+For aggregation we summarize $\mathrm{Var}(\boldsymbol{g}_i)$ by a positive scalar functional
+\begin{equation}
+  v_i \;:=\; \Psi\!\big(\mathrm{Var}(\boldsymbol{g}_i)\big)\ \in\ (0,\infty),
+  \qquad
+  \text{e.g.,}\ \Psi(\boldsymbol{A})=\mathrm{tr}(\boldsymbol{A})\ \text{or}\ \Psi(\boldsymbol{A})=\mathbb{E}_{\boldsymbol{u}}[\boldsymbol{u}^\top \boldsymbol{A}\boldsymbol{u}],
+  \label{eq:scalar-proxy}
+\end{equation}
+where $\boldsymbol{u}$ is a unit vector (fixed or randomized). If $\{v_i\}$ were known, the minimum-variance unbiased (MVU) linear weights are
+\begin{equation}
+  x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^{G} v_j^{-1}}.
+  \label{eq:mvu-weights}
+\end{equation}
+For a detailed proof along with the assumptions consult Appendix \ref{app:mvu-weights}. Hence the core statistical task is to model/estimate $v_i$ as a function of length and dependence.
+
+
+% \section{Problem Setup}\label{sec:setup}
+
+% \paragraph{Goal.}
+% Given a batch of trajectories with heterogeneous lengths and within-trajectory token dependence, we seek an unbiased linear aggregate of trajectory-level gradients that is statistically efficient. We cast the aggregation problem as estimation of a common mean under heteroscedastic noise whose variance scales with trajectory length and dependence structure, setting up a Bayesian treatment that will later recover and generalize the $\Delta L$ family of weights.
+
+% \subsection{Observed Entities and Target Quantity}
+% We observe $G$ trajectories (responses) indexed by $i\in\{1,\dots,G\}$. Trajectory $i$ has length $L_i\in\mathbb{N}$ tokens and produces the (unnormalized) trajectory-level gradient
+% \begin{equation}
+%   \boldsymbol{g}_i \;=\; \sum_{t=1}^{L_i} \boldsymbol{Z}_{i,t}\ \in\ \mathbb{R}^{p},
+%   \qquad
+%   \mathbb{E}\!\left[\,\boldsymbol{g}_i\,\right] \;=\; \boldsymbol{\mu}\ \in\ \mathbb{R}^{p},
+%   \label{eq:traj-grad}
+% \end{equation}
+% where $\boldsymbol{Z}_{i,t}$ is the token-level score contribution (e.g., advantage-weighted policy-score increment). The learning signal $\boldsymbol{\mu}$ is common across trajectories in a batch.
+
+% \subsection{Design Objective: Linear, Unbiased, and Efficient}
+% Training aggregates the per-trajectory gradients linearly,
+% \begin{equation}
+%   \widehat{\boldsymbol{g}}
+%   \;=\;
+%   \sum_{i=1}^{G} x_i\,\boldsymbol{g}_i,
+%   \qquad
+%   \sum_{i=1}^{G} x_i \;=\; \frac{1}{M},
+%   \label{eq:linear-agg}
+% \end{equation}
+% for a fixed scaling constant $M>0$. Under \eqref{eq:traj-grad}, any choice of weights satisfying \eqref{eq:linear-agg} yields an unbiased estimate, $\mathbb{E}[\widehat{\boldsymbol{g}}]=\boldsymbol{\mu}/M$. The design problem is to choose $\{x_i\}$ to minimize the dispersion of $\widehat{\boldsymbol{g}}$ subject to unbiasedness.
+
+% \subsection{Non-iid Tokens and a Scalar Variance Proxy}
+% Token contributions within a trajectory are dependent. Define the auto-covariance function (along the auto-regressive index)
+% \begin{equation}
+%   \boldsymbol{\Gamma}_i(k)
+%   \;:=\;
+%   \mathrm{Cov}\!\big(\boldsymbol{Z}_{i,t},\,\boldsymbol{Z}_{i,t-k}\big)\in\mathbb{R}^{p\times p},
+%   \qquad k\in\mathbb{Z}.
+% \end{equation}
+% Then the trajectory covariance, under stationarity, is
+% \begin{equation}
+%   \mathrm{Var}(\boldsymbol{g}_i)
+%   \;=\;
+%   \sum_{k=-(L_i-1)}^{L_i-1} (L_i-|k|)\,\boldsymbol{\Gamma}_i(k).
+%   \label{eq:var-sum}
+% \end{equation}
+% For aggregation we summarize $\mathrm{Var}(\boldsymbol{g}_i)$ by a positive scalar functional
+% \begin{equation}
+%   v_i \;:=\; \Psi\!\big(\mathrm{Var}(\boldsymbol{g}_i)\big)\ \in\ (0,\infty),
+%   \qquad
+%   \text{e.g.,}\ \Psi(\boldsymbol{A})=\mathrm{tr}(\boldsymbol{A})\ \text{or}\ \Psi(\boldsymbol{A})=\mathbb{E}_{\boldsymbol{u}}[\boldsymbol{u}^\top \boldsymbol{A}\boldsymbol{u}],
+%   \label{eq:scalar-proxy}
+% \end{equation}
+% where $\boldsymbol{u}$ is a unit vector (fixed or randomized). If $\{v_i\}$ were known, the minimum-variance unbiased (MVU) linear weights are
+% \begin{equation}
+%   x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^{G} v_j^{-1}}.
+%   \label{eq:mvu-weights}
+% \end{equation}
+% Hence the core statistical task is to model/estimate $v_i$ as a function of length and dependence.
+
+
+
+
+
+% \section{Problem Setup}
+
+% \paragraph{Goal.}
+% Given a batch of trajectories with heterogeneous lengths and within-trajectory token dependence, we seek an unbiased linear aggregate of trajectory-level gradients that is statistically efficient. We cast the aggregation problem as estimation of a common mean under heteroscedastic noise whose variance scales with trajectory length and dependence structure, setting up a Bayesian treatment that will later recover and generalize the $\Delta L$ family of weights.
+
+% \subsection{Observed Entities and Target Quantity}
+% We observe $G$ trajectories (responses) indexed by $i\in\{1,\dots,G\}$. Trajectory $i$ has length $L_i\in\mathbb{N}$ tokens and produces the (unnormalized) trajectory-level gradient
+% \begin{equation}
+%   \boldsymbol{g}_i \;=\; \sum_{t=1}^{L_i} \boldsymbol{Z}_{i,t}\ \in\ \mathbb{R}^{p},
+%   \qquad
+%   \mathbb{E}\!\left[\,\boldsymbol{g}_i\,\right] \;=\; \boldsymbol{\mu}\ \in\ \mathbb{R}^{p},
+%   \label{eq:traj-grad}
+% \end{equation}
+% where $\boldsymbol{Z}_{i,t}$ is the token-level score contribution (e.g., advantage-weighted policy-score increment). The learning signal $\boldsymbol{\mu}$ is common across trajectories in a batch.
+
+% \subsection{A Statistically Efficient, Linear, Unbiased Estimator}
+% Training aggregates the per-trajectory gradients linearly,
+% \begin{equation}
+%   \widehat{\boldsymbol{g}}
+%   \;=\;
+%   \sum_{i=1}^{G} x_i\,\boldsymbol{g}_i,
+%   \qquad
+%   \sum_{i=1}^{G} x_i \;=\; \frac{1}{M},
+%   \label{eq:linear-agg}
+% \end{equation}
+% for a fixed scaling constant $M>0$. Under \eqref{eq:traj-grad}, any choice of weights satisfying the normalization in \eqref{eq:linear-agg} yields an unbiased estimate, $\mathbb{E}[\widehat{\boldsymbol{g}}]=\boldsymbol{\mu}/M$. The design problem is to choose $\{x_i\}$ to minimize the dispersion of $\widehat{\boldsymbol{g}}$ subject to unbiasedness.
+
+% \subsection{Non-iid Tokens}
+% Token contributions within a trajectory are dependent. Define the auto-covariance function (along the auto-regressive index)
+% \begin{equation}
+%   \boldsymbol{\Gamma}_i(k)
+%   \;:=\;
+%   \mathrm{Cov}\!\big(\boldsymbol{Z}_{i,t},\,\boldsymbol{Z}_{i,t-k}\big)\in\mathbb{R}^{p\times p},
+%   \qquad k\in\mathbb{Z}.
+% \end{equation}
+% Then the trajectory covariance, under stationarity condition, is
+% \begin{equation}
+%   \mathrm{Var}(\boldsymbol{g}_i)
+%   \;=\;
+%   \sum_{k=-(L_i-1)}^{L_i-1} (L_i-|k|)\,\boldsymbol{\Gamma}_i(k).
+%   \label{eq:var-sum}
+% \end{equation}
+% For aggregation we summarize $\mathrm{Var}(\boldsymbol{g}_i)$ by a positive scalar functional
+% \begin{equation}
+%   v_i \;:=\; \Psi\!\big(\mathrm{Var}(\boldsymbol{g}_i)\big)\ \in\ (0,\infty),
+%   \qquad
+%   \text{e.g.,}\ \Psi(\boldsymbol{A})=\mathrm{tr}(\boldsymbol{A})\ \text{or}\ \Psi(\boldsymbol{A})=\mathbb{E}_{\boldsymbol{u}}[\boldsymbol{u}^\top \boldsymbol{A}\boldsymbol{u}],
+%   \label{eq:scalar-proxy}
+% \end{equation}
+% where $\boldsymbol{u}$ is a unit vector (fixed or randomized). If $\{v_i\}$ were known, the minimum-variance unbiased (MVU) linear weights are
+% \begin{equation}
+%   x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^{G} v_j^{-1}}.
+%   \label{eq:mvu-weights}
+% \end{equation}
+% Hence the core statistical task is to model/estimate $v_i$ as a function of length and dependence.
+
+% \subsection{Length-Only Benchmark and the $\Delta L$ Family}
+% Under an i.i.d.\ token model with $\mathrm{Var}(\boldsymbol{Z}_{i,t})=\boldsymbol{\Sigma}_0$ and $\boldsymbol{\Gamma}_i(k)=\boldsymbol{0}$ for $k\neq 0$,
+% \begin{equation}
+%   \mathrm{Var}(\boldsymbol{g}_i)=L_i\,\boldsymbol{\Sigma}_0
+%   \quad\Longrightarrow\quad
+%   v_i \propto L_i.
+% \end{equation}
+% Substituting into \eqref{eq:mvu-weights} gives $x_i\propto L_i^{-1}$, i.e., the $\Delta L$ rule with exponent $\alpha=1$. More generally, the paper proposes a one-parameter family
+% \begin{equation}
+%   x_i \ \propto\ L_i^{-\alpha},\qquad \alpha\in[0,1],
+% \end{equation}
+% interpolating between constant weighting ($\alpha=0$) and inverse-length weighting ($\alpha=1$), as a practical control of variance induced by heterogeneous lengths.
+
+
+% % === Replacement Section: Bayesian Setup under a General Prior, with Derivations ===
+
+% \subsection{Bayesian Setup under a General Prior}
+% We project each trajectory-level gradient onto a fixed direction to obtain a scalar summary. Let $\bm{u}$ be a unit vector and define
+% \begin{equation}
+%   g_i \;=\; \bm{u}^\top \bm{g}_i,\qquad \mathbb{E}[g_i]=\mu,\qquad \mathrm{Var}(g_i)=v_i.
+%   \label{eq:def_gi_scalar}
+% \end{equation}
+% Conditional on the variance parameters $\vartheta := (\sigma^2, \beta, \xi)$,
+
+% \begin{equation}
+%   g_i \,\big|\, \mu,\vartheta \ \sim\ \mathcal{N}\!\big(\mu,\ v_i(\vartheta)\big),
+%   \qquad
+%   v_i(\vartheta)\;=\;\sigma^2\,L_i^{\beta}\,s(L_i;\,\xi),
+%   \label{eq:hetero_general_prior}
+% \end{equation}
+
+% where $\vartheta=(\sigma^2,\beta,\xi)$. Here $\sigma^2>0$ is a global scale, $\beta\in[0,2]$ controls length scaling, and $s(L_i;\xi)>0$ is a shape factor encoding within-trajectory dependence. This modular treatment allows us to plug in different estimates for the shape factor neatly.
+
+% \paragraph{General priors.}
+% We adopt a flat prior on the mean and a flexible, proper prior on the variance and shape parameters:
+% \begin{equation}
+%   p(\mu)\ \propto\ 1,\qquad
+%   \sigma^2 \sim \mathrm{Inv\text{-}Gamma}(a_0,b_0),\qquad
+%   \beta \sim \pi_\beta,\qquad
+%   \xi \sim \pi_\xi.
+%   \label{eq:priors_general}
+% \end{equation}
+% Jeffreys' prior for scale is recovered in the limit $a_0,b_0\to 0$. The prior $\pi_\beta$ can be chosen agnostic (centered at $1$ with moderate variance) or informative to reflect anticipated sub/superlinear growth. We later demonstrate the relationship between this and the 'correctness' of the trajectory. The prior $\pi_\xi$ encodes beliefs about token dependence.
+
+% \paragraph{Likelihood geometry and sufficient sums.}
+% Define precisions and aggregated quantities
+% \begin{equation}
+%   \lambda_i(\vartheta) := \frac{1}{v_i(\vartheta)} = \frac{1}{\sigma^2}\,\omega_i(\beta,\xi),
+%   \qquad
+%   \omega_i(\beta,\xi) := L_i^{-\beta}\,s(L_i;\xi)^{-1},
+%   \label{eq:def_lambda_omega}
+% \end{equation}
+% \begin{equation}
+%   \Lambda(\vartheta) \;=\; \sum_{i=1}^G \lambda_i(\vartheta),\qquad
+%   T(\vartheta) \;=\; \sum_{i=1}^G \lambda_i(\vartheta)\,g_i.
+%   \label{eq:Lambda_T}
+% \end{equation}
+% The conditional posterior for $\mu$ given $\vartheta$ is Normal:
+% \begin{equation}
+%   \mu\,\big|\,\vartheta,\{g_i\} \ \sim\ \mathcal{N}\!\big(m(\vartheta),\,\Lambda(\vartheta)^{-1}\big),
+%   \qquad
+%   m(\vartheta)=\frac{T(\vartheta)}{\Lambda(\vartheta)}=\frac{\sum_i \lambda_i(\vartheta) g_i}{\sum_i \lambda_i(\vartheta)}.
+%   \label{eq:mu_conditional}
+% \end{equation}
+% Let $m(\beta,\xi)$ denote $m(\vartheta)$ with $\sigma^2$ profiled out via \eqref{eq:def_lambda_omega}, and define the weighted residual sum of squares
+% \begin{equation}
+%   \mathrm{RSS}_\omega(\beta,\xi) \;=\; \sum_{i=1}^G \omega_i(\beta,\xi)\,\big(g_i - m(\beta,\xi)\big)^2.
+%   \label{eq:rss_omega}
+% \end{equation}
+% Combining \eqref{eq:priors_general}--\eqref{eq:rss_omega}, the conditional posterior of $\sigma^2$ is
+% \begin{equation}
+%   \sigma^2 \,\big|\, \beta,\xi,\{g_i\} \ \sim\ \mathrm{Inv\text{-}Gamma}\!\left(a_0+\frac{G-1}{2},\ b_0+\frac{1}{2}\,\mathrm{RSS}_\omega(\beta,\xi)\right).
+%   \label{eq:sigma2_posterior}
+% \end{equation}
+
+% \paragraph{Bayes weights (posterior-precision aggregator).}
+% Define
+% \begin{equation}
+%   \widetilde{w}_i \;:=\; \mathbb{E}\!\left[\lambda_i(\vartheta)\,\big|\,\{g_j\}\right]
+%   \;=\; \mathbb{E}\!\left[\frac{1}{\sigma^2}\,\omega_i(\beta,\xi)\,\Big|\,\{g_j\}\right].
+%   \label{eq:bayes_weight_def}
+% \end{equation}
+% A practical estimator uses either (i) a Laplace/MAP plug-in $(\hat\beta,\hat\xi)$ yielding $\widetilde{w}_i \propto \omega_i(\hat\beta,\hat\xi)$, or (ii) Monte Carlo averaging over draws $(\beta_s,\xi_s,\sigma^2_s)$ from the posterior. The Bayes-optimal unbiased linear aggregate then takes
+% \begin{equation}
+%   x_i^{\mathrm{Bayes}} \;=\; \frac{1}{M}\,\frac{\widetilde{w}_i}{\sum_{j=1}^G \widetilde{w}_j}.
+%   \label{eq:bayes_weight_rule}
+% \end{equation}
+
+% \subsection{Jeffreys' Prior Baseline: Recovering $\Delta L$ with $\alpha=1$}
+% Assume independence ($s\equiv 1$) and fix $\beta=1$. Let $a_0,b_0\to 0$ so that $p(\sigma^2)\propto 1/\sigma^2$. From \eqref{eq:def_lambda_omega}--\eqref{eq:sigma2_posterior},
+% \begin{equation}
+%   \lambda_i(\vartheta) \;=\; \frac{1}{\sigma^2}\,L_i^{-1},
+%   \qquad
+%   \mathbb{E}\!\left[\sigma^{-2}\,\big|\,\beta=1,\{g_i\}\right] \;=\; \frac{G-1}{\,\mathrm{RSS}_\omega(\beta{=}1)\,},
+% \end{equation}
+% so the common factor $\mathbb{E}[\sigma^{-2}\mid\cdot]$ cancels in \eqref{eq:bayes_weight_rule}, and
+% \begin{equation}
+%   x_i^{\mathrm{Bayes}} \ \propto\ L_i^{-1}.
+%   \label{eq:deltaL_alpha1}
+% \end{equation}
+% Thus the $\Delta L$ rule with exponent $\alpha=1$ is exactly the Bayes posterior-precision aggregator under Jeffreys' prior and the i.i.d.\ length law.
+
+% \subsection{Informative Prior on the Length Exponent: $\alpha<1$}
+% Retain independence ($s\equiv 1$) but let $\beta$ be random with a proper prior $\pi_\beta$ and posterior $p(\beta\mid\{g_i\})$. Using \eqref{eq:bayes_weight_def},
+% \begin{equation}
+%   \widetilde{w}_i \;\propto\; \mathbb{E}\!\left[L_i^{-\beta}\,\big|\,\{g_j\}\right].
+%   \label{eq:wtilde_beta_random}
+% \end{equation}
+% Two useful consequences:
+% \begin{enumerate}
+%   \item \emph{MAP/Laplace approximation.} If $p(\beta\mid\{g_i\})$ is sharply peaked at $\hat\beta$, then
+%   \begin{equation}
+%     \widetilde{w}_i \ \propto\ L_i^{-\hat\beta}
+%     \quad\Longrightarrow\quad
+%     x_i^{\mathrm{Bayes}} \ \propto\ L_i^{-\hat\beta},
+%     \label{eq:laplace_alpha}
+%   \end{equation}
+%   i.e., the $\Delta L$ family with \(\alpha=\hat\beta<1\) when posterior mass for $\beta$ concentrates below $1$ (sublinear variance growth).
+%   \item \emph{Closed-form moment under Gaussian posterior.} If $\beta\mid\{g_i\}\sim \mathcal{N}(m_\beta,\tau_\beta^2)$ (ignoring truncation),
+%   \begin{equation}
+%     \mathbb{E}\!\left[L_i^{-\beta}\mid\{g_i\}\right]
+%     \;=\;
+%     \exp\!\Big(-m_\beta\ln L_i + \tfrac{1}{2}\tau_\beta^2(\ln L_i)^2\Big)
+%     \;\approx\; L_i^{-m_\beta}\ \text{ when }\ \tau_\beta^2\text{ is small},
+%     \label{eq:moment_gaussian_beta}
+%   \end{equation}
+%   so an effective exponent is \(\alpha \approx m_\beta < 1\) when the posterior mean of $\beta$ is subunit.
+% \end{enumerate}
+% In both cases the Bayes rule coincides with $\Delta L$ but with a \emph{data-driven} exponent $\alpha$ induced by an informative prior on $\beta$. Dependence corrections $s(L_i;\xi)$ can be reintroduced by replacing $L_i^{-\beta}$ with $L_i^{-\beta}s(L_i;\xi)^{-1}$ in \eqref{eq:wtilde_beta_random}.
+
+
+% \subsection{Why $\alpha<1$ When Longer Responses Are More Likely Correct}
+
+% \paragraph{Intuition.}
+% If longer responses have higher probability of being correct, then---after baselineing---their token contributions are less noisy on average. In a heteroskedastic model, this means the \emph{per-token variance} decreases with length, so the \emph{sum} over $L$ tokens grows \emph{sublinearly} in $L$. Consequently, inverse-variance weights scale as $L^{-\alpha}$ with $\alpha<1$.
+
+% \paragraph{Heteroskedastic variance model tied to correctness.}
+% Let $g_i=\sum_{t=1}^{L_i} Z_{i,t}$ be the scalarized trajectory gradient (Sec.~\S\ref{eq:traj-grad}–\S\ref{eq:hetero-model} in your setup). Suppose the per-token variance contracts with response length via a correctness factor $\kappa(L)\in(0,1]$:
+% \begin{equation}
+%   \mathrm{Var}(Z_{i,t}\mid L_i=L)\;=\;\sigma^2\,\kappa(L),
+%   \qquad
+%   \kappa'(L)\le 0.
+%   \label{eq:per-token-variance}
+% \end{equation}
+% A concrete rationale is a Bernoulli-like reward component with success probability $p(L)$ (``response is correct'') and a baseline $b(L)\approx \mathbb{E}[r\mid L]=p(L)$, which yields a multiplicative factor $\kappa(L)\propto p(L)\,\bigl(1-p(L)\bigr)$ in the gradient noise. As $p(L)\uparrow 1$, we have $\kappa(L)\downarrow 0$.
+
+% Accounting for token dependence via $s(L;\xi)$ (Sec.~\S\ref{eq:hetero-model}), the trajectory variance takes the form
+% \begin{equation}
+%   \mathrm{Var}(g_i\mid L_i=L)\;=\;\sigma^2\,L\,\kappa(L)\,s(L;\xi).
+%   \label{eq:traj-var-kappa}
+% \end{equation}
+% Assume a regularly varying contraction:
+% \begin{equation}
+%   \kappa(L)\;=\;c\,L^{-\delta}\,(1+o(1)),
+%   \qquad
+%   \delta\in[0,1),
+%   \label{eq:kappa-regular}
+% \end{equation}
+% which is implied, for example, if $p(L)=1-\tilde c\,L^{-\gamma}+o(L^{-\gamma})$ with $\gamma>0$, since then
+% \(
+% p(L)\bigl(1-p(L)\bigr)
+% =
+% \tilde c\,L^{-\gamma}+o(L^{-\gamma})
+% \)
+% and one may set $\delta=\gamma$ up to constants.
+
+% Combining \eqref{eq:traj-var-kappa}–\eqref{eq:kappa-regular} gives the effective length law
+% \begin{equation}
+%   v(L)\;:=\;\mathrm{Var}(g_i\mid L_i=L)
+%   \;=\;\sigma^2\,L^{\,1-\delta}\,s(L;\xi)\,\bigl(1+o(1)\bigr).
+%   \label{eq:effective-length-law}
+% \end{equation}
+% Thus the variance exponent is $\beta=1-\delta<1$ whenever correctness improves with length at a polynomial rate.
+
+% \paragraph{Bayesian aggregation and the $\Delta L$ exponent.}
+% Under the heteroskedastic Normal working model with
+% \(
+% v_i(\vartheta)=\sigma^2\,L_i^{\beta}\,s(L_i;\xi)
+% \)
+% and Jeffreys' prior on $\sigma^2$ (scale invariance), the Bayes posterior-precision weights satisfy, up to a common factor,
+% \begin{equation}
+%   x_i^{\mathrm{Bayes}}
+%   \;\propto\;
+%   \frac{1}{L_i^{\beta}\,s(L_i;\xi)}.
+%   \label{eq:bayes-weight-beta}
+% \end{equation}
+% If $s(L;\xi)\equiv 1$ (independence benchmark), \eqref{eq:bayes-weight-beta} is exactly the $\Delta L$ family with exponent
+% \(
+% \alpha=\beta.
+% \)
+% By \eqref{eq:effective-length-law}, correctness-driven contraction implies $\beta=1-\delta<1$, hence
+% \begin{equation}
+%   x_i \;\propto\; L_i^{-\alpha},
+%   \qquad
+%   \alpha \;=\; 1-\delta \;<\; 1.
+%   \label{eq:alpha-less-than-one}
+% \end{equation}
+
+% \paragraph{Examples linking $p(L)$ to $\alpha$.}
+% \begin{enumerate}
+% \item \emph{Power-law approach to correctness.}
+% If $p(L)=1-\tilde c\,L^{-\gamma}+o(L^{-\gamma})$ with $\gamma\in(0,1)$, then
+% \(
+% \kappa(L)\propto L^{-\gamma}
+% \)
+% and
+% \(
+% \alpha=1-\gamma\in(0,1).
+% \)
+% \item \emph{Logistic saturation.}
+% If $p(L)=\bigl(1+\exp\{-a(\log L-b)\}\bigr)^{-1}$ with $a>0$, then for large $L$,
+% \(
+% 1-p(L)\asymp L^{-a}
+% \),
+% so again $\alpha=1-a$ (clipped to $(0,1)$).
+% \end{enumerate}
+
+% \paragraph{With dependence $s(L;\xi)\neq 1$.}
+% All conclusions persist with serial dependence: replace $L^{-\beta}$ by $L^{-\beta} s(L;\xi)^{-1}$ in \eqref{eq:bayes-weight-beta}. For AR(1), $s(L;\xi)$ approaches a positive constant as $L\to\infty$, so the large-$L$ exponent remains $\alpha=1-\delta$. For $k$-banded dependence, $s(L;\xi)=1+\tfrac{2}{L}\sum_{h=1}^{k}(L-h)\rho_h=1+O(1)$, again preserving $\alpha=1-\delta$ asymptotically.
+
+% \paragraph{Informative priors strengthen $\alpha<1$.}
+% If $\beta$ is random with a proper prior concentrated below $1$ (reflecting the belief ``longer answers are cleaner''), then
+% \(
+% x_i^{\mathrm{Bayes}}\propto \mathbb{E}[L_i^{-\beta}\mid\text{data}]
+% \)
+% and a Laplace/mean summary yields \(\alpha\simeq \mathbb{E}[\beta\mid\text{data}]<1\). This is the principled Bayesian route to $\alpha<1$ when correctness improves with length.
+
+
+%%%%%% OLDEST FRAME
+
+% \subsection{A Principled Bayesian Weighting Scheme}
+% \label{subsec:bayesian}
+% In order to put this into a unified Bayesian framework, we use a scalar projection of each trajectory gradient. Let $\boldsymbol{u}\in\mathbb{R}^{p}$ be fixed (e.g., an arbitrary unit vector), and define
+% \begin{equation}
+%   g_i \;:=\; \boldsymbol{u}^\top \boldsymbol{g}_i \in \mathbb{R},
+%   \qquad
+%   \mathbb{E}[g_i]=\mu \in \mathbb{R},
+%   \qquad
+%   \mathrm{Var}(g_i)=v_i.
+% \end{equation}
+
+% Given a normally distributed trajectory $g_i$ with hetero-scedastic variance, 
+% \begin{equation}
+%   g_i \,\big|\, \mu,\vartheta \ \sim\ \mathcal{N}\!\big(\mu,\ v_i(\vartheta)\big),
+%   \qquad
+%   v_i(\vartheta)\;=\;\sigma^2\,L_i^{\beta}\,s(L_i;\,\xi),
+%   \label{eq:hetero-model}
+% \end{equation}
+% with variance parameters $\vartheta=(\sigma^2,\beta,\xi)$. Here $\sigma^2>0$ is a global scale, $\beta\in[0,2]$ controls length scaling (the i.i.d. benchmark is $\beta=1$), and $s(L_i;\xi)>0$ is a shape factor encoding within-trajectory dependence structure.
+
+% \paragraph{Priors.}
+% We employ a noninformative prior on the mean and a scale-invariant prior on the variance,
+% \begin{equation}
+%   p(\mu)\ \propto\ 1,
+%   \qquad
+%   p(\sigma^2)\ \propto\ \frac{1}{\sigma^2},
+%   \qquad
+%   \beta \sim \pi_\beta,\ \ \xi \sim \pi_\xi,
+% \end{equation}
+% with $\pi_\beta$ and $\pi_\xi$ specified to capture either agnostic or informed beliefs about length scaling and dependence.
+
+% \subsection{Roadmap to Bayesian Identifications (Preview)}
+% Under the model \eqref{eq:hetero-model}, the Bayes-optimal linear unbiased aggregate uses weights proportional to the posterior mean precision, i.e.,
+% \begin{equation}
+%   \widetilde{w}_i \;:=\; \mathbb{E}\!\left[\frac{1}{v_i(\vartheta)}\,\bigg|\,\{g_j\}_{j=1}^G\right]
+%   \;=\;
+%   \mathbb{E}\!\left[\frac{1}{\sigma^2\,L_i^{\beta}\,s(L_i;\xi)}\,\bigg|\,\{g_j\}\right],
+%   \qquad
+%   x_i^{\mathrm{Bayes}} \;=\; \frac{1}{M}\,\frac{\widetilde{w}_i}{\sum_{j=1}^{G}\widetilde{w}_j}.
+%   \label{eq:bayes-weights}
+% \end{equation}
+% In the independence benchmark $s\equiv 1$ with a noninformative prior on $\sigma^2$ and $\beta=1$, \eqref{eq:bayes-weights} reduces to $x_i\propto L_i^{-1}$ (the $\Delta L$ rule with $\alpha=1$). Proper priors on $\beta$ yield posterior summaries that act as data-driven exponents ($\alpha\approx \mathbb{E}[\beta\mid\{g_j\}]$), while explicit dependence templates $s(L;\xi)$ (compound symmetry, $k$-banded, geometric) introduce principled corrections to the effective length law. These derivations follow in the next section.

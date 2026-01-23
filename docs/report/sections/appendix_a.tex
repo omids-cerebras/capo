@@ -1,0 +1,121 @@
+\appendix
+
+\section{Proof of the Minimum-Variance Unbiased (MVU) Weights}
+\label{app:mvu-weights}
+
+% \section{Inverse-variance MVU weights}
+\begin{lemma}[Inverse-variance MVU weights]\label{lem:mvu-weights}
+Assume $\mathrm{Cov}(\boldsymbol{g}_i,\boldsymbol{g}_j)=\boldsymbol{0}$ for $i\neq j$ and let $v_i:=\Psi\!\big(\mathrm{Var}(\boldsymbol{g}_i)\big)\in(0,\infty)$ for a fixed positive, linear, monotone functional $\Psi$ on $\mathbb{S}^p_+$ (e.g., $\Psi(\boldsymbol{A})=\boldsymbol{u}^\top\boldsymbol{A}\boldsymbol{u}$ with $\|\boldsymbol{u}\|{=}1$, or $\Psi(\boldsymbol{A})=\mathrm{tr}(\boldsymbol{A})$). Among all linear unbiased estimators $\widehat{\boldsymbol{g}}=\sum_{i=1}^G x_i\boldsymbol{g}_i$ satisfying $\sum_{i=1}^G x_i=1/M$, the weights
+\begin{equation}
+  x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^{G} v_j^{-1}}
+  \tag{\ref{eq:mvu-weights}}
+\end{equation}
+uniquely minimize the dispersion $\Psi\!\big(\mathrm{Var}(\widehat{\boldsymbol{g}})\big)$.
+\end{lemma}
+
+\begin{proof}
+By linearity of covariance and the cross-covariance assumption,
+\[
+\mathrm{Var}(\widehat{\boldsymbol{g}})=\mathrm{Var}\Big(\sum_{i=1}^G x_i\boldsymbol{g}_i\Big)
+=\sum_{i=1}^G x_i^2\,\mathrm{Var}(\boldsymbol{g}_i).
+\]
+Applying $\Psi$ (positive, linear, monotone on $\mathbb{S}^p_+$),
+\[
+\Psi\!\big(\mathrm{Var}(\widehat{\boldsymbol{g}})\big)
+=\sum_{i=1}^G x_i^2\,\Psi\!\big(\mathrm{Var}(\boldsymbol{g}_i)\big)
+=\sum_{i=1}^G v_i\,x_i^2.
+\]
+Thus the problem reduces to the strictly convex quadratic program
+\[
+\min_{\boldsymbol{x}}\ \sum_{i=1}^G v_i x_i^2
+\quad\text{s.t.}\quad \sum_{i=1}^G x_i=\frac{1}{M},
+\]
+with $v_i>0$. The Lagrangian is
+\(
+\mathcal{L}(\boldsymbol{x},\lambda)=\sum_i v_i x_i^2 - \lambda\Big(\sum_i x_i-\frac{1}{M}\Big).
+\)
+First-order optimality yields \(2v_i x_i - \lambda = 0\), i.e.
+\[
+x_i=\frac{\lambda}{2v_i}.
+\]
+Imposing the constraint,
+\[
+\sum_{i=1}^G x_i=\frac{\lambda}{2}\sum_{i=1}^G \frac{1}{v_i}=\frac{1}{M}
+\quad\Longrightarrow\quad
+\lambda=\frac{2}{M\sum_{j=1}^G v_j^{-1}}.
+\]
+Substituting back gives
+\[
+x_i^\star=\frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}},
+\]
+which is the unique minimizer by strict convexity.
+\end{proof}
+
+\begin{remark}
+Taking $\Psi(\boldsymbol{A})=\boldsymbol{u}^\top\boldsymbol{A}\boldsymbol{u}$ recovers the familiar “inverse-variance” rule with $v_i=\boldsymbol{u}^\top\mathrm{Var}(\boldsymbol{g}_i)\boldsymbol{u}$. Taking $\Psi=\mathrm{tr}$ yields the same weights with $v_i=\mathrm{tr}\,\mathrm{Var}(\boldsymbol{g}_i)$. If $\mathrm{Cov}(\boldsymbol{g}_i,\boldsymbol{g}_j)\neq \boldsymbol{0}$ for some $i\neq j$, the optimal weights depend on the full covariance matrix and are not generally diagonal inverse-variance.
+\end{remark}
+
+% We provide a derivation of the weights in Eq.~\eqref{eq:mvu-weights}, showing that
+% they follow directly from the principle of inverse-variance weighting.
+
+% \subsection{Setup}
+% Suppose we have $G$ groups, each contributing $M$ trajectories. Let 
+% $\{\widehat{\theta}_i\}_{i=1}^G$ denote unbiased estimators from each group, with
+% covariance proxy $v_i := \Psi(\mathrm{Var}(\boldsymbol{g}_i)) \in (0,\infty)$ as defined in
+% Eq.~\eqref{eq:scalar-proxy}. The goal is to form a linear aggregate
+% \[
+% \widehat{\theta} \;=\; \sum_{i=1}^G x_i \, \widehat{\theta}_i,
+% \]
+% that is unbiased and has minimum variance.
+
+% \subsection{Variance of a Linear Aggregate}
+% Since the estimators are unbiased and uncorrelated across groups,
+% the variance of $\widehat{\theta}$ is
+% \begin{equation}
+%   \mathrm{Var}(\widehat{\theta})
+%   \;=\; \sum_{i=1}^G x_i^2 v_i.
+%   \label{eq:var-linear}
+% \end{equation}
+% To preserve unbiasedness, the weights must satisfy
+% \begin{equation}
+%   \sum_{i=1}^G x_i = 1.
+%   \label{eq:constraint}
+% \end{equation}
+
+% \subsection{Optimization via Lagrange Multipliers}
+% We minimize~\eqref{eq:var-linear} subject to the constraint~\eqref{eq:constraint}
+% using a Lagrange multiplier $\lambda$:
+% \[
+% \mathcal{L}(x,\lambda) \;=\; \sum_{i=1}^G x_i^2 v_i - \lambda\!\left(\sum_{i=1}^G x_i - 1\right).
+% \]
+% Taking derivatives and setting to zero gives
+% \[
+% \frac{\partial \mathcal{L}}{\partial x_i} = 2 v_i x_i - \lambda = 0
+% \quad \;\Longrightarrow\;\quad
+% x_i \;=\; \frac{\lambda}{2 v_i}.
+% \]
+% Enforcing~\eqref{eq:constraint} yields
+% \[
+% \sum_{i=1}^G \frac{\lambda}{2 v_i} = 1
+% \quad \;\Longrightarrow\;\quad
+% \lambda \;=\; \frac{2}{\sum_{j=1}^G v_j^{-1}}.
+% \]
+% Hence the optimal weights are
+% \begin{equation}
+%   x_i^\star \;=\; \frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}}.
+%   \label{eq:inverse-variance}
+% \end{equation}
+
+% \subsection{Accounting for $M$ Trajectories per Group}
+% If each group $i$ contributes $M$ trajectories that are averaged to form 
+% $\widehat{\theta}_i$, then the effective weight per trajectory is scaled by 
+% a factor of $1/M$. Thus, the per-trajectory weights are
+% \begin{equation}
+%   x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}},
+% \end{equation}
+% as claimed in Eq.~\eqref{eq:mvu-weights}.
+
+% \subsection{Conclusion}
+% The derivation shows that the MVU weights correspond to 
+% \emph{inverse-variance weighting}, adapted to trajectory-level 
+% variances summarized by the scalar functional $\Psi$.
