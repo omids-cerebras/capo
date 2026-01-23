@@ -35,6 +35,32 @@ from capo.eb_core import (
 Tensor = torch.Tensor
 
 
+def _cfg_get(config, path, default):
+    """Return config[path] for nested OmegaConf/dict/objects; else default."""
+    if config is None:
+        return default
+    parts = path.split(".") if path else []
+    cur = config
+    for k in parts:
+        if cur is None:
+            return default
+        # dict-like
+        if isinstance(cur, dict):
+            cur = cur.get(k, None)
+            continue
+        # OmegaConf / Namespace-like (attribute access)
+        if hasattr(cur, k):
+            cur = getattr(cur, k)
+            continue
+        # OmegaConf may allow key access
+        try:
+            cur = cur[k]
+            continue
+        except Exception:
+            return default
+    return default if cur is None else cur
+
+
 def _lengths_and_scalar_returns(
     token_level_rewards: Tensor,
     response_mask: Tensor,

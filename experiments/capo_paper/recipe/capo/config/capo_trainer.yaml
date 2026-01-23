@@ -1,0 +1,57 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+trainer:
+  project_name: capo
+  # Write a line-delimited JSON metrics file for post-hoc analysis scripts.
+  # This is intentionally local (works without WandB/MLflow).
+  local_metrics_path: ${hydra:runtime.output_dir}/metrics.jsonl
+
+# ----------------------------------------------------------------------------
+# CAPO algorithm selection (registered in verl/trainer/ppo/core_algos.py)
+# ----------------------------------------------------------------------------
+algorithm:
+  # valid: capo | capo_eb_lite | capo_eb
+  adv_estimator: capo_eb
+
+  # keep VERL defaults; CAPO does not require KL-in-reward
+  use_kl_in_reward: ${algorithm.use_kl_in_reward}
+
+# ----------------------------------------------------------------------------
+# CAPO knobs (consumed by capo.verl_integration.adv_estimators)
+# These are passed through `config` and can be read inside CAPO functions.
+# ----------------------------------------------------------------------------
+capo:
+  epsilon: 1e-8
+
+  # EB-lite
+  eb_lite:
+    max_iters: 20
+    tol: 1e-4
+
+  # EB-full
+  eb_full:
+    beta_init: 1.0
+    rho_init: 0.0
+    eta_init: 1.0
+    k_band: 64
+    beta_steps: 1
+    xi_steps: 1
+    beta_lr: 0.1
+    rho_lr: 0.1
+    eta_lr: 0.1
+    rho_max: 0.99
+    beta_min: 0.0
+    beta_max: 2.0
+    ema_beta: 1.0
+    ema_xi: 1.0
+    use_acf_moment: true
+    # optional priors (set to 0 unless you implement priors)
+    dlog_pi_beta: 0.0
+    dlog_pi_rho: 0.0
+    dlog_pi_eta: 0.0
