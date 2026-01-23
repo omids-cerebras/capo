@@ -16,6 +16,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
+export PYTHONUNBUFFERED=1
+export HYDRA_FULL_ERROR=1
+
+# Ensure vendored VERL is used.
+export PYTHONPATH="$REPO_ROOT/experiments/capo_paper:$REPO_ROOT:${PYTHONPATH:-}"
+
 usage() {
   cat <<USAGE
 Usage:
@@ -79,16 +85,21 @@ python "$ENTRYPOINT" \
   trainer.n_gpus_per_node=1 \
   trainer.total_training_steps="$STEPS" \
   trainer.local_metrics_path="$OUTDIR/metrics.jsonl" \
+  trainer.validation_data_dir="$OUTDIR/val_generations" \
+  trainer.val_before_train=True \
+  trainer.test_freq=25 \
+  trainer.save_freq=-1 \
   data.train_files="$TRAIN" \
   data.val_files="$VAL" \
-  data.train_batch_size=64 \
+  data.train_batch_size=16 \
   data.max_prompt_length=256 \
   data.max_response_length=256 \
   actor_rollout_ref.model.path="$MODEL" \
+  actor_rollout_ref.rollout.name=hf \
+  actor_rollout_ref.rollout.n=2 \
+  actor_rollout_ref.rollout.val_kwargs.n=2 \
   algorithm.adv_estimator="$ADV" \
-  seed="$SEED" \
-  trainer.val_interval=25 \
-  trainer.save_interval=0
+  seed="$SEED"
 
 echo "Smoke run complete."
 echo "Run dir: $OUTDIR"

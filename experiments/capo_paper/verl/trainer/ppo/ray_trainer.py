@@ -332,9 +332,22 @@ def compute_advantage(
             adv_kwargs["reward_baselines"] = data.batch["reward_baselines"]
 
         # calculate advantage estimator
-        advantages, returns = adv_estimator_fn(**adv_kwargs)
+        out = adv_estimator_fn(**adv_kwargs)
+        adv_metrics = None
+        if isinstance(out, tuple) and len(out) == 3:
+            advantages, returns, adv_metrics = out
+        else:
+            advantages, returns = out
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+
+        if adv_metrics:
+            # Store extra diagnostic metrics (e.g., CAPO EB weight dispersion)
+            # for downstream logging. Must be JSON-serializable.
+            data.meta_info = data.meta_info or {}
+            data.meta_info["adv_metrics"] = {
+                str(k): float(v) for k, v in adv_metrics.items() if v is not None
+            }
     return data
 
 
@@ -1460,6 +1473,24 @@ class RayPPOTrainer:
                             "norm_adv_by_std_in_grpo", True
                         )  # GRPO adv normalization factor
 
+                        # CAPO advantage estimators rely on a top-level `capo.*`
+                        # config block. The upstream VERL trainer passes only
+                        # `config.algorithm` into advantage estimation; we
+                        # merge the CAPO block into the algorithm config here
+                        # to keep the upstream interface intact.
+                        adv_cfg = self.config.algorithm
+                        if hasattr(self.config, "capo"):
+                            try:
+                                from omegaconf import OmegaConf
+
+                                adv_cfg = OmegaConf.merge(
+                                    self.config.algorithm, {"capo": self.config.capo}
+                                )
+                            except Exception:
+                                # Fall back gracefully: CAPO will then use
+                                # default hyperparameters.
+                                adv_cfg = self.config.algorithm
+
                         batch = compute_advantage(
                             batch,
                             adv_estimator=self.config.algorithm.adv_estimator,
@@ -1468,7 +1499,7 @@ class RayPPOTrainer:
                             num_repeat=self.config.actor_rollout_ref.rollout.n,
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
-                            config=self.config.algorithm,
+                            config=adv_cfg,
                             use_dr_grpo=self.config.algorithm.use_dr_grpo,
                             use_grpopp=self.config.algorithm.use_grpopp,
                             grpopp_config=self.config.algorithm.grpopp_config,
@@ -1571,6 +1602,14 @@ class RayPPOTrainer:
                 metrics.update(
                     compute_data_metrics(batch=batch, use_critic=self.use_critic)
                 )
+
+                # Optional: advantage-estimator specific diagnostics.
+                # Custom estimators (e.g. CAPO EB) may return a third payload
+                # which we stashed under `batch.meta_info['adv_metrics']`.
+                if isinstance(getattr(batch, "meta_info", None), dict):
+                    adv_metrics = batch.meta_info.get("adv_metrics")
+                    if isinstance(adv_metrics, dict):
+                        metrics.update(adv_metrics)
                 metrics.update(
                     compute_timing_metrics(batch=batch, timing_raw=timing_raw)
                 )

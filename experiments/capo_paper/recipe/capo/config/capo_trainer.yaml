@@ -6,11 +6,39 @@ defaults:
   - ppo_trainer
   - _self_
 
+# Global seed used by recipe/capo/main_capo.py for Python/NumPy/Torch RNG.
+seed: 0
+
 trainer:
   project_name: capo
   # Write a line-delimited JSON metrics file for post-hoc analysis scripts.
   # This is intentionally local (works without WandB/MLflow).
   local_metrics_path: ${hydra:runtime.output_dir}/metrics.jsonl
+
+  # Conservative defaults. The experiment scripts override these as needed.
+  val_before_train: true
+  test_freq: 50
+  save_freq: -1
+  validation_data_dir: ${hydra:runtime.output_dir}/val_generations
+
+# Prefer the simpler HF rollout backend by default. The experiment scripts may
+# override this to vLLM if desired.
+actor_rollout_ref:
+  rollout:
+    name: hf
+    # GRPO/CAPO operate on groups of samples per prompt.
+    n: 8
+    val_kwargs:
+      n: 8
+
+  # HF rollout currently has known issues with HYBRID_SHARD; FULL_SHARD avoids
+  # the hang in most setups.
+  actor:
+    fsdp_config:
+      sharding_strategy: FULL_SHARD
+  ref:
+    fsdp_config:
+      sharding_strategy: FULL_SHARD
 
 # ----------------------------------------------------------------------------
 # CAPO algorithm selection (registered in verl/trainer/ppo/core_algos.py)

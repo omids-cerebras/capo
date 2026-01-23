@@ -127,6 +127,20 @@ fi
 
 echo
 echo "Installing pinned dependencies from '$PINNED_FILE' into $VENV_DIR using uv..."
+echo
+echo "Optionally installing PyTorch before the rest of the dependencies."
+echo "  - If you are on a GPU machine, set TORCH_CUDA=cu121 (or another CUDA tag)"
+echo "    to install the corresponding wheel from the official PyTorch index." 
+echo "  - If TORCH_CUDA is not set, you must ensure torch is installed yourself."
+
+if [[ -n "${TORCH_CUDA:-}" ]]; then
+  TORCH_INDEX="https://download.pytorch.org/whl/${TORCH_CUDA}"
+  echo "Installing torch==2.4.1 from ${TORCH_INDEX}"
+  VIRTUAL_ENV="$VENV_DIR" "$UV_BIN" pip install --python "$ENV_PY" --index-url "$TORCH_INDEX" torch==2.4.1
+else
+  echo "TORCH_CUDA not set; skipping torch installation."
+fi
+
 VIRTUAL_ENV="$VENV_DIR" "$UV_BIN" pip install --python "$ENV_PY" -r "$PINNED_FILE"
 
 echo

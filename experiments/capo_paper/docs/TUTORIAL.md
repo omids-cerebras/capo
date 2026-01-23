@@ -1,99 +1,109 @@
-# Tutorial: running CAPO paper experiments end-to-end
+# Tutorial: Running CAPO paper experiments (CountDown, Qwen2.5-1.5B)
 
-This tutorial is written to be followed literally on a fresh machine.
+This guide is intentionally procedural: each step produces a tangible artifact
+(a dataset, a run directory, or a paper-ready figure/table).
 
-## 0) Preconditions
+## 1) Environment
 
-- CUDA driver/toolkit compatible with your GPU
-- Python environment with CAPO installed
-- Access to a model checkpoint and a dataset supported by the vendored VERL runner
+Use any environment that can run PyTorch + CUDA and HuggingFace Transformers.
 
-## 1) Install
+Key requirement:
+- Ensure the vendored VERL in `experiments/capo_paper/verl` is on `PYTHONPATH`.
+  All provided scripts do this automatically.
 
-From the CAPO repo root:
+## 2) Prepare CountDown data
+
+Create a VERL-compatible parquet dataset (train + test) under a single folder:
 
 ```bash
-pip install -e ".[analysis]"
+python experiments/capo_paper/scripts/data/prepare_countdown_dataset.py \
+  --out_dir data/countdown \
+  --seed 123 \
+  --test_size 0.1
 ```
 
-## 2) Fast diagnostics (A10-friendly)
+This produces:
+- `data/countdown/train.parquet`
+- `data/countdown/test.parquet`
 
-These are designed to take minutes and reveal:
-- import/path problems
-- CUDA visibility issues
-- obvious shape/mask mismatches
-- exploding advantages / NaNs
-- missing `metrics.jsonl` logging
+## 3) Quick diagnostics on an A10
+
+These are designed to take minutes and fail loudly if something is wrong:
 
 ```bash
+# Environment sanity check (imports, versions, CUDA visibility)
 bash experiments/capo_paper/scripts/a10/a10_diagnose_env.sh
-bash experiments/capo_paper/scripts/a10/a10_smoke_tiny.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+
+# 1-GPU tiny smoke run (very short training)
+bash experiments/capo_paper/scripts/a10/a10_smoke_tiny.sh \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --train data/countdown/train.parquet \
+  --val data/countdown/test.parquet \
+  --steps 50 \
+  --adv capo_eb_lite \
+  --out outputs/smoke_tiny
 ```
 
-If the smoke test fails, do **not** start the full suite—fix the issue first.
+## 4) Run the paper experiment suite
 
-## 3) Run the paper-minimum suite (1-week budget)
+### One-command runner
 
-All scripts share the same interface:
-
-- `--model <MODEL_PATH>`
-- `--train <TRAIN_FILE> --val <VAL_FILE>`
-- optional: `--seeds "0 1 2"` etc.
-
-### E1: main comparison (primary figure + primary table)
+If you want a single entrypoint that prepares data, runs the canonical suite,
+and builds paper artifacts:
 
 ```bash
-bash experiments/capo_paper/recipe/capo/scripts/E1_main_comparison.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+bash experiments/capo_paper/scripts/run_all.sh \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --workdir ./workdir \
+  --seeds "0 1"
 ```
 
-### E2: training dynamics
+By default this runs:
+- a 1-GPU smoke test
+- E1 (short, 2048)
+- E4 (long, 8192; includes length-decile eval)
+- E3 (small CAPO k-band sweep)
+- artifact build + optional copy into a paper folder
+
+### Individual experiments
+
+All experiment scripts share the same basic interface:
 
 ```bash
-bash experiments/capo_paper/recipe/capo/scripts/E2_dynamics.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+bash experiments/capo_paper/recipe/capo/scripts/E1_main_comparison.sh \
+  --model Qwen/Qwen2.5-1.5B-Instruct \
+  --data_dir data/countdown \
+  --out_root outputs/paper \
+  --steps 400 \
+  --seeds "0 1"
 ```
 
-### E3: stability sweep
+Available scripts:
+- `E1_main_comparison.sh`: main baseline comparison (multi-method, multi-seed)
+- `E2_dynamics.sh`: smoother learning curves for a small subset of methods
+- `E3_stability_sweep.sh`: CAPO EB k-band sensitivity sweep
+- `E4_length_deciles.sh`: long-context runs + length-stratified evaluation
+
+## 5) Build paper artifacts
+
+Artifacts are derived from `metrics.jsonl` and validation generation dumps.
 
 ```bash
-bash experiments/capo_paper/recipe/capo/scripts/E3_stability_sweep.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+python experiments/capo_paper/analysis/collect_runs.py \
+  --outputs_root outputs/paper \
+  --out artifacts/collected
+
+python experiments/capo_paper/analysis/make_paper_artifacts.py \
+  --collected artifacts/collected \
+  --out artifacts
 ```
 
-### E4: length-stratified evaluation
+This generates `artifacts/paper/` containing:
+- `tab_main_accuracy.tex`
+- `tab_stability_efficiency.tex`
+- `fig_dynamics.pdf`
+- `fig_stability.pdf`
+- `fig_length_deciles.pdf`
 
-```bash
-bash experiments/capo_paper/recipe/capo/scripts/E4_length_deciles.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
-```
-
-## 4) Build the paper figures/tables
-
-Collect runs:
-
-```bash
-python experiments/capo_paper/analysis/collect_runs.py --runs_dir outputs --out artifacts/collected
-```
-
-Generate artifacts:
-
-```bash
-python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts/paper
-```
-
-## 5) Sanity check: what should exist
-
-After step (4), you should have:
-
-- `artifacts/paper/fig_main.pdf`
-- `artifacts/paper/fig_dynamics.pdf`
-- `artifacts/paper/fig_stability.pdf`
-- `artifacts/paper/fig_length_deciles.pdf`
-- `artifacts/paper/tab_main_accuracy.tex`
-- `artifacts/paper/tab_stability_efficiency.tex`
-
-If any of these are missing, the builder should have raised an error that tells you which metric/config key is missing.
-
-## 6) Debugging tips
-
-- Look at `outputs/.../.hydra/config.yaml` to confirm the resolved settings.
-- Inspect the last ~200 lines of `metrics.jsonl` to see if a metric stopped being logged.
-- If you see NaNs/inf in advantages, start by lowering learning rate or increasing CAPO epsilon.
-- If you suspect length effects, rerun E4 with fewer bins and confirm monotonicity first.
+The artifact builder is forgiving: if a run or metric is missing, it emits
+compile-safe placeholders (dashes / empty plots) rather than failing.
