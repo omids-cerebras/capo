@@ -1,0 +1,25 @@
+name: capo
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pytorch=2.4.1
+  - pytorch-cuda=12.1
+  - numpy=1.26
+  - pandas
+  - pyarrow
+  - ray-default>=2.9
+  - pytest
+  - hydra-core>=1.3
+  - omegaconf>=2.3
+  - transformers>=4.40
+  - accelerate>=0.28
+  - datasets
+  - wandb
+  - pip
+  - pip:
+      - verl==0.3.0.post1

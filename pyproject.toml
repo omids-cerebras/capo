@@ -5,16 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "capo"
 version = "0.1.0"
-description = "Covariance Aware Policy Optimization (CAPO)"
+description = "Covariance-Aware Policy Optimization: Bayesian gradient aggregation for RLVR"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-
-authors = [
-  { name = "Omid Shams Solari", email = "omid.solari@cerebras.net" },
-]
+authors = [{ name = "Omid Shams Solari", email = "omid.solari@cerebras.net" }]
 
 classifiers = [
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -24,55 +22,44 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-keywords = ["reinforcement-learning", "rlhf", "verl", "capo"]
+keywords = ["reinforcement-learning", "rlhf", "rlvr", "policy-optimization", "verl"]
 
 dependencies = [
   "torch>=2.1",
   "numpy>=1.24",
+  "verl>=0.3",
 ]
 
 [project.optional-dependencies]
-analysis = [
-  "pandas>=2.0",
-  "matplotlib>=3.7",
-  "PyYAML>=6.0",
-  "tqdm>=4.66",
-]
-
 dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "ruff>=0.5.0",
   "mypy>=1.0",
-  "mkdocs>=1.6",
+]
+docs = [
+  "mkdocs>=1.5",
+  "mkdocs-material>=9.0",
+  "mkdocstrings[python]>=0.24",
+  "mkdocs-jupyter>=0.24",
+]
+analysis = [
+  "matplotlib>=3.7",
+  "seaborn>=0.12",
 ]
 
 [project.urls]
 Homepage = "https://github.com/omids/capo"
 Repository = "https://github.com/omids/capo"
-Issues = "https://github.com/omids/capo/issues"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["capo*"]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
-testpaths = ["capo/tests"]
-filterwarnings = [
-    "ignore::DeprecationWarning",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-]
+testpaths = ["src/capo/tests"]
+addopts = "-ra -q"
 
-# --- HOW TO PUBLISH --------------------------------
-# 1. Ensure you have up-to-date build tools:
-#       pip install -U build twine
-# 2. Build the source + wheel distributions:
-#       python -m build
-# 3. Upload to PyPI (or TestPyPI first):
-#       python -m twine upload dist/*
-#
-# Make sure you've set name, version, authors and URLs to match your repo.
-# -----------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
