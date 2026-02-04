@@ -1,12 +1,8 @@
-# Docker quickstart (GPU)
+# Docker
 
-This repository vendors VERL under `experiments/capo_paper/verl`. The Docker
-image configures `PYTHONPATH` so that the vendored copy is imported (no `pip
-install verl` is required).
+Build and run CAPO in a container.
 
 ## Build
-
-From the repository root:
 
 ```bash
 docker build -t capo:latest -f docker/Dockerfile .
@@ -21,16 +17,19 @@ docker run --rm -it --gpus all \
   capo:latest
 ```
 
-Inside the container you can then run:
+Inside the container:
 
 ```bash
-python experiments/capo_paper/scripts/data/prepare_countdown_dataset.py --out_dir data/countdown
-bash experiments/capo_paper/scripts/run_all.sh --model Qwen/Qwen2.5-1.5B-Instruct --data_dir data/countdown
+# Prepare data
+python -m capo.experiments.scripts.data.prepare_countdown_dataset --out_dir data/countdown
+
+# Run training
+python -m capo.experiments.recipe.capo.main_capo \
+    algorithm.adv_estimator=capo_eb
 ```
 
 ## Notes
 
-- If you build against a different CUDA runtime, adjust the `--index-url` used to
-  install PyTorch in the Dockerfile.
-- If you do not want WandB network access, set `WANDB_MODE=offline` in your
+- Adjust CUDA version in Dockerfile if needed
+- Set `WANDB_MODE=offline` if no network access
   environment.

@@ -20,6 +20,8 @@ dependencies:
   - accelerate>=0.28
   - datasets
   - wandb
+  - matplotlib
+  - seaborn
   - pip
   - pip:
       - verl==0.3.0.post1

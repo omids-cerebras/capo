@@ -14,6 +14,10 @@ nav:
       - CAPO Method: method.md
       - Algorithms: algorithms.md
       - Evaluations: evaluations.md
+  - Tutorials:
+      - CAPO Basics: tutorials/01_capo_basics.ipynb
+      - Comparing Estimators: tutorials/02_comparing_estimators.ipynb
+      - Empirical Bayes: tutorials/03_empirical_bayes.ipynb
   - API Reference: api.md
   - Experiments: experiments.md
 

@@ -64,7 +64,7 @@ def _cfg_get(config, path, default):
 def _lengths_and_scalar_returns(
     token_level_rewards: Tensor, response_mask: Tensor,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    """
+    r"""
     Compute (L_i, g_i) from token-level rewards.
 
     Parameters

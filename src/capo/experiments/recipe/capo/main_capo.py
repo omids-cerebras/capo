@@ -1,6 +1,6 @@
 """CAPO paper entrypoint.
 
-This file is intentionally thin: it wires configuration (Hydra) into the vendored
+This file is intentionally thin: it wires configuration (Hydra) into the
 VERL RayPPO trainer.
 
 Design constraints:
@@ -16,8 +16,7 @@ Key config switches
     - `capo_eb_lite`
     - `capo_eb`
 
-The CAPO estimators are registered into VERL in:
-  `experiments/capo_paper/verl/trainer/ppo/core_algos.py`
+The CAPO estimators are in `capo.verl_integration.adv_estimators`.
 """
 
 from __future__ import annotations

@@ -3,7 +3,7 @@ FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
+    python3.11 \
     python3-pip \
     python3-venv \
     git \
@@ -16,18 +16,12 @@ RUN python3 -m pip install --upgrade pip setuptools wheel
 WORKDIR /workspace
 COPY . /workspace
 
-# Install a CUDA-enabled PyTorch wheel.
-# NOTE: adjust 'cu121' if you build this image with a different CUDA runtime.
+# Install PyTorch with CUDA support
 RUN pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Install pinned deps (torch is intentionally excluded from the lock file).
-RUN pip install -r pinned-requirements.txt
+# Install CAPO and dependencies
+RUN pip install -e . verl==0.3.0.post1
 
-# Install CAPO in editable mode.
-RUN pip install -e .
-
-# Ensure vendored VERL is importable.
-ENV PYTHONPATH=/workspace/experiments/capo_paper:/workspace:${PYTHONPATH}
 ENV PYTHONUNBUFFERED=1
 ENV HYDRA_FULL_ERROR=1
 

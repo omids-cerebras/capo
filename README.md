@@ -50,16 +50,22 @@ src/
     ├── __init__.py
     ├── eb_core.py              # Core EB algorithms
     ├── verl_integration/       # VERL integration
-    │   ├── reward_fn.py        # CAPO reward function
-    │   ├── reward_manager.py   # Token-level reward manager
-    │   └── adv_estimators.py   # EB advantage estimators
     ├── experiments/            # Paper reproduction code
-    │   └── capo_paper/
     └── tests/                  # Test suite
 
+notebooks/tutorials/            # Interactive tutorials
 docs/                           # MkDocs documentation
-└── report/                     # Technical report (LaTeX)
 ```
+
+## Tutorials
+
+Interactive notebooks to get started:
+
+| Notebook | Description |
+|----------|-------------|
+| [01_capo_basics](notebooks/tutorials/01_capo_basics.ipynb) | Core concepts and weighting |
+| [02_comparing_estimators](notebooks/tutorials/02_comparing_estimators.ipynb) | Compare all three estimators |
+| [03_empirical_bayes](notebooks/tutorials/03_empirical_bayes.ipynb) | EB estimation deep dive |
 
 ## Algorithms
 
