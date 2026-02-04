@@ -62,8 +62,7 @@ def _cfg_get(config, path, default):
 
 
 def _lengths_and_scalar_returns(
-    token_level_rewards: Tensor,
-    response_mask: Tensor,
+    token_level_rewards: Tensor, response_mask: Tensor,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Compute (L_i, g_i) from token-level rewards.
@@ -80,14 +79,18 @@ def _lengths_and_scalar_returns(
     lengths : Tensor, shape [B]
         Response lengths L_i = Σ_t 1_{mask_{i,t}}.
     returns_scalar : Tensor, shape [B]
-        Scalarized returns g_i = mean_{t <= L_i} r_{i,t}.
+        Scalarized returns g_i = \sum_{t \le L_i} r_{i,t}.
     valid : Tensor[bool], shape [B, T]
         Boolean mask of valid positions (same as response_mask > 0).
     """
     valid = response_mask > 0
     lengths = valid.sum(dim=-1).clamp_min(1).float()
-    # Mean token reward per trajectory.
-    returns_scalar = (token_level_rewards * valid).sum(dim=-1) / lengths
+    # Scalar return per trajectory.
+    #
+    # IMPORTANT: use a sum (not a mean). For outcome-only tasks like CountDown,
+    # the reward is concentrated at the terminal token; a mean would
+    # artificially shrink returns for longer responses.
+    returns_scalar = (token_level_rewards * valid).sum(dim=-1)
     return lengths, returns_scalar, valid
 
 
@@ -159,7 +162,7 @@ def compute_capo_eb_lite_advantage(
     max_iters: int = 20,
     tol: float = 1e-4,
     **kwargs,
-) -> Tuple[Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, dict]:
     """
     EB–CAPO-lite advantage (Algorithm~\\ref{alg:eb-lite}).
 
@@ -197,6 +200,8 @@ def compute_capo_eb_lite_advantage(
         Token-level advantages from EB–CAPO-lite.
     returns : Tensor, shape [B, T]
         Returns (here equal to CAPO token-level rewards masked).
+    adv_metrics : dict
+        Lightweight diagnostics for logging (JSON-serializable floats).
     """
     lengths, returns_scalar, valid = _lengths_and_scalar_returns(
         token_level_rewards, response_mask
@@ -205,14 +210,10 @@ def compute_capo_eb_lite_advantage(
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)
         returns = token_level_rewards.clone()
-        return advantages, returns
+        return advantages, returns, {}
 
     beta_hat, w, m = eb_lite_fit_beta_and_weights(
-        g=returns_scalar,
-        L=lengths,
-        eps=epsilon,
-        max_iters=max_iters,
-        tol=tol,
+        g=returns_scalar, L=lengths, eps=epsilon, max_iters=max_iters, tol=tol,
     )
 
     # Per-trajectory scalar advantages A_i = w_i (g_i - m̂).
@@ -226,7 +227,24 @@ def compute_capo_eb_lite_advantage(
         advantages = advantages / std
 
     returns = token_level_rewards * valid
-    return advantages, returns
+    # Advantage estimator diagnostics (helpful for debugging / stability plots).
+    with torch.no_grad():
+        w_mean = w.mean()
+        w_std = w.std(unbiased=False)
+        w_cv = (w_std / (w_mean.abs() + epsilon)).item()
+        w_centered = w - w_mean
+        w_var = w_centered.pow(2).mean().clamp_min(epsilon)
+        w_kurt = (w_centered.pow(4).mean() / (w_var * w_var)).item()
+        ess = (w.sum().pow(2) / w.pow(2).sum().clamp_min(epsilon)).item()
+
+        adv_metrics = {
+            "capo/beta": float(beta_hat),
+            "capo/weight_cv": float(w_cv),
+            "capo/weight_kurtosis": float(w_kurt),
+            "capo/weight_ess": float(ess),
+        }
+
+    return advantages, returns, adv_metrics
 
 
 def compute_capo_eb_full_advantage(
@@ -256,7 +274,7 @@ def compute_capo_eb_full_advantage(
     dlog_pi_rho: float = 0.0,
     dlog_pi_eta: float = 0.0,
     **kwargs,
-) -> Tuple[Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, dict]:
     """
     Full EB–CAPO advantage (Algorithms~\\ref{alg:eb-capo} and
     ~\\ref{alg:joint-eb-kband}).
@@ -322,7 +340,7 @@ def compute_capo_eb_full_advantage(
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)
         returns = token_level_rewards.clone()
-        return advantages, returns
+        return advantages, returns, {}
 
     # Joint EB update for this batch.
     beta_t, rho_t, eta_t, w = joint_eb_update_kband(
@@ -362,7 +380,28 @@ def compute_capo_eb_full_advantage(
         advantages = advantages / std
 
     returns = token_level_rewards * valid
-    return advantages, returns
+
+    # Diagnostics for logging.
+    w = w.detach()
+    w_mean = w.mean()
+    w_std = w.std(unbiased=False)
+    w_cv = w_std / (w_mean.abs() + epsilon)
+    w_centered = w - w_mean
+    w_var = w_centered.pow(2).mean().clamp_min(epsilon)
+    w_kurt = w_centered.pow(4).mean() / (w_var.pow(2) + epsilon)
+    w_ess = (w.sum().pow(2) / (w.pow(2).sum() + epsilon)).clamp_min(0.0)
+
+    adv_metrics = {
+        "capo/beta": float(beta_t),
+        "capo/rho": float(rho_t),
+        "capo/eta": float(eta_t),
+        "capo/k_band": float(k_band),
+        "capo/weight_cv": float(w_cv),
+        "capo/weight_kurtosis": float(w_kurt),
+        "capo/weight_ess": float(w_ess),
+    }
+
+    return advantages, returns, adv_metrics
 
 
 # Alias for backward compatibility

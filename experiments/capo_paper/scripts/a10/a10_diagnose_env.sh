@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 repo_root = Path(r"$REPO_ROOT")
-verl_path = repo_root / "experiments" / "capo_paper" / "verl"
+paper_root = repo_root / "experiments" / "capo_paper"
 
 print("python:", sys.version.replace("\n", " "))
 
@@ -43,8 +43,9 @@ except Exception as e:
     raise RuntimeError(f"Ray import failed: {e}")
 
 # Ensure vendored VERL is importable with highest precedence.
-if str(verl_path) not in sys.path:
-    sys.path.insert(0, str(verl_path))
+# The sys.path entry must be the *parent* of the 'verl' package directory.
+if str(paper_root) not in sys.path:
+    sys.path.insert(0, str(paper_root))
 
 try:
     import verl  # noqa: F401

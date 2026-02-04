@@ -322,7 +322,6 @@ tomli==2.3.0
     # via
     #   black
     #   pytest
-torch==2.4.1
     # via
     #   -r requirements.in
     #   accelerate
@@ -363,7 +362,6 @@ urllib3==2.2.3
     #   requests
     #   sentry-sdk
     #   torchdata
-verl==0.3.0.post1
     # via -r requirements.in
 virtualenv==20.35.4
     # via ray

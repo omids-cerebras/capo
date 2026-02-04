@@ -277,9 +277,7 @@ class Qwen2_5VisionModel(VisionModule):
         vision_data = self.patch_embed(vision_data)
         window_index, cu_window_seqlens = self.get_window_index(grid_thw)
         cu_window_seqlens = torch.tensor(
-            cu_window_seqlens,
-            device=vision_data.device,
-            dtype=torch.int32,
+            cu_window_seqlens, device=vision_data.device, dtype=torch.int32,
         )
         cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 

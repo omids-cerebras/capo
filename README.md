@@ -59,47 +59,89 @@ The **VERL integration** is entirely contained under `capo/verl_integration/`. T
 
 - Python **3.10+** (3.11 recommended).
 - A working C++ toolchain (if you compile PyTorch from source).
+- CUDA 11.8+ for GPU training.
 - Optionally: `uv` or `pip` for dependency management.
-- VERL (installed from GitHub or via your internal distribution).
 
-### Recommended: pinned environment via `pin.sh` / `create_env.sh`
+> **Note on VERL**: This repository includes a vendored copy of VERL in
+> `experiments/capo_paper/verl/`. The installation scripts automatically
+> configure PYTHONPATH to use this vendored version, so you don't need to
+> install VERL separately.
 
-If your repo includes `requirements.in`, `pin.sh`, and `create_env.sh`:
+---
 
-1. **Pin dependencies**
+### Option 1: Conda Environment (Recommended)
+
+The easiest way to get started with full GPU support:
+
+```bash
+# Create conda environment with Python 3.11 and CUDA 12.1
+./create_conda_env.sh
+
+# Or customize:
+CUDA_VERSION=cu118 PYTHON_VERSION=3.10 ./create_conda_env.sh myenv
+
+# Activate
+conda activate capo
+```
+
+This automatically:
+- Installs PyTorch with CUDA support
+- Installs all dependencies
+- Configures PYTHONPATH for the vendored VERL
+- Sets useful environment variables (HYDRA_FULL_ERROR=1, etc.)
+
+---
+
+### Option 2: Virtual Environment (venv)
+
+If you prefer a lightweight venv:
+
+1. **Pin dependencies** (optional, for reproducibility)
 
    ```bash
    ./pin.sh
    ```
 
-   This produces a `pinned-requirements.txt` for your current platform.
-
-2. **Create a virtual environment and install**
+2. **Create virtual environment and install**
 
    ```bash
+   # For GPU support, set TORCH_CUDA
+   TORCH_CUDA=cu121 ./create_env.sh .venv
+   
+   # For CPU only
    ./create_env.sh .venv
+   
+   # Activate
    source .venv/bin/activate
    ```
 
-   This will:
+---
 
-   - create (or reuse) `.venv/`,
-   - install all pinned dependencies,
-   - install the `capo` package in editable mode (`-e .`).
+### Option 3: Docker
 
-3. **Install VERL**
+For fully isolated, reproducible runs:
 
-   If VERL is not already in pinned requirements, you can install from GitHub:
+```bash
+cd docker
+docker build -t capo:latest ..
+docker run --gpus all -it capo:latest bash
+```
 
-   ```bash
-   pip install "git+https://github.com/volcengine/verl.git"
-   ```
+---
 
-4. **Sanity check**
+### Verify Installation
 
-   ```bash
-   python -c "import verl, capo; print('OK')"
-   ```
+After installation, verify everything works:
+
+```bash
+# Test imports
+python -c "import torch; print(f'PyTorch: {torch.__version__}, CUDA: {torch.cuda.is_available()}')"
+python -c "import capo; print('CAPO: OK')"
+python -c "import verl; print('VERL: OK')"
+
+# Run tests
+pytest capo/tests/ -v
+```
 
 ---
 

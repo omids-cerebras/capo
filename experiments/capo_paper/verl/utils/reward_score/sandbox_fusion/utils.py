@@ -173,10 +173,13 @@ def call_sandbox_api(
     )  # <-- Use internal log_prefix
     # Return the error message without the prefix, as the caller doesn't need the internal ID
     # Ensure API call failure returns error message, leading to -1 in check_correctness
-    return None, (
-        last_error.replace(log_prefix, "API Call Failed: ")
-        if last_error
-        else "API Call Failed after retries"
+    return (
+        None,
+        (
+            last_error.replace(log_prefix, "API Call Failed: ")
+            if last_error
+            else "API Call Failed after retries"
+        ),
     )
 
 
@@ -515,10 +518,13 @@ def check_correctness(
             f"Mismatch between number of inputs ({len(inputs)}) and outputs ({len(expected_outputs)})."
         )
         # Return error based on the number of inputs provided
-        return [-1] * num_cases, [
-            {"error": "Input/output count mismatch", "case_index": i}
-            for i in range(num_cases)
-        ]
+        return (
+            [-1] * num_cases,
+            [
+                {"error": "Input/output count mismatch", "case_index": i}
+                for i in range(num_cases)
+            ],
+        )
 
     first_compile_error_index = -1
 

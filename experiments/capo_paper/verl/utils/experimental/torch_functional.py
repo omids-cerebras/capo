@@ -223,9 +223,5 @@ class FusedLinearForPPO(torch.nn.Module):
     ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         input_ids = input_ids.to(torch.int64)
         return FusedLinearForPPOFunction.apply(
-            hidden_states,
-            vocab_weights,
-            input_ids,
-            temperature,
-            self.chunk_size,
+            hidden_states, vocab_weights, input_ids, temperature, self.chunk_size,
         )

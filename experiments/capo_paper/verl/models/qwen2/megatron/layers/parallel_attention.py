@@ -384,9 +384,11 @@ class ParallelQwen2AttentionRmPad(ParallelQwen2Attention):
         cu_seqlens: torch.Tensor = None,
         max_seqlen_in_batch: int = None,
     ):
-        total_nnz, _, _ = (
-            hidden_states.size()
-        )  # This is the total_nnz padded after sequence parallel
+        (
+            total_nnz,
+            _,
+            _,
+        ) = hidden_states.size()  # This is the total_nnz padded after sequence parallel
 
         if self.megatron_config.sequence_parallel:
             total_nnz = total_nnz * mpu.get_tensor_model_parallel_world_size()

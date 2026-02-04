@@ -25,7 +25,7 @@ from __future__ import annotations
 import hydra
 import ray
 
-from verl.trainer.ppo.reward import get_custom_reward_fn
+from verl.trainer.ppo.reward import load_reward_manager
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
 
@@ -54,14 +54,37 @@ def run_ppo(config) -> None:
 @ray.remote(num_cpus=1)  # avoid scheduling on the Ray head if possible
 class TaskRunner:
     def run(self, config):
+        """Build and execute a RayPPOTrainer run.
+
+        Notes
+        -----
+        - This entrypoint is intentionally light on logic. Any experimental
+          variation should be done via Hydra config overrides (see
+          `experiments/capo_paper/recipe/capo/scripts/*`).
+        - We set RNG seeds here (before any model construction) to improve
+          reproducibility across Ray workers.
+        """
+
+        import os
+        import random
         from pprint import pprint
 
+        import numpy as np
+        import torch
         from omegaconf import OmegaConf
 
         from verl.utils.fs import copy_to_local
 
-        pprint(OmegaConf.to_container(config, resolve=True))
         OmegaConf.resolve(config)
+        pprint(OmegaConf.to_container(config, resolve=True))
+
+        seed = int(getattr(config, "seed", 1))
+        os.environ.setdefault("PYTHONHASHSEED", str(seed))
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
         # download/checkpoint path abstraction (HDFS/local supported by VERL)
         local_path = copy_to_local(config.actor_rollout_ref.model.path)
@@ -130,28 +153,22 @@ class TaskRunner:
             role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
             mapping[Role.RefPolicy] = global_pool_id
 
-        from verl.workers.reward_manager import get_reward_manager_cls
+        # Reward manager. We rely on VERL's loader, but pass optional kwargs
+        # defensively (reward managers have different ctor signatures).
+        reward_kwargs = dict(config.reward_model.get("reward_kwargs", {}))
 
-        reward_manager_name = config.reward_model.get("reward_manager", "naive")
-        reward_manager_cls = get_reward_manager_cls(reward_manager_name)
+        # These kwargs are used by some reward managers (e.g., DAPO-style
+        # overlong-buffer penalties) but are ignored by others.
+        reward_kwargs.setdefault("max_resp_len", config.data.max_response_length)
+        overlong_cfg = config.reward_model.get("overlong_buffer", None)
+        if overlong_cfg is not None:
+            reward_kwargs.setdefault("overlong_buffer_cfg", overlong_cfg)
 
-        compute_score = get_custom_reward_fn(config)
-        reward_fn = reward_manager_cls(
-            tokenizer=tokenizer,
-            num_examine=0,
-            compute_score=compute_score,
-            reward_fn_key=config.data.reward_fn_key,
-            max_resp_len=config.data.max_response_length,
-            overlong_buffer_cfg=config.reward_model.overlong_buffer,
+        reward_fn = load_reward_manager(
+            config, tokenizer, num_examine=0, **reward_kwargs
         )
-
-        val_reward_fn = reward_manager_cls(
-            tokenizer=tokenizer,
-            num_examine=1,
-            compute_score=compute_score,
-            reward_fn_key=config.data.reward_fn_key,
-            max_resp_len=config.data.max_response_length,
-            overlong_buffer_cfg=config.reward_model.overlong_buffer,
+        val_reward_fn = load_reward_manager(
+            config, tokenizer, num_examine=1, **reward_kwargs
         )
 
         resource_pool_manager = ResourcePoolManager(

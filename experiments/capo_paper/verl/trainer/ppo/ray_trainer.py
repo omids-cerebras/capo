@@ -59,9 +59,7 @@ from verl.utils.checkpoint.checkpoint_manager import (
     find_latest_ckpt_path,
 )
 from verl.utils.debug.performance import _timer
-from verl.utils.metric import (
-    reduce_metrics,
-)
+from verl.utils.metric import reduce_metrics
 from verl.utils.seqlen_balancing import (
     get_seqlen_balanced_partitions,
     log_seqlen_unbalance,
@@ -332,9 +330,22 @@ def compute_advantage(
             adv_kwargs["reward_baselines"] = data.batch["reward_baselines"]
 
         # calculate advantage estimator
-        advantages, returns = adv_estimator_fn(**adv_kwargs)
+        out = adv_estimator_fn(**adv_kwargs)
+        adv_metrics = None
+        if isinstance(out, tuple) and len(out) == 3:
+            advantages, returns, adv_metrics = out
+        else:
+            advantages, returns = out
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+
+        if adv_metrics:
+            # Store extra diagnostic metrics (e.g., CAPO EB weight dispersion)
+            # for downstream logging. Must be JSON-serializable.
+            data.meta_info = data.meta_info or {}
+            data.meta_info["adv_metrics"] = {
+                str(k): float(v) for k, v in adv_metrics.items() if v is not None
+            }
     return data
 
 
@@ -805,8 +816,8 @@ class RayPPOTrainer:
                 )
             else:
                 self.async_rollout_manager.wake_up()
-                test_output_gen_batch_padded = (
-                    self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
+                test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(
+                    test_gen_batch_padded
                 )
                 self.async_rollout_manager.sleep()
 
@@ -965,9 +976,9 @@ class RayPPOTrainer:
             OmegaConf.select(self.config.trainer, "ray_wait_register_center_timeout")
             is not None
         ):
-            wg_kwargs["ray_wait_register_center_timeout"] = (
-                self.config.trainer.ray_wait_register_center_timeout
-            )
+            wg_kwargs[
+                "ray_wait_register_center_timeout"
+            ] = self.config.trainer.ray_wait_register_center_timeout
 
         for resource_pool, class_dict in self.resource_pool_to_cls.items():
             worker_dict_cls = create_colocated_worker_cls(class_dict=class_dict)
@@ -1003,8 +1014,7 @@ class RayPPOTrainer:
 
             self.async_rollout_mode = True
             self.async_rollout_manager = AsyncLLMServerManager(
-                config=self.config,
-                worker_group=self.actor_rollout_wg,
+                config=self.config, worker_group=self.actor_rollout_wg,
             )
 
     def _save_checkpoint(self):
@@ -1292,8 +1302,8 @@ class RayPPOTrainer:
                             )
                         else:
                             self.async_rollout_manager.wake_up()
-                            gen_batch_output = (
-                                self.async_rollout_manager.generate_sequences(gen_batch)
+                            gen_batch_output = self.async_rollout_manager.generate_sequences(
+                                gen_batch
                             )
                             self.async_rollout_manager.sleep()
                         timing_raw.update(gen_batch_output.meta_info["timing"])
@@ -1303,10 +1313,8 @@ class RayPPOTrainer:
                         with _timer("gen_max", timing_raw):
                             gen_baseline_batch = deepcopy(gen_batch)
                             gen_baseline_batch.meta_info["do_sample"] = False
-                            gen_baseline_output = (
-                                self.actor_rollout_wg.generate_sequences(
-                                    gen_baseline_batch
-                                )
+                            gen_baseline_output = self.actor_rollout_wg.generate_sequences(
+                                gen_baseline_batch
                             )
 
                             batch = batch.union(gen_baseline_output)
@@ -1413,8 +1421,8 @@ class RayPPOTrainer:
                                     batch
                                 )
                             else:
-                                ref_log_prob = (
-                                    self.actor_rollout_wg.compute_ref_log_prob(batch)
+                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(
+                                    batch
                                 )
                             batch = batch.union(ref_log_prob)
 
@@ -1460,6 +1468,24 @@ class RayPPOTrainer:
                             "norm_adv_by_std_in_grpo", True
                         )  # GRPO adv normalization factor
 
+                        # CAPO advantage estimators rely on a top-level `capo.*`
+                        # config block. The upstream VERL trainer passes only
+                        # `config.algorithm` into advantage estimation; we
+                        # merge the CAPO block into the algorithm config here
+                        # to keep the upstream interface intact.
+                        adv_cfg = self.config.algorithm
+                        if hasattr(self.config, "capo"):
+                            try:
+                                from omegaconf import OmegaConf
+
+                                adv_cfg = OmegaConf.merge(
+                                    self.config.algorithm, {"capo": self.config.capo}
+                                )
+                            except Exception:
+                                # Fall back gracefully: CAPO will then use
+                                # default hyperparameters.
+                                adv_cfg = self.config.algorithm
+
                         batch = compute_advantage(
                             batch,
                             adv_estimator=self.config.algorithm.adv_estimator,
@@ -1468,7 +1494,7 @@ class RayPPOTrainer:
                             num_repeat=self.config.actor_rollout_ref.rollout.n,
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
-                            config=self.config.algorithm,
+                            config=adv_cfg,
                             use_dr_grpo=self.config.algorithm.use_dr_grpo,
                             use_grpopp=self.config.algorithm.use_grpopp,
                             grpopp_config=self.config.algorithm.grpopp_config,
@@ -1507,9 +1533,9 @@ class RayPPOTrainer:
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
-                            batch.meta_info["multi_turn"] = (
-                                self.config.actor_rollout_ref.rollout.multi_turn.enable
-                            )
+                            batch.meta_info[
+                                "multi_turn"
+                            ] = self.config.actor_rollout_ref.rollout.multi_turn.enable
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(
                             actor_output.meta_info["metrics"]
@@ -1571,6 +1597,14 @@ class RayPPOTrainer:
                 metrics.update(
                     compute_data_metrics(batch=batch, use_critic=self.use_critic)
                 )
+
+                # Optional: advantage-estimator specific diagnostics.
+                # Custom estimators (e.g. CAPO EB) may return a third payload
+                # which we stashed under `batch.meta_info['adv_metrics']`.
+                if isinstance(getattr(batch, "meta_info", None), dict):
+                    adv_metrics = batch.meta_info.get("adv_metrics")
+                    if isinstance(adv_metrics, dict):
+                        metrics.update(adv_metrics)
                 metrics.update(
                     compute_timing_metrics(batch=batch, timing_raw=timing_raw)
                 )

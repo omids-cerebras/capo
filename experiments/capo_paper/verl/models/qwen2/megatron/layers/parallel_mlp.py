@@ -33,6 +33,7 @@ class ParallelQwen2MLP(nn.Module):
     This module consists of a gate-up projection followed by a down projection,
     with an activation function applied to the gate output.
     """
+
     def __init__(self, config, megatron_config: ModelParallelConfig = None) -> None:
         super().__init__()
         self.config = config

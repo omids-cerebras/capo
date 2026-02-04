@@ -150,14 +150,12 @@ class MultiTurnSFTDataset(Dataset):
                 tools=tools,
             )
             if is_assistant:
-                prev_applied_text_w_generation_prompt = (
-                    self.tokenizer.apply_chat_template(
-                        messages[:start_idx],
-                        tokenize=False,
-                        add_generation_prompt=True,
-                        enable_thinking=enable_thinking,
-                        tools=tools,
-                    )
+                prev_applied_text_w_generation_prompt = self.tokenizer.apply_chat_template(
+                    messages[:start_idx],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=enable_thinking,
+                    tools=tools,
                 )
 
         else:
@@ -176,8 +174,7 @@ class MultiTurnSFTDataset(Dataset):
                 len(prev_applied_text) :
             ]
             generation_prompt_tokens = self.tokenizer.encode(
-                generation_prompt_text,
-                add_special_tokens=False,
+                generation_prompt_text, add_special_tokens=False,
             )
             _message_tokens = self.tokenizer.encode(
                 cur_applied_text[len(prev_applied_text_w_generation_prompt) :],
@@ -189,8 +186,7 @@ class MultiTurnSFTDataset(Dataset):
             )
         else:
             message_tokens = self.tokenizer.encode(
-                cur_applied_text[len(prev_applied_text) :],
-                add_special_tokens=False,
+                cur_applied_text[len(prev_applied_text) :], add_special_tokens=False,
             )
             loss_mask = [0] * len(message_tokens)
 

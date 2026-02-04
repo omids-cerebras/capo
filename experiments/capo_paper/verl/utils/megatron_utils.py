@@ -243,8 +243,7 @@ def init_megatron_optim_config(optim_config: Dict) -> OptimizerConfig:
 
 
 def mcore_model_parallel_config(
-    sequence_parallel: bool,
-    params_dtype: torch.dtype,
+    sequence_parallel: bool, params_dtype: torch.dtype,
 ) -> ModelParallelConfig:
     # WARNING: Code should not reach this point. This function is deprecated and will be removed.
     # Please use hf_to_mcore_config_dense() from verl.models.mcore.config_converter instead.
@@ -623,9 +622,9 @@ def convert_megatron_model_to_transformers_model(
             new_params[f"model.layers.{layer_number}.self_attn.o_proj.weight"] = param
         elif component == "linear_qkv" and not isinstance(param, list):
             if param_type == "layer_norm_weight":
-                new_params[f"model.layers.{layer_number}.input_layernorm.weight"] = (
-                    param
-                )
+                new_params[
+                    f"model.layers.{layer_number}.input_layernorm.weight"
+                ] = param
             else:
                 if convert_qkv_gate_up_by_trunk_concat:
                     convert_qkv_shard(
@@ -646,15 +645,15 @@ def convert_megatron_model_to_transformers_model(
         else:
             assert isinstance(param, list) and len(param) == 3
             assert param_type == "weight" or param_type == "bias"
-            new_params[f"model.layers.{layer_number}.self_attn.q_proj.{param_type}"] = (
-                param[0]
-            )
-            new_params[f"model.layers.{layer_number}.self_attn.k_proj.{param_type}"] = (
-                param[1]
-            )
-            new_params[f"model.layers.{layer_number}.self_attn.v_proj.{param_type}"] = (
-                param[2]
-            )
+            new_params[
+                f"model.layers.{layer_number}.self_attn.q_proj.{param_type}"
+            ] = param[0]
+            new_params[
+                f"model.layers.{layer_number}.self_attn.k_proj.{param_type}"
+            ] = param[1]
+            new_params[
+                f"model.layers.{layer_number}.self_attn.v_proj.{param_type}"
+            ] = param[2]
     elif "mlp" in name:
         splitted_name = name.split(".")
         layer_number = splitted_name[2]

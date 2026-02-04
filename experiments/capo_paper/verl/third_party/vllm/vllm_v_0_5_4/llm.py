@@ -155,8 +155,7 @@ class LLM(LLM):
         return self.llm_engine.tokenizer
 
     def set_tokenizer(
-        self,
-        tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
+        self, tokenizer: Union[PreTrainedTokenizer, PreTrainedTokenizerFast],
     ) -> None:
         self.llm_engine.tokenizer = tokenizer
 

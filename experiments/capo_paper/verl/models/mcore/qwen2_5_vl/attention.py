@@ -109,9 +109,10 @@ class Qwen2_5VLSelfAttention(SelfAttention):
         ):
             assert self.layer_number in inference_context.key_value_memory_dict
             assert inference_context.sequence_len_offset is not None
-            inference_key_memory, inference_value_memory = (
-                inference_context.key_value_memory_dict[self.layer_number]
-            )
+            (
+                inference_key_memory,
+                inference_value_memory,
+            ) = inference_context.key_value_memory_dict[self.layer_number]
             output = self.flash_decode(
                 sequence_len_offset=sequence_len_offset,
                 query_layer=query,
@@ -127,17 +128,21 @@ class Qwen2_5VLSelfAttention(SelfAttention):
             output, bias = self.linear_proj(context_layer)
             return output, bias
 
-        query, key, value, rotary_pos_emb, attn_mask_type = (
-            self._adjust_key_value_for_inference(
-                inference_context,
-                query,
-                key,
-                value,
-                rotary_pos_emb,
-                rotary_pos_cos,
-                rotary_pos_sin,
-                sequence_len_offset,
-            )
+        (
+            query,
+            key,
+            value,
+            rotary_pos_emb,
+            attn_mask_type,
+        ) = self._adjust_key_value_for_inference(
+            inference_context,
+            query,
+            key,
+            value,
+            rotary_pos_emb,
+            rotary_pos_cos,
+            rotary_pos_sin,
+            sequence_len_offset,
         )
 
         if packed_seq_params is not None:

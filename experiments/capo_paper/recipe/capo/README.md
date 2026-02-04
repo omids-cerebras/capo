@@ -27,7 +27,7 @@ If you rename a figure/table in LaTeX, update this mapping (and the artifact bui
 
 | Script | What it runs | Paper artifacts produced (via `analysis/make_paper_artifacts.py`) |
 |---|---|---|
-| `scripts/E1_main_comparison.sh` | CAPO variants vs baseline at fixed budget (multi-seed) | `fig_main.pdf`, `tab_main_accuracy.tex` |
+| `scripts/E1_main_comparison.sh` | CAPO variants vs baselines at a fixed budget (multi-seed) | `tab_main_accuracy.tex` |
 | `scripts/E2_dynamics.sh` | learning curves / dynamics logging | `fig_dynamics.pdf` |
 | `scripts/E3_stability_sweep.sh` | stability/sensitivity sweep over CAPO knobs | `fig_stability.pdf`, `tab_stability_efficiency.tex` |
 | `scripts/E4_length_deciles.sh` | length-stratified evaluation (deciles) | `fig_length_deciles.pdf` |
@@ -43,10 +43,11 @@ python experiments/capo_paper/analysis/collect_runs.py --runs_dir outputs --out 
 2) Generate all figures/tables:
 
 ```bash
-python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts/paper
+python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts
 ```
 
-The artifact builder is intentionally strict and will error if any required metric/config key is missing.
+The artifact builder is intentionally forgiving: if a run or metric is missing it emits
+compile-safe placeholders (dashes / empty plots) rather than crashing.
 
 ## Configuration
 

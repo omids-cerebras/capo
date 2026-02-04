@@ -169,12 +169,14 @@ class DataParallelPPOActor(BasePPOActor):
                             sp_size=self.ulysses_sequence_parallel_size,
                         )
                     else:
-                        input_ids_rmpad, position_ids_rmpad, pad_size = (
-                            ulysses_pad_and_slice_inputs(
-                                input_ids_rmpad,
-                                position_ids_rmpad=position_ids_rmpad,
-                                sp_size=self.ulysses_sequence_parallel_size,
-                            )
+                        (
+                            input_ids_rmpad,
+                            position_ids_rmpad,
+                            pad_size,
+                        ) = ulysses_pad_and_slice_inputs(
+                            input_ids_rmpad,
+                            position_ids_rmpad=position_ids_rmpad,
+                            sp_size=self.ulysses_sequence_parallel_size,
                         )
                     input_ids_rmpad_rolled, _, _ = ulysses_pad_and_slice_inputs(
                         input_ids_rmpad_rolled,
@@ -234,10 +236,7 @@ class DataParallelPPOActor(BasePPOActor):
                 if self.use_ulysses_sp:
                     # gather and unpad for the ulysses sp
                     log_probs = gather_outpus_and_unpad(
-                        log_probs,
-                        gather_dim=0,
-                        unpad_dim=0,
-                        padding_size=pad_size,
+                        log_probs, gather_dim=0, unpad_dim=0, padding_size=pad_size,
                     )
                     if calculate_entropy:
                         entropy_rmpad = gather_outpus_and_unpad(
@@ -538,21 +537,24 @@ class DataParallelPPOActor(BasePPOActor):
                         calculate_entropy=calculate_entropy,
                     )
 
-                    pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower = (
-                        compute_policy_loss(
-                            old_log_prob=old_log_prob,
-                            log_prob=log_prob,
-                            advantages=advantages,
-                            response_mask=response_mask,
-                            cliprange=clip_ratio,
-                            cliprange_low=clip_ratio_low,
-                            cliprange_high=clip_ratio_high,
-                            clip_ratio_c=clip_ratio_c,
-                            loss_agg_mode=loss_agg_mode,
-                            use_dr_grpo=use_dr_grpo,
-                            use_grpopp=use_grpopp,
-                            grpopp_config=grpopp_config,
-                        )
+                    (
+                        pg_loss,
+                        pg_clipfrac,
+                        ppo_kl,
+                        pg_clipfrac_lower,
+                    ) = compute_policy_loss(
+                        old_log_prob=old_log_prob,
+                        log_prob=log_prob,
+                        advantages=advantages,
+                        response_mask=response_mask,
+                        cliprange=clip_ratio,
+                        cliprange_low=clip_ratio_low,
+                        cliprange_high=clip_ratio_high,
+                        clip_ratio_c=clip_ratio_c,
+                        loss_agg_mode=loss_agg_mode,
+                        use_dr_grpo=use_dr_grpo,
+                        use_grpopp=use_grpopp,
+                        grpopp_config=grpopp_config,
                     )
 
                     if entropy_coeff != 0:

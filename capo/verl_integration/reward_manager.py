@@ -114,8 +114,7 @@ def _build_wrong_step_token_mask(
 
         # Check that the response tokens match the step tokens at this offset.
         if not torch.equal(
-            response_ids[offset : offset + step_len],
-            step_token_ids_tensor,
+            response_ids[offset : offset + step_len], step_token_ids_tensor,
         ):
             # Alignment failure; see comment above.
             return mask
@@ -209,9 +208,7 @@ class CAPORewardManager:
         self.reward_kwargs = reward_kwargs
 
     def __call__(
-        self,
-        data: DataProto,
-        return_dict: bool = False,
+        self, data: DataProto, return_dict: bool = False,
     ) -> torch.Tensor | Dict[str, Any]:
         """
         Compute CAPO token-level rewards for a batch of data.
@@ -253,9 +250,7 @@ class CAPORewardManager:
         # Initialize reward tensor with zeros.
         responses = data.batch["responses"]
         reward_tensor = torch.zeros_like(
-            responses,
-            dtype=torch.float32,
-            device=responses.device,
+            responses, dtype=torch.float32, device=responses.device,
         )
 
         reward_extra_info: Dict[str, List[Any]] = defaultdict(list)

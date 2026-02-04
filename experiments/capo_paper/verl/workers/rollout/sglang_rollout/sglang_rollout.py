@@ -179,10 +179,7 @@ class AsyncEngine(sglang.srt.entrypoints.engine.Engine):
 
 # NOTE(sgm): add for verl. We can optimize it by making
 #  the dataloader yield List[int] without padding.
-def _pre_process_inputs(
-    pad_token_id,
-    prompt_token_ids: torch.Tensor,
-) -> list[int]:
+def _pre_process_inputs(pad_token_id, prompt_token_ids: torch.Tensor,) -> list[int]:
     # remove the left padding in the prompt token_id
     non_pad_index = torch.nonzero(prompt_token_ids != pad_token_id, as_tuple=False)[0][
         0
@@ -515,10 +512,7 @@ class SGLangRollout(BaseRollout):
         tool_map = {tool.name: tool for tool in tool_list}
         tool_call_parser_type = get_tool_call_parser_type(tokenizer)
         sgl_tools = [Tool.model_validate(tool_schema) for tool_schema in tool_schemas]
-        function_call_parser = FunctionCallParser(
-            sgl_tools,
-            tool_call_parser_type,
-        )
+        function_call_parser = FunctionCallParser(sgl_tools, tool_call_parser_type,)
 
         return (
             tool_schemas,
@@ -873,9 +867,10 @@ class SGLangRollout(BaseRollout):
                         finish_reason_type = FinishReasonTypeEnum.TOOL_CALL
                         _req.state = AsyncRolloutRequestStateEnum.TOOL_CALLING
                         try:
-                            normed_content, tool_calls = (
-                                self._function_call_parser.parse_non_stream(content)
-                            )
+                            (
+                                normed_content,
+                                tool_calls,
+                            ) = self._function_call_parser.parse_non_stream(content)
                         except JSONDecodeError:
                             normed_content = content
                             tool_calls = []
@@ -884,12 +879,12 @@ class SGLangRollout(BaseRollout):
                             tool_calls = []
                         parsed_tool_calls = []
                         for tool_call in tool_calls:
-                            function, has_decode_error = (
-                                OpenAIFunctionCallSchema.from_openai_function_parsed_schema(
-                                    OpenAIFunctionParsedSchema(
-                                        name=tool_call.name,
-                                        arguments=tool_call.parameters,
-                                    )
+                            (
+                                function,
+                                has_decode_error,
+                            ) = OpenAIFunctionCallSchema.from_openai_function_parsed_schema(
+                                OpenAIFunctionParsedSchema(
+                                    name=tool_call.name, arguments=tool_call.parameters,
                                 )
                             )
                             # Drop the tool call if its arguments has decode error
@@ -897,8 +892,7 @@ class SGLangRollout(BaseRollout):
                                 continue
                             parsed_tool_calls.append(
                                 OpenAIFunctionToolCall(
-                                    id=str(tool_call.tool_index),
-                                    function=function,
+                                    id=str(tool_call.tool_index), function=function,
                                 )
                             )
                         if len(parsed_tool_calls) > 0:
@@ -1023,8 +1017,7 @@ class SGLangRollout(BaseRollout):
         tgt_device = prompts.batch["input_ids"].device
         if self._tp_rank == 0:
             req_list = self._preprocess_prompt_to_async_rollout_requests(
-                prompts,
-                n=1 if is_validate else self.config.n,
+                prompts, n=1 if is_validate else self.config.n,
             )
             loop = asyncio.get_event_loop()
             output_req_list = loop.run_until_complete(
@@ -1336,10 +1329,7 @@ class SGLangRollout(BaseRollout):
             choices.append(
                 {
                     "index": i,
-                    "message": {
-                        "role": "assistant",
-                        "content": content["text"],
-                    },
+                    "message": {"role": "assistant", "content": content["text"],},
                     "finish_reason": content["meta_info"]["finish_reason"]["type"],
                 }
             )

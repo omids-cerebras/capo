@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Collect upstream-style VERL runs into a normalized table.
+"""Collect VERL runs into a normalized table.
 
 This collector is intentionally conservative:
 - It only relies on artifacts we control locally:
@@ -81,9 +81,10 @@ class RunSummary:
     last_metrics: Dict[str, Any]
     best_val_step: Optional[int]
     best_val_metric: Optional[float]
+    cfg: Dict[str, Any]
 
     def to_dict(self) -> Dict[str, Any]:
-        d = {
+        d: Dict[str, Any] = {
             "run_dir": str(self.run_dir),
             "exp_name": self.exp_name,
             "timestamp": self.timestamp,
@@ -91,6 +92,11 @@ class RunSummary:
             "last_step": self.last_step,
             "best_val_step": self.best_val_step,
             "best_val_metric": self.best_val_metric,
+            # Keep the last metrics payload so downstream scripts can derive
+            # task-specific keys (e.g., val-core/countdown/acc/mean@8).
+            "metrics": self.last_metrics,
+            # Keep the resolved Hydra config for provenance and filtering.
+            "config": self.cfg,
         }
         # flatten a few common keys if present
         for key in [
@@ -110,8 +116,16 @@ class RunSummary:
 def _extract_best_val(
     rows: List[Dict[str, Any]],
 ) -> Tuple[Optional[int], Optional[float]]:
-    # Prefer val/acc, else val/score, else val/reward.
-    candidates = ["val/acc", "val/score", "val/reward"]
+    # Prefer CountDown acc metrics when available; fall back to legacy keys.
+    candidates = [
+        # VERL validation summary keys (preferred)
+        "val-core/countdown/acc/mean@8",
+        "val-core/countdown/acc/best@8/mean",
+        # Legacy / older keys
+        "val/acc",
+        "val/score",
+        "val/reward",
+    ]
     best_step: Optional[int] = None
     best_val: Optional[float] = None
     for r in rows:
@@ -163,6 +177,7 @@ def summarize_run(run_dir: Path) -> Optional[RunSummary]:
         last_metrics=last,
         best_val_step=best_step,
         best_val_metric=best_val,
+        cfg=cfg,
     )
 
 
@@ -171,12 +186,19 @@ def main() -> None:
     ap.add_argument(
         "--runs_dir", type=str, default="outputs", help="Hydra outputs directory"
     )
+    # Backwards/alias for older automation scripts.
+    ap.add_argument(
+        "--outputs_root",
+        type=str,
+        default=None,
+        help="Alias for --runs_dir (kept for compatibility)",
+    )
     ap.add_argument(
         "--out", type=str, default="artifacts/collected", help="Output directory"
     )
     args = ap.parse_args()
 
-    runs_dir = Path(args.runs_dir)
+    runs_dir = Path(args.outputs_root) if args.outputs_root else Path(args.runs_dir)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 

@@ -77,13 +77,7 @@ class EBStats:
     RSS_omega: float
 
 
-def s_kband(
-    L: Tensor,
-    rho: float,
-    k: int,
-    eta: float,
-    eps: float = 1e-8,
-) -> Tensor:
+def s_kband(L: Tensor, rho: float, k: int, eta: float, eps: float = 1e-8,) -> Tensor:
     """
     Stretched-geometric k-banded dependence factor s(L; ρ, k, η).
 
@@ -139,7 +133,7 @@ def s_kband(
 
         h = torch.arange(1, m_i + 1, dtype=torch.double)
         # Use h^η in the exponent, as in the stretched-geometric model.
-        powers = rho ** (h**eta)
+        powers = rho ** (h ** eta)
         summand = (Li - h) * powers
         s_vals[idx] = 1.0 + (2.0 / Li) * summand.sum()
 
@@ -338,7 +332,7 @@ def grad_ell_beta_closed_form(
 
     term1 = 0.5 * (-sum_logL + sum_omega_logL / Lambda)
 
-    sum_omega_e2_logL = (omega * (e**2) * logL).sum()
+    sum_omega_e2_logL = (omega * (e ** 2) * logL).sum()
     term2 = 0.5 * (G - 1) * sum_omega_e2_logL / RSS
 
     g_beta = term1 + term2 + dlog_pi_beta
@@ -518,7 +512,7 @@ def acf_moment_estimate(
     for rho in rho_grid:
         for eta in eta_grid:
             # Predicted correlation ρ^{h^η} for observed lags h.
-            preds = rho ** (h_vals**eta)
+            preds = rho ** (h_vals ** eta)
             loss = torch.mean((r - preds) ** 2).item()
             if loss < best_loss:
                 best_loss = loss
@@ -529,11 +523,7 @@ def acf_moment_estimate(
 
 
 def eb_lite_fit_beta_and_weights(
-    g: Tensor,
-    L: Tensor,
-    eps: float = 1e-8,
-    max_iters: int = 20,
-    tol: float = 1e-4,
+    g: Tensor, L: Tensor, eps: float = 1e-8, max_iters: int = 20, tol: float = 1e-4,
 ) -> Tuple[float, Tensor, Tensor]:
     """
     EB-lite (Algorithm~\\ref{alg:eb-lite}): length-only EB estimator.
@@ -636,12 +626,7 @@ def eb_lite_fit_beta_and_weights(
 
 
 def kband_weights(
-    L: Tensor,
-    beta: float,
-    rho: float,
-    eta: float,
-    k: int,
-    eps: float = 1e-8,
+    L: Tensor, beta: float, rho: float, eta: float, k: int, eps: float = 1e-8,
 ) -> Tuple[Tensor, Tensor]:
     """
     k-banded covariance weights (Algorithm~\\ref{alg:kband-weights}).

@@ -250,10 +250,15 @@ def flash_attention_forward(
         and not (torch.diff(position_ids[0], dim=-1) >= 0).all()
     ):
         batch_size = query_states.size(0)
-        query_states, key_states, value_states, _, cu_seq_lens, max_seq_lens = (
-            prepare_fa2_from_position_ids(
-                query_states, key_states, value_states, position_ids[0]
-            )
+        (
+            query_states,
+            key_states,
+            value_states,
+            _,
+            cu_seq_lens,
+            max_seq_lens,
+        ) = prepare_fa2_from_position_ids(
+            query_states, key_states, value_states, position_ids[0]
         )  # remove channel dimension
         cu_seqlens_q, cu_seqlens_k = cu_seq_lens
         max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
@@ -638,11 +643,7 @@ def forward_with_triton_backend(
         )
 
     log_probs, entropy = linear_cross_entropy(
-        hidden_states,
-        self.lm_head.weight,
-        rolled_labels,
-        temperature,
-        "none",
+        hidden_states, self.lm_head.weight, rolled_labels, temperature, "none",
     )
 
     return Qwen2VLCausalLMOutputForPPO(

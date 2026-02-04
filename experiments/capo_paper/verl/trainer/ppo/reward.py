@@ -106,13 +106,30 @@ def load_reward_manager(config, tokenizer, num_examine, **reward_kwargs):
         else:
             final_compute_score = default_compute_score
 
-    # Instantiate and return the reward manager with the specified parameters
+    # Instantiate and return the reward manager. Different reward managers
+    # expose different constructor kwargs (e.g., DAPO adds overlong-buffer
+    # options). We filter kwargs conservatively to avoid TypeError for reward
+    # managers that do not accept a particular knob.
+    import inspect
+
+    sig = inspect.signature(reward_manager_cls.__init__)
+    accepts_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if accepts_var_kw:
+        filtered_kwargs = {k: v for k, v in reward_kwargs.items() if v is not None}
+    else:
+        allowed = set(sig.parameters.keys()) - {"self"}
+        filtered_kwargs = {
+            k: v for k, v in reward_kwargs.items() if (k in allowed and v is not None)
+        }
+
     return reward_manager_cls(
         tokenizer=tokenizer,
         num_examine=num_examine,
         compute_score=final_compute_score,
         reward_fn_key=config.data.reward_fn_key,
-        **reward_kwargs,
+        **filtered_kwargs,
     )
 
 

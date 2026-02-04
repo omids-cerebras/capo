@@ -28,27 +28,36 @@ Quickstart
 pip install -e ".[analysis]"
 ```
 
-2) Run an A10 sanity check (fast, fails loudly if something is wrong):
+2) Prepare the CountDown data in VERL-compatible parquet format:
+
+```bash
+python experiments/capo_paper/scripts/data/prepare_countdown_dataset.py --out_dir data/countdown
+```
+
+3) Run an A10 sanity check (fast, fails loudly if something is wrong):
 
 ```bash
 bash experiments/capo_paper/scripts/a10/a10_diagnose_env.sh
-bash experiments/capo_paper/scripts/a10/a10_smoke_tiny.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+bash experiments/capo_paper/scripts/a10/a10_smoke_tiny.sh \
+  --model <MODEL_PATH> \
+  --train data/countdown/train.parquet \
+  --val data/countdown/test.parquet
 ```
 
-3) Run paper experiments (see mapping in `recipe/capo/README.md`):
+4) Run paper experiments (see mapping in `recipe/capo/README.md`):
 
 ```bash
-bash experiments/capo_paper/recipe/capo/scripts/E1_main_comparison.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
-bash experiments/capo_paper/recipe/capo/scripts/E2_dynamics.sh        --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
-bash experiments/capo_paper/recipe/capo/scripts/E3_stability_sweep.sh --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
-bash experiments/capo_paper/recipe/capo/scripts/E4_length_deciles.sh  --model <MODEL_PATH> --train <TRAIN_FILE> --val <VAL_FILE>
+bash experiments/capo_paper/recipe/capo/scripts/E1_main_comparison.sh --model <MODEL_PATH> --data_dir data/countdown
+bash experiments/capo_paper/recipe/capo/scripts/E2_dynamics.sh        --model <MODEL_PATH> --data_dir data/countdown
+bash experiments/capo_paper/recipe/capo/scripts/E3_stability_sweep.sh --model <MODEL_PATH> --data_dir data/countdown
+bash experiments/capo_paper/recipe/capo/scripts/E4_length_deciles.sh  --model <MODEL_PATH> --data_dir data/countdown
 ```
 
-4) Build the paper artifacts (all figures/tables) from the runs:
+5) Build the paper artifacts (all figures/tables) from the runs:
 
 ```bash
 python experiments/capo_paper/analysis/collect_runs.py --runs_dir outputs --out artifacts/collected
-python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts/paper
+python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts
 ```
 
 Documentation

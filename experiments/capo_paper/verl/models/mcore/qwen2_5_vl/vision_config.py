@@ -80,7 +80,7 @@ def get_vision_projection_config(
     config.gated_linear_unit = False
     config.bias_activation_fusion = False
     config.add_bias_linear = True
-    config.ffn_hidden_size = embed_dim * (spatial_merge_size**2)
+    config.ffn_hidden_size = embed_dim * (spatial_merge_size ** 2)
     config.activation_func = torch.nn.functional.gelu
     config.tp_comm_overlap = False
     config.sequence_parallel = False

@@ -345,9 +345,11 @@ class MegatronPPOCritic(BasePPOCritic):
                 mini_batch_size=self.config.ppo_mini_batch_size,
             )
             metric_micro_batch = metric_micro_batch["output"]
-            update_successful, grad_norm, num_zeros_in_grad = (
-                self.critic_optimizer.step()
-            )
+            (
+                update_successful,
+                grad_norm,
+                num_zeros_in_grad,
+            ) = self.critic_optimizer.step()
             learning_rate = self.critic_optimizer.param_groups[-1]["lr"]
             data = {"critic/grad_norm": grad_norm, "critic/lr": learning_rate}
             append_to_dict(metrics, data)
