@@ -1,0 +1,1908 @@
+\section{Method}\label{sec:method}
+
+\paragraph{Roadmap.}
+We begin with a length-only model that recovers $\Delta L$ weighting method; we then present a heteroscedastic Gaussian model with flexible priors, derive the posterior-precision aggregator, identify Jeffreys’ baseline ($\alpha{=}1$), and show how correctness-linked variance reduction yields $\alpha{<}1$; dependence corrections are incorporated via $s(L;\xi)$.
+
+\subsection{Length-Only Benchmark and the $\Delta L$ Family}\label{subsec:warmup}
+Under an i.i.d.\ token model with $\mathrm{Var}(\boldsymbol{Z}_{i,t})=\boldsymbol{\Sigma}_0$ and $\boldsymbol{\Gamma}_i(k)=\boldsymbol{0}$ for $k\neq 0$,
+\begin{equation}
+  \mathrm{Var}(\boldsymbol{g}_i)=L_i\,\boldsymbol{\Sigma}_0
+  \quad\Longrightarrow\quad
+  v_i \propto L_i.
+\end{equation}
+Substituting into \eqref{eq:mvu-weights} yields the inverse-length rule
+\begin{equation}
+  x_i \ \propto\ L_i^{-1},
+  \label{eq:deltaL_alpha1}
+\end{equation}
+which is precisely the $\Delta L$ normalization of \citet{he2025deltal} with exponent $\alpha=1$. More generally, following \citet{he2025deltal} we consider the one-parameter family
+\begin{equation}
+  x_i \ \propto\ L_i^{-\beta},\qquad \beta\in[0,2],
+  \label{eq:ldependence}
+\end{equation}
+interpolating between constant weighting ($\beta=0$) and inverse-length weighting ($\beta=1$), as a practical control of variance induced by heterogeneous lengths.
+
+\paragraph{A two-parameter normalization family.}
+Length-only normalization can be viewed as choosing a (possibly biased) \emph{global} step scale and a (possibly variance-reducing) \emph{relative} within-batch reweighting. To decouple these effects, we introduce a two-parameter family
+\begin{equation}
+  x_i(\alpha,\kappa)
+  \;:=\;
+  \frac{1}{M_\kappa}\,\frac{L_i^{-\alpha}}{\sum_{j=1}^{G} L_j^{-\alpha}},
+  \qquad
+  M_\kappa\;:=\;\Big(\sum_{j=1}^{G} L_j^{-\alpha}\Big)^{\kappa},
+  \label{eq:two_param_norm}
+\end{equation}
+where $\alpha\in[0,1]$ controls the relative suppression of long responses and $\kappa\in\mathbb{R}$ controls the overall step magnitude. The standard $\Delta L$ estimator corresponds to $\kappa=0$ (purely relative reweighting with a fixed $M$), while $\kappa=1$ recovers a DAPO-style batch-length normalization where the step magnitude shrinks with the batch effective length. Section~\ref{sec:eb-theory} shows that CAPO preserves unbiasedness by enforcing the linear constraint $\sum_i x_i=1/M$ while learning the variance structure; empirically, we therefore treat $(\alpha,\kappa)$ as a diagnostic lens rather than as free hyperparameters for CAPO.
+
+\subsection{Bayesian Setup under a General Prior}\label{subsec:bayes-setup}
+We project each trajectory-level gradient onto a fixed direction to obtain a scalar summary. Let $\bm{u}$ be a unit vector and define
+\begin{equation}
+  g_i \;=\; \bm{u}^\top \bm{g}_i,\qquad \mathbb{E}[g_i]=\mu,\qquad \mathrm{Var}(g_i)=v_i.
+  \label{eq:def_gi_scalar}
+\end{equation}
+\paragraph{Vector-valued gradients and common-shape covariances.}
+Our Bayesian and empirical-Bayes derivations proceed via a scalar projection \eqref{eq:def_gi_scalar}.
+This is not merely a notational convenience: in a broad and practically relevant regime, the resulting weights are also optimal for \emph{vector-valued} aggregation objectives.
+
+\begin{assumption}[Common-shape covariance]\label{assump:common_shape}
+There exists a fixed positive-semidefinite matrix $\boldsymbol{\Sigma}_0\in\mathbb{S}_{+}^{p}$ and positive scalars $v_i$ such that, for every trajectory $i$,
+\[
+\mathrm{Cov}(\boldsymbol{g}_i)=v_i\,\boldsymbol{\Sigma}_0.
+\]
+\end{assumption}
+
+\begin{proposition}[Inverse-variance weights are optimal under common shape]\label{prop:common_shape_weights}
+Assume cross-trajectory uncorrelatedness (Assumption~\ref{assump:cross_traj_uncorr}) and the common-shape model in Assumption~\ref{assump:common_shape}.
+Let $\Psi:\mathbb{S}_{+}^{p}\to(0,\infty)$ be any positive-homogeneous functional, i.e.,
+$\Psi(c\boldsymbol{A})=c\,\Psi(\boldsymbol{A})$ for all $c\ge 0$ and $\boldsymbol{A}\in\mathbb{S}_{+}^{p}$.
+Then the unique minimizer of $\Psi(\mathrm{Cov}(\widehat{\boldsymbol{g}}))$ over weights satisfying $\sum_{i=1}^G x_i=1/M$ is given by the inverse-variance rule
+$x_i^\star\propto v_i^{-1}$ (with normalization fixed by $\sum_i x_i=1/M$), i.e., the same weights as in Lemma~\ref{lem:mvu}.
+\end{proposition}
+
+\begin{proof}
+Under cross-trajectory uncorrelatedness,
+\[
+\mathrm{Cov}(\widehat{\boldsymbol{g}})
+=\sum_{i=1}^G x_i^2\,\mathrm{Cov}(\boldsymbol{g}_i)
+=\sum_{i=1}^G x_i^2\,v_i\,\boldsymbol{\Sigma}_0
+=\left(\sum_{i=1}^G x_i^2 v_i\right)\boldsymbol{\Sigma}_0.
+\]
+By positive homogeneity of $\Psi$,
+\[
+\Psi\!\left(\mathrm{Cov}(\widehat{\boldsymbol{g}})\right)
+=\left(\sum_{i=1}^G x_i^2 v_i\right)\Psi(\boldsymbol{\Sigma}_0).
+\]
+Since $\Psi(\boldsymbol{\Sigma}_0)>0$ is constant in $(x_i)$, minimizing $\Psi(\mathrm{Cov}(\widehat{\boldsymbol{g}}))$ is equivalent to minimizing
+$\sum_i x_i^2 v_i$ under $\sum_i x_i=1/M$, whose unique minimizer is the inverse-variance rule in Lemma~\ref{lem:mvu}.
+\end{proof}
+
+\begin{remark}[Beyond common shape]
+When the covariance matrices $\mathrm{Cov}(\boldsymbol{g}_i)$ are not approximately proportional to a common shape,
+the optimal weights can depend on the chosen scalarization objective $\Psi$ (e.g., a particular direction $\bm{u}$ or a trace objective).
+CAPO focuses on the setting where a \emph{single} scalar proxy $v_i$ provides a stable and implementable approximation.
+\end{remark}
+
+Conditional on the variance parameters $\vartheta := (\sigma^2, \beta, \xi)$,
+\begin{equation}
+  g_i \,\big|\, \mu,\vartheta \ \sim\ \mathcal{N}\!\big(\mu,\ v_i(\vartheta)\big),
+  \qquad
+  v_i(\vartheta)\;=\;\sigma^2\,L_i^{\beta}\,s(L_i;\,\xi),
+  \label{eq:hetero_general_prior}
+\end{equation}
+where $\sigma^2>0$ is a global scale, $\beta\in[0,2]$ controls length scaling, and $s(L_i;\xi)>0$ is a shape factor encoding within-trajectory dependence. This modular treatment allows us to plug in different estimates for the shape factor neatly.
+
+\paragraph{General priors.}
+We adopt a flat prior on the mean and a flexible, proper prior on the variance and shape parameters:
+\begin{equation}
+  p(\mu)\ \propto\ 1,\qquad
+  \sigma^2 \sim \mathrm{Inv\text{-}Gamma}(a_0,b_0),\qquad
+  \beta \sim \pi_\beta,\qquad
+  \xi \sim \pi_\xi.
+  \label{eq:priors_general}
+\end{equation}
+Jeffreys' prior for scale is recovered in the limit $a_0,b_0\to 0$. The prior $\pi_\beta$ can be chosen agnostic (centered at $1$ with moderate variance) or informative to reflect anticipated sub/superlinear growth. The prior $\pi_\xi$ encodes beliefs about token dependence.
+
+\paragraph{Likelihood geometry and sufficient sums.}
+Define precisions and aggregated quantities
+\begin{equation}
+  \lambda_i(\vartheta) := \frac{1}{v_i(\vartheta)} = \frac{1}{\sigma^2}\,\omega_i(\beta,\xi),
+  \qquad
+  \omega_i(\beta,\xi) := L_i^{-\beta}\,s(L_i;\xi)^{-1},
+  \label{eq:def_lambda_omega}
+\end{equation}
+\begin{equation}
+  \Lambda(\vartheta) \;=\; \sum_{i=1}^G \lambda_i(\vartheta),\qquad
+  T(\vartheta) \;=\; \sum_{i=1}^G \lambda_i(\vartheta)\,g_i.
+  \label{eq:Lambda_T}
+\end{equation}
+Then the conditional posterior for $\mu$ given $\vartheta$ is Normal:
+\begin{equation}
+  \mu\,\big|\,\vartheta, g_i \ \sim\ \mathcal{N}\!\big(m(\vartheta),\,\Lambda(\vartheta)^{-1}\big),
+  \qquad
+  m(\vartheta)=\frac{T(\vartheta)}{\Lambda(\vartheta)}=\frac{\sum_i \lambda_i(\vartheta) g_i}{\sum_i \lambda_i(\vartheta)}.
+  \label{eq:mu_conditional}
+\end{equation}
+Let $m(\beta,\xi)$ denote $m(\vartheta)$ with $\sigma^2$ factored out via \eqref{eq:def_lambda_omega}, and define the weighted residual sum of squares
+\begin{equation}
+  \mathrm{RSS}_\omega(\beta,\xi) \;=\; \sum_{i=1}^G \omega_i(\beta,\xi)\,\big(g_i - m(\beta,\xi)\big)^2.
+  \label{eq:rss_omega}
+\end{equation}
+Combining \eqref{eq:priors_general}--\eqref{eq:rss_omega}, the conditional posterior of $\sigma^2$ is
+\begin{equation}
+  \sigma^2 \,\big|\, \beta,\xi,\{g_i\} \ \sim\ \mathrm{Inv\text{-}Gamma}\!\left(a_0+\frac{G-1}{2},\ b_0+\frac{1}{2}\,\mathrm{RSS}_\omega(\beta,\xi)\right).
+  \label{eq:sigma2_posterior}
+\end{equation}
+
+\begin{proposition}[Conditional posterior of $\sigma^2$]\label{prop:sigma2-posterior}
+Under the Gaussian model
+\[
+g_i \mid \mu,\vartheta \ \sim\ \mathcal{N}\!\big(\mu,\ v_i(\vartheta)\big),
+\qquad
+v_i(\vartheta)=\sigma^2 L_i^{\beta}s(L_i;\xi)\ =\ \frac{\sigma^2}{\omega_i(\beta,\xi)},
+\]
+with $\vartheta=(\sigma^2,\beta,\xi)$ and $\omega_i(\beta,\xi):=L_i^{-\beta}s(L_i;\xi)^{-1}$ (cf.\ \eqref{eq:def_lambda_omega}),
+and priors $p(\mu)\propto 1$, $\ \sigma^2\sim\mathrm{Inv\text{-}Gamma}(a_0,b_0)$ as in \eqref{eq:priors_general},
+the conditional posterior of $\sigma^2$ given $(\beta,\xi)$ and data $\{g_i\}_{i=1}^G$ is
+\begin{equation}
+  \sigma^2 \,\big|\, \beta,\xi,\{g_i\}
+  \ \sim\ 
+  \mathrm{Inv\text{-}Gamma}\!\left(
+    a_0+\frac{G-1}{2},\ 
+    b_0+\frac{1}{2}\,\mathrm{RSS}_\omega(\beta,\xi)
+  \right),
+  \tag{\ref{eq:sigma2_posterior}}
+\end{equation}
+where the weighted mean is
+\[
+m(\beta,\xi)\ :=\ \frac{\sum_{i=1}^G \omega_i(\beta,\xi)\,g_i}{\sum_{i=1}^G \omega_i(\beta,\xi)}
+\]
+and the weighted residual sum of squares is
+\[
+\mathrm{RSS}_\omega(\beta,\xi)\ :=\ \sum_{i=1}^G \omega_i(\beta,\xi)\,\big(g_i-m(\beta,\xi)\big)^2.
+\tag{\ref{eq:rss_omega}}
+\]
+\end{proposition}
+
+\begin{proof}
+\emph{Step 1: Likelihood in $(\mu,\sigma^2)$ up to $(\beta,\xi)$-constants.}
+Conditional on $(\beta,\xi)$, the variances are $v_i=\sigma^2/\omega_i$.
+Thus the likelihood is
+\[
+p(\{g_i\}\mid \mu,\sigma^2,\beta,\xi)
+=\prod_{i=1}^G \frac{\sqrt{\omega_i}}{\sqrt{2\pi\sigma^2}}
+\exp\!\left\{-\frac{\omega_i}{2\sigma^2}(g_i-\mu)^2\right\}.
+\]
+Dropping factors independent of $(\mu,\sigma^2)$ (i.e., $\prod_i \sqrt{\omega_i}$), the kernel is
+\begin{equation}
+p(\{g_i\}\mid \mu,\sigma^2,\beta,\xi)\ \propto\ 
+(\sigma^2)^{-G/2}\,
+\exp\!\left\{-\frac{1}{2\sigma^2}\sum_{i=1}^G \omega_i(g_i-\mu)^2\right\}.
+\label{eq:lik-kernel}
+\end{equation}
+
+\emph{Step 2: Multiply by priors.}
+With $p(\mu)\propto 1$ and $\sigma^2\sim\mathrm{Inv\text{-}Gamma}(a_0,b_0)$ whose density kernel is
+$(\sigma^2)^{-a_0-1}\exp\{-b_0/\sigma^2\}$, the joint posterior kernel is
+\[
+p(\mu,\sigma^2\mid \beta,\xi,\{g_i\})
+\ \propto\
+(\sigma^2)^{-\left(a_0+1+\frac{G}{2}\right)}
+\exp\!\left\{-\frac{1}{\sigma^2}\left(
+b_0+\frac{1}{2}\sum_{i=1}^G \omega_i(g_i-\mu)^2
+\right)\right\}.
+\]
+
+\emph{Step 3: Complete the square in $\mu$.}
+Let $\Lambda_\omega:=\sum_{i=1}^G \omega_i$ and
+$m(\beta,\xi):=\big(\sum_i \omega_i g_i\big)/\Lambda_\omega$.
+Using the weighted-mean identity,
+\[
+\sum_{i=1}^G \omega_i(g_i-\mu)^2
+=\sum_{i=1}^G \omega_i\big(g_i-m(\beta,\xi)\big)^2
++\Lambda_\omega\,(\mu-m(\beta,\xi))^2,
+\]
+we obtain
+\[
+p(\mu,\sigma^2\mid\beta,\xi,\{g_i\})
+\ \propto\
+(\sigma^2)^{-\left(a_0+1+\frac{G}{2}\right)}
+\exp\!\left\{-\frac{1}{\sigma^2}\left(
+b_0+\frac{1}{2}\mathrm{RSS}_\omega(\beta,\xi)
+\right)\right\}\,
+\exp\!\left\{-\frac{\Lambda_\omega}{2\sigma^2}\,(\mu-m(\beta,\xi))^2\right\}.
+\]
+
+\emph{Step 4: Integrate out $\mu$.}
+Because $p(\mu)\propto 1$ and the $\mu$-kernel is Gaussian, we have
+\[
+\int_{\mathbb{R}}
+\exp\!\left\{-\frac{\Lambda_\omega}{2\sigma^2}(\mu-m)^2\right\}\,d\mu
+=\sqrt{\frac{2\pi\sigma^2}{\Lambda_\omega}},
+\]
+which contributes a factor $(\sigma^2)^{1/2}$ (and a constant in $(\beta,\xi)$) to the kernel.
+Therefore,
+\[
+p(\sigma^2\mid \beta,\xi,\{g_i\})
+\ \propto\
+(\sigma^2)^{-\left(a_0+1+\frac{G}{2}\right)}(\sigma^2)^{1/2}\,
+\exp\!\left\{-\frac{1}{\sigma^2}\left(
+b_0+\frac{1}{2}\mathrm{RSS}_\omega(\beta,\xi)
+\right)\right\}.
+\]
+
+\emph{Step 5: Identify the inverse-gamma form.}
+Collecting powers of $\sigma^2$ gives
+\[
+p(\sigma^2\mid \beta,\xi,\{g_i\})
+\ \propto\
+(\sigma^2)^{-\left(a_0+\frac{G-1}{2}+1\right)}
+\exp\!\left\{-\frac{1}{\sigma^2}\left(
+b_0+\frac{1}{2}\mathrm{RSS}_\omega(\beta,\xi)
+\right)\right\},
+\]
+which is the kernel of
+\(
+\mathrm{Inv\text{-}Gamma}\!\big(a_0+\tfrac{G-1}{2},\ b_0+\tfrac{1}{2}\mathrm{RSS}_\omega(\beta,\xi)\big).
+\)
+\end{proof}
+
+\begin{remark}
+(i) The factorization $\lambda_i(\vartheta)=\sigma^{-2}\omega_i(\beta,\xi)$ implies $m(\beta,\xi)$ does \emph{not} depend on $\sigma^2$, since the common factor cancels: $m(\vartheta)=T(\vartheta)/\Lambda(\vartheta)=\big(\sum \lambda_i g_i\big)/\big(\sum \lambda_i\big)=\big(\sum \omega_i g_i\big)/\big(\sum \omega_i\big)$. \\
+(ii) The shape update $a_0\mapsto a_0+\frac{G-1}{2}$ reflects the loss of one degree of freedom from estimating the (flat-prior) mean $\mu$. \\
+(iii) Constants that depend only on $(\beta,\xi)$, such as $\prod_i \sqrt{\omega_i}$ and $\Lambda_\omega^{-1/2}$, are immaterial for $p(\sigma^2\mid\beta,\xi,\{g_i\})$ and are absorbed into the normalizing constant.
+\end{remark}
+
+\subsection{Formal Results and Aggregators}\label{subsec:formal-results}
+
+\begin{lemma}[MVU weights with known $v_i$]\label{lem:mvu}
+Let $(g_1,\dots,g_G)$ be scalar random variables such that $\mathbb{E}[g_i]=\mu$ for all $i$,
+$\mathrm{Var}(g_i)=v_i\in(0,\infty)$ are known, and the trajectories are cross-uncorrelated:
+$\mathrm{Cov}(g_i,g_j)=0$ for all $i\neq j$.
+For any weights $(x_1,\dots,x_G)$ satisfying the unbiasedness constraint $\sum_{i=1}^G x_i = 1/M$,
+the linear estimator $\widehat{\mu}:=\sum_{i=1}^G x_i g_i$ is unbiased for $\mu/M$ and satisfies
+\[
+\mathrm{Var}(\widehat{\mu})=\sum_{i=1}^G x_i^2 v_i.
+\]
+The unique minimizer of $\mathrm{Var}(\widehat{\mu})$ over all such unbiased linear estimators is
+\begin{equation}
+  x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}},
+  \tag{\ref{eq:mvu-weights} revisited}
+\end{equation}
+i.e., inverse-variance weighting with normalization fixed by $\sum_i x_i=1/M$.
+\end{lemma}
+
+\begin{proof}
+Under the stated cross-uncorrelatedness, for any weights $(x_1,\dots,x_G)$ we have
+\[
+\mathrm{Var}\!\left(\sum_{i=1}^G x_i g_i\right)
+=\sum_{i=1}^G x_i^2\,\mathrm{Var}(g_i)
+=\sum_{i=1}^G x_i^2 v_i.
+\]
+We minimize the strictly convex quadratic function $Q(x):=\sum_{i=1}^G x_i^2 v_i$
+over the affine subspace $\{x\in\mathbb{R}^G:\sum_{i=1}^G x_i=1/M\}$.
+
+Introduce the Lagrangian
+\[
+\mathcal{L}(x_1,\dots,x_G,\lambda)
+=\sum_{i=1}^G x_i^2 v_i
+-\lambda\left(\sum_{i=1}^G x_i-\frac{1}{M}\right).
+\]
+The first-order optimality conditions are, for each $i\in\{1,\dots,G\}$,
+\[
+\frac{\partial \mathcal{L}}{\partial x_i}=2x_i v_i-\lambda=0
+\quad\Longrightarrow\quad
+x_i=\frac{\lambda}{2v_i}.
+\]
+Imposing the constraint $\sum_i x_i=1/M$ yields
+\[
+\frac{1}{M}=\sum_{i=1}^G x_i=\frac{\lambda}{2}\sum_{i=1}^G v_i^{-1}
+\quad\Longrightarrow\quad
+\frac{\lambda}{2}=\frac{1/M}{\sum_{j=1}^G v_j^{-1}}.
+\]
+Substituting back gives
+\[
+x_i^\star=\frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}},
+\]
+which satisfies the constraint and the first-order conditions.
+Since $Q$ is strictly convex (all $v_i>0$), the solution is the unique global minimizer.
+\end{proof}
+
+\begin{proposition}[Robustness of plug-in inverse-variance weights]\label{prop:plugin_robust}
+Assume the setting of Lemma~\ref{lem:mvu} and let $\{\widehat{v}_i\}_{i=1}^G$ be positive variance estimates such that, for some $c\ge 1$,
+\begin{equation}
+  \frac{1}{c}\,v_i \;\le\; \widehat{v}_i \;\le\; c\,v_i
+  \qquad \text{for all } i\in\{1,\dots,G\}.
+  \label{eq:vi-mult-error}
+\end{equation}
+Define the plug-in inverse-variance weights
+\[
+\widehat{x}_i \;:=\; \frac{1}{M}\,\frac{\widehat{v}_i^{-1}}{\sum_{j=1}^G \widehat{v}_j^{-1}}.
+\]
+Let $V^\star$ denote the minimum variance achieved by the oracle MVU weights of Lemma~\ref{lem:mvu}, and let
+$\widehat{V}:=\mathrm{Var}(\sum_i \widehat{x}_i g_i)$ denote the variance under the plug-in weights.
+Then the plug-in rule is variance-robust in the sense that
+\[
+\frac{1}{c^2}\,V^\star \;\le\; \widehat{V} \;\le\; c^2\,V^\star.
+\]
+\end{proposition}
+
+\begin{proof}
+Let $a_i:=v_i^{-1}$ and $\widehat{a}_i:=\widehat{v}_i^{-1}$ so that \eqref{eq:vi-mult-error} is equivalent to
+$\widehat{a}_i\in[a_i/c,\,c a_i]$.
+Define $S:=\sum_{i=1}^G a_i$ and $\widehat{S}:=\sum_{i=1}^G \widehat{a}_i$.
+A direct computation (see the proof of Lemma~\ref{lem:mvu}) gives the oracle optimum
+\[
+V^\star=\frac{1}{M^2}\,\frac{1}{S}.
+\]
+For the plug-in weights, cross-trajectory uncorrelatedness gives
+\[
+\widehat{V}
+=\sum_{i=1}^G \widehat{x}_i^2 v_i
+=\frac{1}{M^2}\,\frac{\sum_{i=1}^G \widehat{a}_i^2 v_i}{\widehat{S}^2}
+=\frac{1}{M^2}\,\frac{\sum_{i=1}^G \widehat{a}_i^2/a_i}{\widehat{S}^2}.
+\]
+Since $\widehat{a}_i/a_i\le c$, we have $\widehat{a}_i^2/a_i=\widehat{a}_i(\widehat{a}_i/a_i)\le c\,\widehat{a}_i$ and hence
+$\sum_i \widehat{a}_i^2/a_i \le c\,\widehat{S}$.
+Therefore
+\[
+\widehat{V}\le \frac{1}{M^2}\,\frac{c}{\widehat{S}}.
+\]
+Moreover, $\widehat{a}_i\ge a_i/c$ implies $\widehat{S}\ge S/c$, so $\widehat{V}\le \frac{1}{M^2}\frac{c}{S/c}=c^2 V^\star$.
+
+For the lower bound, $\widehat{a}_i/a_i\ge 1/c$ implies $\sum_i \widehat{a}_i^2/a_i \ge (1/c)\widehat{S}$, hence
+$\widehat{V}\ge \frac{1}{M^2}\frac{1/c}{\widehat{S}}$.
+Since $\widehat{a}_i\le c a_i$ implies $\widehat{S}\le c S$, we conclude
+$\widehat{V}\ge \frac{1}{M^2}\frac{1/c}{c S}=\frac{1}{c^2}V^\star$.
+\end{proof}
+
+
+\begin{theorem}[Posterior-precision aggregation and scale cancellation]\label{thm:ppa}
+Consider the scalarized Gaussian model \eqref{eq:def_gi_scalar}--\eqref{eq:hetero_general_prior} and assume
+the heteroscedastic variances factorize as
+\begin{equation}
+  v_i(\vartheta)=\sigma^2\,f_i(\vartheta),
+  \qquad f_i(\vartheta)>0,
+  \label{eq:vi-factor}
+\end{equation}
+so that the conditional precisions satisfy $\lambda_i(\vartheta)=1/v_i(\vartheta)=(1/\sigma^2)\,f_i(\vartheta)^{-1}$.
+Fix $\vartheta$ (e.g., $\vartheta=(\beta,\xi)$) and endow $\sigma^2$ with any prior such that
+$\mathbb{E}[\sigma^{-2}\mid \vartheta,\{g_j\}_{j=1}^G]$ exists and is finite.
+
+Define the \emph{posterior-precision scores}
+\begin{equation}
+  \widetilde{w}_i(\vartheta)
+  \;:=\;
+  \mathbb{E}\!\left[\lambda_i(\vartheta)\,\middle|\,\vartheta,\{g_j\}_{j=1}^G\right]
+  \;=\;
+  f_i(\vartheta)^{-1}\,\mathbb{E}\!\left[\sigma^{-2}\,\middle|\,\vartheta,\{g_j\}_{j=1}^G\right].
+  \label{eq:posterior-precision-scores}
+\end{equation}
+Then the (unique) minimum-variance unbiased linear estimator of $\mu/M$ of the form
+$\widehat{\mu}=\sum_{i=1}^G x_i g_i$ under the constraint $\sum_{i=1}^G x_i=1/M$ is obtained by
+normalizing the relative precisions:
+\begin{equation}
+  x_i^{\mathrm{Bayes}}(\vartheta)
+  \;=\;
+  \frac{1}{M}\,\frac{f_i(\vartheta)^{-1}}{\sum_{j=1}^G f_j(\vartheta)^{-1}}
+  \;=\;
+  \frac{1}{M}\,\frac{\widetilde{w}_i(\vartheta)}{\sum_{j=1}^G \widetilde{w}_j(\vartheta)}.
+  \label{eq:bayes_weight_def}
+\end{equation}
+In particular, the common scale factor $\mathbb{E}[\sigma^{-2}\mid\vartheta,\{g_j\}]$ cancels from the normalized weights.
+\end{theorem}
+
+\begin{proof}
+Fix $\vartheta$ and condition on $(\sigma^2,\vartheta)$.
+Under \eqref{eq:vi-factor}, the conditional variances are $v_i(\vartheta)=\sigma^2 f_i(\vartheta)$ and hence
+\[
+v_i(\vartheta)^{-1}=\lambda_i(\vartheta)=\frac{1}{\sigma^2}\,f_i(\vartheta)^{-1}.
+\]
+Therefore, conditional on $(\sigma^2,\vartheta)$ the variances $\{v_i(\vartheta)\}$ are known and
+Lemma~\ref{lem:mvu} applies, yielding the unique minimizer
+\[
+x_i^\star(\sigma^2,\vartheta)
+=\frac{1}{M}\,\frac{v_i(\vartheta)^{-1}}{\sum_{j=1}^G v_j(\vartheta)^{-1}}
+=\frac{1}{M}\,\frac{f_i(\vartheta)^{-1}}{\sum_{j=1}^G f_j(\vartheta)^{-1}},
+\]
+where the factor $\sigma^{-2}$ cancels from numerator and denominator.
+This is exactly the first equality in \eqref{eq:bayes_weight_def}.
+
+For the second equality, use \eqref{eq:posterior-precision-scores} to write
+$\widetilde w_i(\vartheta)=f_i(\vartheta)^{-1}\,\mathbb{E}[\sigma^{-2}\mid\vartheta,\{g_j\}]$;
+normalizing $\widetilde w_i(\vartheta)$ across $i$ cancels the common factor
+$\mathbb{E}[\sigma^{-2}\mid\vartheta,\{g_j\}]$, giving the same weights as above.
+\end{proof}
+
+\begin{remark}[When $\vartheta$ is random]
+If $\vartheta$ itself is endowed with a non-degenerate prior (e.g., a prior on the length exponent $\beta$),
+then two distinct Bayesian constructions become relevant:
+\begin{enumerate}
+\item The \emph{exact} posterior mean of the conditional MVU weights
+$x_i^\star(\vartheta)\propto f_i(\vartheta)^{-1}$, namely
+$\mathbb{E}[x_i^\star(\vartheta)\mid\{g_j\}]$.
+\item The \emph{posterior-precision approximation} that replaces $f_i(\vartheta)^{-1}$ by its posterior mean
+$\mathbb{E}[f_i(\vartheta)^{-1}\mid\{g_j\}]$ and then renormalizes across $i$.
+\end{enumerate}
+These coincide whenever the posterior over $\vartheta$ is sufficiently concentrated or when $f_i(\vartheta)$
+is treated as deterministic via Empirical Bayes (as done in \S\ref{sec:eb-theory}).
+\end{remark}
+
+\begin{theorem}[Jeffreys’ baseline recovers $\Delta L$ with $\alpha=1$]\label{thm:jeffreys}
+Assume independence $s(\cdot;\xi)\equiv 1$, fix $\beta=1$, and take $a_0,b_0\to 0$ so that $p(\sigma^2)\propto 1/\sigma^2$. Then
+\begin{equation}
+  x_i^{\mathrm{Bayes}} \ \propto\ L_i^{-1}.
+  \tag{\ref{eq:deltaL_alpha1} revisited}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+With $\beta=1$ and $s\equiv 1$, we have $\lambda_i(\vartheta)=\sigma^{-2} L_i^{-1}$. From \eqref{eq:sigma2_posterior}, $\mathbb{E}[\sigma^{-2}\mid \beta{=}1,\{g\}]=(G-1)/\mathrm{RSS}_\omega(\beta{=}1)$, a common factor that cancels in Theorem~\ref{thm:ppa}, yielding $x_i\propto L_i^{-1}$.
+\end{proof}
+
+\begin{proposition}[Correctness-linked contraction implies $\alpha<1$]\label{prop:alpha-less-than-1}
+Suppose the per-token variance contracts with response length via $\kappa(L)\in(0,1]$ with $\kappa'(L)\le 0$ and
+\(
+\kappa(L)=c\,L^{-\delta}(1+o(1))
+\)
+for some $\delta\in[0,1)$, so that
+\begin{equation}
+  \mathrm{Var}(g_i\mid L_i=L)=\sigma^2\,L\,\kappa(L)\,s(L;\xi)
+  \;=\;
+  \sigma^2\,L^{1-\delta}\,s(L;\xi)\,(1+o(1)).
+  \label{eq:effective-length-law_repeat}
+\end{equation}
+Then in the independence benchmark $s\equiv 1$ the implied $\Delta L$ exponent is
+\(
+\alpha=\beta=1-\delta<1.
+\)
+\end{proposition}
+
+\begin{proof}
+The effective length law in \eqref{eq:effective-length-law_repeat} gives variance exponent $\beta=1-\delta$. Applying Theorem~\ref{thm:ppa} with Jeffreys’ scale (or any scale prior whose common factor cancels) yields weights $\propto L^{-\beta}$, hence $\alpha=\beta=1-\delta<1$.
+\end{proof}
+
+\begin{corollary}[Serial dependence corrections]\label{cor:dependence}
+If $s(L;\xi)=\Theta(1)$ (e.g., AR(1) or $k$-band dependence), then the large-$L$ exponent in Proposition~\ref{prop:alpha-less-than-1} is unchanged; dependence enters through the multiplicative factor $s(L;\xi)^{-1}$ in the weights.
+\end{corollary}
+
+\subsection{Informative Prior on the Length Exponent}\label{subsec:informative-beta}
+Retain independence ($s\equiv 1$) but let $\beta\sim\pi_\beta$ with posterior $p(\beta\mid\{g_i\})$. Using \eqref{eq:bayes_weight_def},
+\begin{equation}
+  \widetilde{w}_i \;\propto\; \mathbb{E}\!\left[L_i^{-\beta}\,\big|\,\{g_j\}\right].
+  \label{eq:wtilde_beta_random_repeat}
+\end{equation}
+Two useful consequences:
+\begin{enumerate}
+  \item \emph{MAP/Laplace approximation.} If $p(\beta\mid\{g_i\})$ is sharply peaked at $\hat\beta$, then
+  \(
+    x_i^{\mathrm{Bayes}} \propto L_i^{-\hat\beta}.
+  \)
+  \item \emph{Gaussian posterior moment.} If $\beta\mid\{g_i\}\sim \mathcal{N}(m_\beta,\tau_\beta^2)$ (ignoring truncation),
+  \begin{equation}
+    \mathbb{E}\!\left[L_i^{-\beta}\mid\{g_i\}\right]
+    \;=\;
+    \exp\!\Big(-m_\beta\ln L_i + \tfrac{1}{2}\tau_\beta^2(\ln L_i)^2\Big)
+    \;\approx\; L_i^{-m_\beta}\quad (\tau_\beta^2\ \text{small}),
+  \end{equation}
+  i.e., an effective $\alpha\simeq m_\beta$.
+\end{enumerate}
+
+\subsection{Why $\beta<1$ When Longer Responses Are More Likely Correct}\label{subsec:alpha-less-than-1}
+\paragraph{Intuition.}
+If longer responses have a higher probability of being correct, then, after baselining, their token contributions are less noisy on average. In a heteroscedastic model, the per-token variance decreases with length, so the sum over $L$ tokens grows sub-linearly in $L$. Consequently, inverse-variance weights scale as $L^{-\alpha}$ with $\alpha<1$.
+
+\paragraph{Heteroskedastic variance model tied to correctness.}
+Let $g_i=\sum_{t=1}^{L_i} Z_{i,t}$ be the scalarized trajectory gradient (see \eqref{eq:traj-grad} and \eqref{eq:hetero_general_prior}). Suppose
+\begin{equation}
+  \mathrm{Var}(Z_{i,t}\mid L_i=L)\;=\;\sigma^2\,\kappa(L),
+  \qquad
+  \kappa'(L)\le 0,
+\end{equation}
+with $\kappa(L)\propto p(L)\{1-p(L)\}$ for a correctness probability $p(L)$ with $p(L)\uparrow 1$ as $L\uparrow\infty$. Then
+\begin{equation}
+  \mathrm{Var}(g_i\mid L_i=L)\;=\;\sigma^2\,L\,\kappa(L)\,s(L;\xi).
+\end{equation}
+If $\kappa(L)=c\,L^{-\delta}(1+o(1))$ with $\delta\in[0,1)$, we recover \eqref{eq:effective-length-law_repeat} and thus $\alpha=1-\delta<1$ by Proposition~\ref{prop:alpha-less-than-1}. The conclusion persists with serial dependence by Corollary~\ref{cor:dependence}.
+
+
+\subsection{Weights under $k$-banded Covariance Structure}\label{subsec:kband-eta}
+
+We work with the scalarized series $Y_{i,t}:=\bm{u}^\top \boldsymbol{Z}_{i,t}$ and $g_i=\sum_{t=1}^{L_i}Y_{i,t}$ as in \eqref{eq:def_gi_scalar}. Assume second–order stationarity and the \emph{$k$-banded, stretched-geometric} auto-covariance:
+\begin{equation}
+\gamma(0)=\mathrm{Var}(Y_{i,t})=\tau^2,\qquad
+\gamma(h)=\mathrm{Cov}(Y_{i,t},Y_{i,t-h})=\tau^2\,\rho^{\,|h|^{\eta}}\ \mathbf{1}\{|h|\le k\},
+\quad \eta\ge 0,
+\label{eq:kband-stretch}
+\end{equation}
+with $|\rho|<1$ for $\eta>0$. The case $\eta=1$ reduces to geometric decay $\gamma(h)=\tau^2\rho^{|h|}$; $\eta\downarrow 0$ yields \emph{no decay across lags} $\gamma(h)=\tau^2\rho$ (compound-symmetry within the band). Let $m_i:=\min\{k,L_i-1\}$.
+
+\begin{lemma}[Dependence shape factor for stretched-geometric $k$-band]\label{lem:sL-kband-eta}
+Under \eqref{eq:kband-stretch},
+\begin{equation}
+\mathrm{Var}(g_i)
+\;=\; \tau^2\!\left[
+  L_i \;+\; 2\sum_{h=1}^{m_i} (L_i-h)\,\rho^{\,h^{\eta}}
+\right]
+\;=\; \tau^2\,L_i\,s(L_i;\rho,k,\eta),
+\qquad
+s(L;\rho,k,\eta)\;=\;1+\frac{2}{L}\sum_{h=1}^{m} (L-h)\rho^{\,h^{\eta}}.
+\label{eq:v-and-s-kband-eta}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By Bartlett’s identity (Lemma~\ref{lem:bartlett}),
+$\mathrm{Var}(g_i)=\sum_{h=-(L_i-1)}^{L_i-1}(L_i-|h|)\gamma(h)$.
+Insert \eqref{eq:kband-stretch}, collect positive and negative lags, and truncate at $m_i$.
+\end{proof}
+
+\begin{proposition}[Weighting rule under stretched-geometric $k$-band]\label{prop:weights-kband-eta}
+Under the heteroscedastic model \eqref{eq:hetero_general_prior} with
+\(
+v_i(\vartheta)=\sigma^2 L_i^{\beta}\,s(L_i;\rho,k,\eta)
+\),
+the posterior-precision (Bayes) weights satisfy, up to a common factor,
+\begin{equation}
+x_i^{\mathrm{Bayes}} \ \propto\ \frac{1}{L_i^{\beta}\,s(L_i;\rho,k,\eta)}
+\;=\;
+\frac{1}{L_i^{\beta}\Big(1+\frac{2}{L_i}\sum_{h=1}^{m_i}(L_i-h)\rho^{\,h^{\eta}}\Big)}.
+\label{eq:weights-kband-eta}
+\end{equation}
+In particular, under the Jeffreys baseline $\beta=1$,
+\(
+x_i \propto \big[L_i + 2\sum_{h=1}^{m_i}(L_i-h)\rho^{\,h^{\eta}}\big]^{-1}.
+\)
+\end{proposition}
+
+\begin{proof}
+From \eqref{eq:hetero_general_prior} and Lemma~\ref{lem:sL-kband-eta},
+\(
+\lambda_i(\vartheta)=1/v_i(\vartheta)=(1/\sigma^2)\,L_i^{-\beta}\,s(L_i;\rho,k,\eta)^{-1}
+\).
+Apply Theorem~\ref{thm:ppa} and note $1/\sigma^2$ cancels upon normalization.
+\end{proof}
+
+\begin{lemma}[Monotonicity in the decay exponent]\label{lem:mono-eta}
+For fixed $(\rho,k,L)$ with $\rho\in(0,1)$, $s(L;\rho,k,\eta)$ is nonincreasing in $\eta$:
+\[
+0\le \eta_1<\eta_2 \ \Rightarrow\ s(L;\rho,k,\eta_1)\ \ge\ s(L;\rho,k,\eta_2).
+\]
+Consequently, the weight magnitude $[L^{\beta}s(L;\rho,k,\eta)]^{-1}$ is nondecreasing in $\eta$.
+\end{lemma}
+
+\begin{proof}
+For $h\ge 1$ and $\rho\in(0,1)$, the map $\eta\mapsto \rho^{\,h^{\eta}}$ is decreasing, hence each summand in \eqref{eq:v-and-s-kband-eta} decreases in $\eta$.
+\end{proof}
+
+\paragraph{No-decay limit ($\eta=0$): constant-lag covariance within the band.}
+Setting $\eta=0$ in \eqref{eq:kband-stretch} gives $\gamma(h)=\tau^2\rho$ for $1\le|h|\le k$. Then
+\begin{equation}
+s(L;\rho,k,0)
+\;=\;
+1+\frac{2\rho}{L}\sum_{h=1}^{m}(L-h)
+\;=\;
+1+2m\rho-\frac{m(m+1)}{L}\rho,
+\qquad m=\min\{k,L-1\}.
+\label{eq:s-kband-nodecay}
+\end{equation}
+Accordingly,
+\begin{equation}
+x_i^{\mathrm{Bayes}}
+\ \propto\
+\frac{1}{L_i^{\beta}\big(1+2m_i\rho-\frac{m_i(m_i+1)}{L_i}\rho\big)},
+\qquad m_i=\min\{k,L_i-1\}.
+\label{eq:weights-kband-nodecay}
+\end{equation}
+
+\paragraph{Compound symmetry.}
+Taking $k\ge L-1$ in \eqref{eq:s-kband-nodecay} yields
+\(
+m=L-1
+\)
+and
+\begin{equation}
+s(L;\rho,k\!\ge\!L-1,0)
+=
+1+\rho(L-1)
+=
+(1-\rho)+\rho L,
+\label{eq:s-compound}
+\end{equation}
+which is the compound-symmetry shape from Lemma~\ref{lem:cs-var}. Thus
+\begin{equation}
+x_i^{\mathrm{Bayes}}
+\ \propto\
+\frac{1}{L_i^{\beta}\,\big(1+\rho(L_i-1)\big)}
+\qquad\text{and, for }\beta=1,\qquad
+x_i\ \propto\ \frac{1}{(1-\rho)L_i+\rho L_i^2}.
+\label{eq:weights-compound}
+\end{equation}
+
+\begin{remark}[Asymptotics]
+For fixed $k$ and $L\to\infty$,
+\(
+s(L;\rho,k,\eta)=1+2\sum_{h=1}^{k}\rho^{\,h^{\eta}}+O(L^{-1})
+\),
+a positive constant depending on $(\rho,k,\eta)$. Hence the length exponent is unchanged and dependence multiplies the $\Delta L$ rule by a constant. Under compound symmetry (no band), $s(L;\rho,\,\cdot,0)=(1-\rho)+\rho L$, so $v_i=\Theta(L_i^{\beta+1})$ and, under $\beta=1$, $x_i\sim ( \rho L_i^2 )^{-1}$ as $L_i\to\infty$.
+\end{remark}
+
+
+\subsection{Why $\beta>1$ When Longer Responses Are More Likely Correct (with tail degradation)}\label{subsec:alpha-greater-than-1}
+
+\paragraph{Intuition.}
+If longer responses are more likely to be correct up to a point, then after base-lining, their token contributions become less noisy as length grows toward an optimum length $L^\star$. Beyond $L^\star$, if the model gets lost, correctness drops and noise increases again. In a heteroskedastic model, this corresponds to a \emph{U-shaped} per-token variance profile $\kappa(L)$: initially decreasing, then increasing. Consequently, the variance of the sum over $L$ tokens grows \emph{sublinearly} before $L^\star$ and \emph{superlinearly} in the tail, yielding inverse-variance weights that scale like $L^{-\beta(L)}$ with $\beta(L)<1$ for moderate $L$ and $\beta(L)>1$ in the tail.
+
+\paragraph{Correctness-weighted Heteroscedastic variance model (non-monotone variance profile).}
+Let $g_i=\sum_{t=1}^{L_i} Z_{i,t}$ be the scalarized trajectory gradient (see \eqref{eq:traj-grad} and \eqref{eq:hetero_general_prior}). As before, write
+\begin{equation}
+  \mathrm{Var}(Z_{i,t}\mid L_i=L)\;=\;\sigma^2\,\kappa(L),
+  \qquad
+  \mathrm{Var}(g_i\mid L_i=L)\;=\;\sigma^2\,L\,\kappa(L)\,s(L;\xi),
+  \label{eq:var-sum-kappa}
+\end{equation}
+where $s(L;\xi)$ encodes serial dependence (Sec.~\ref{subsec:kband-eta}). We now allow $\kappa(L)$ to be \emph{non-monotone}:
+\begin{assumption}[Tail degradation]\label{assump:tail}
+There exist $L^\star\in(1,\infty)$ and exponents $\delta\in[0,1)$, $\theta>0$, and constants $c_-,c_+>0$ such that
+\[
+\kappa(L)
+=\begin{cases}
+c_-\,L^{-\delta}\,\big(1+o(1)\big), & L\nearrow L^\star \text{ (moderate regime)},\\[2pt]
+c_+\,L^{\ \theta}\,\big(1+o(1)\big), & L\to\infty \text{ (tail regime)}.
+\end{cases}
+\]
+That is, $\kappa$ decreases polynomially up to $L^\star$ and increases polynomially beyond it.
+\end{assumption}
+
+\paragraph{Local length exponent and effective law.}
+Define the \emph{local variance elasticity}
+\[
+\varepsilon(L)\ :=\ \frac{d\log \kappa(L)}{d\log L}.
+\]
+From \eqref{eq:var-sum-kappa},
+\(
+\log v(L)=\log\sigma^2+\log L+\log\kappa(L)+\log s(L;\xi)
+\),
+so (ignoring the slowly varying $s(L;\xi)$ for the exponent),
+\begin{equation}
+  \beta_{\mathrm{eff}}(L)
+  \ :=\ \frac{d\log v(L)}{d\log L}\ \approx\ 1+\varepsilon(L).
+  \label{eq:beta-local}
+\end{equation}
+Assumption~\ref{assump:tail} implies
+\[
+\beta_{\mathrm{eff}}(L)\approx
+\begin{cases}
+1-\delta, & L\lesssim L^\star,\\
+1+\theta, & L\gg L^\star,
+\end{cases}
+\qquad
+\text{so}\quad
+v(L)\ \asymp\
+\begin{cases}
+\sigma^2\,L^{\,1-\delta}\,s(L;\xi), & L\lesssim L^\star,\\
+\sigma^2\,L^{\,1+\theta}\,s(L;\xi), & L\gg L^\star.
+\end{cases}
+\label{eq:effective-length-piecewise}
+\]
+
+\begin{proposition}[Posterior-precision weights with tail degradation]\label{prop:tail-weights}
+Under the heteroskedastic Normal model with variance $v(L)$ as in \eqref{eq:var-sum-kappa} and Assumption~\ref{assump:tail}, the Bayes (posterior-precision) weights satisfy, up to a common factor,
+\begin{equation}
+x_i^{\mathrm{Bayes}}
+\ \propto\
+\frac{1}{v(L_i)}
+\ \approx\
+\begin{cases}
+L_i^{-(1-\delta)}\,s(L_i;\xi)^{-1}, & L_i\lesssim L^\star,\\[2pt]
+L_i^{-(1+\theta)}\,s(L_i;\xi)^{-1}, & L_i\gg L^\star.
+\end{cases}
+\label{eq:weights-piecewise}
+\end{equation}
+Equivalently, the implied $\Delta L$ exponent is \(\beta(L)\approx\beta_{\mathrm{eff}}(L)\), i.e., $\beta(L)<1$ before $L^\star$ and $\beta(L)>1$ in the tail.
+\end{proposition}
+
+\begin{proof}
+Theorem~\ref{thm:ppa} yields $x_i^{\mathrm{Bayes}}\propto\mathbb{E}[1/v(L_i)\mid\text{data}]$. Under Assumption~\ref{assump:tail}, $v(L)$ is regularly varying with index $1-\delta$ for $L\lesssim L^\star$ and $1+\theta$ for $L\to\infty$, hence the stated asymptotics. The multiplicative $s(L;\xi)$ enters as in Sec.~\ref{subsec:kband-eta}.
+\end{proof}
+
+\paragraph{Impact of serial dependence.}
+The factor $s(L;\xi)$ multiplies $v(L)$ and hence divides the weights:
+\[
+x_i^{\mathrm{Bayes}}\ \propto\ \frac{1}{L_i\,\kappa(L_i)\,s(L_i;\xi)}.
+\]
+For $k$-banded dependence with fixed $k$ (Sec.~\ref{subsec:kband-eta}), $s(L;\xi)\to s_\infty(\xi)$, a constant; the exponents in \eqref{eq:effective-length-piecewise} remain $1\pm(\delta,\theta)$. Under compound symmetry (constant-lag covariance; Sec.~\ref{subsec:cs}), $s(L;\rho)=(1-\rho)+\rho L$ contributes an extra factor $\sim \rho L$ as $L\to\infty$, so the tail exponent becomes $2+\theta$ and
+\[
+x_i^{\mathrm{Bayes}}\ \propto\ L_i^{-(2+\theta)}\quad\text{(tail, compound symmetry)}.
+\]
+
+\paragraph{Concrete parametric example (unimodal correctness).}
+Let the correctness probability be unimodal in $\log L$, e.g.,
+\[
+p(L)=\big(1+\exp\{-a_0-a_1\log L + a_2(\log L)^2\}\big)^{-1},
+\qquad a_2>0,
+\]
+so $p(L)\uparrow$ for small $L$ and $p(L)\downarrow$ for large $L$. If the variance factor is $\kappa(L)\propto p(L)\{1-p(L)\}$ around the interior (maximal near $p=1/2$) but is \emph{augmented} by a tail noise term $\nu(L)\asymp L^{\theta}$ (credit-assignment drift), i.e.,
+\[
+\kappa(L)\ \asymp\ c_- L^{-\delta} \ \text{ for } L\lesssim L^\star,
+\qquad
+\kappa(L)\ \asymp\ c_+ L^{\theta} \ \text{ for } L\gg L^\star,
+\]
+then Proposition~\ref{prop:tail-weights} applies with the same exponents.
+
+\begin{remark}
+Practical summary.
+    \begin{itemize}
+    \item For \textbf{moderate lengths} where correctness improves, use \(\beta\simeq 1-\delta<1\).
+    \item In the \textbf{long-tail} where the model gets lost, use \(\beta\simeq 1+\theta>1\) (and add $+1$ more under compound symmetry).
+    \item The posterior-precision rule automatically enacts this via $x_i\propto [L_i\,\kappa(L_i)\,s(L_i;\xi)]^{-1}$; the common scale cancels.
+\end{itemize}
+\end{remark}
+
+% =========================================================
+% §3.X  Empirical Bayes estimator for length and dependence
+% Place this AT THE END of your "Special Cases" subsection in Methods.
+% Reference as \ref{sec:eb-theory}. The Algorithms go in a SEPARATE SECTION.
+% =========================================================
+
+
+\subsection{Empirical Bayes estimator for length and dependence}
+\label{sec:eb-theory}
+
+% --- Safe theorem/proof envs if not already defined in the preamble
+\makeatletter
+\@ifundefined{theorem}{\newtheorem{theorem}{Theorem}[section]}{}
+\@ifundefined{lemma}{\newtheorem{lemma}[theorem]{Lemma}}{}
+\@ifundefined{proposition}{\newtheorem{proposition}[theorem]{Proposition}}{}
+\@ifundefined{corollary}{\newtheorem{corollary}[theorem]{Corollary}}{}
+\@ifundefined{assumption}{\newtheorem{assumption}[theorem]{Assumption}}{}
+\@ifundefined{definition}{\newtheorem{definition}[theorem]{Definition}}{}
+\@ifundefined{remark}{\newtheorem{remark}[theorem]{Remark}}{}
+\makeatother
+\ifx\proof\undefined
+  \newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par}
+\fi
+
+We consider trajectories \(i=1,\dots,G\) with length \(L_i\in\mathbb N\) and scalarized return \(g_i\in\mathbb R\).
+Adopt the Normal working model
+\begin{equation}
+\label{eq:model}
+g_i \mid \mu,\sigma^2,\vartheta \sim \mathcal N\!\big(\mu,\; v_i(\vartheta)\big),
+\qquad
+v_i(\vartheta)=\sigma^2\,L_i^{\beta}\,s(L_i;\xi),
+\end{equation}
+where \(\mu\in\mathbb R\) is the common location, \(\sigma^2>0\) is a global scale,
+\(\beta\in\mathbb R\) (the length exponent) controls the length–variance law,
+and \(s(L;\xi)>0\) captures within-trajectory dependence via a low-dimensional shape \(\xi\).
+We denote \(\vartheta=(\beta,\xi)\).
+Define the precisions and normalized weights
+\begin{equation}
+\label{eq:prec-weights}
+\omega_i(\beta,\xi)=\frac{1}{L_i^{\beta}\,s(L_i;\xi)},
+\qquad
+w_i(\beta,\xi)=\frac{\omega_i(\beta,\xi)}{\sum_{j=1}^G \omega_j(\beta,\xi)}.
+\end{equation}
+We take \(p(\mu)\propto 1\) and Jeffreys \(p(\sigma^2)\propto 1/\sigma^2\); weak priors \(\pi_{\beta},\pi_{\xi}\) may be used or set flat for EB/type-II ML.
+
+\paragraph{Weighted aggregator.}
+The Bayes estimator of \(\mu\) under \eqref{eq:model} (for fixed \(\vartheta\)) is the precision-weighted mean
+\begin{equation}
+\label{eq:mu-agg}
+m(\beta,\xi)=\sum_{i=1}^G w_i(\beta,\xi)\,g_i
+=\frac{\sum_{i=1}^G \omega_i(\beta,\xi)\,g_i}{\sum_{i=1}^G \omega_i(\beta,\xi)}.
+\end{equation}
+Let
+\[
+e_i(\beta,\xi)=g_i-m(\beta,\xi),
+\qquad
+\Lambda_\omega(\beta,\xi)=\sum_{i=1}^G \omega_i(\beta,\xi),
+\]
+and
+\begin{equation}
+\label{eq:Lambda-RSS}
+\mathrm{RSS}_\omega(\beta,\xi)=\sum_{i=1}^G \omega_i(\beta,\xi)\,e_i(\beta,\xi)^2.
+\end{equation}
+
+\begin{proposition}[Posterior in closed form, conditional on \((\beta,\xi)\)]
+\label{prop:posterior}
+Under \eqref{eq:model} with \(p(\mu)\propto 1\) and \(p(\sigma^2)\propto \frac{1}{\sigma^2}\),
+\[
+\mu \mid \sigma^2,\mathbf g,\vartheta \sim \mathcal N\!\big(m(\beta,\xi),\,\sigma^2/\Lambda_\omega(\beta,\xi)\big),
+\quad
+\sigma^2 \mid \mathbf g,\vartheta \sim \mathrm{Inv\!-\!Gamma}\!\left(\frac{G-1}{2},\,\frac{\mathrm{RSS}_\omega(\beta,\xi)}{2}\right),
+\]
+where \(\mathbf g=(g_1,\dots,g_G)\) and we use the inverse-gamma parameterization with density
+\(p(x)\propto x^{-(a+1)}\exp(-b/x)\) for \(x>0\), shape \(a>0\) and scale \(b>0\).
+\end{proposition}
+\begin{proof}
+We first write down the likelihood explicitly.
+Given \(\vartheta=(\beta,\xi)\),
+\[
+v_i(\vartheta)
+=\sigma^2 L_i^{\beta} s(L_i;\xi)
+=\frac{\sigma^2}{\omega_i(\beta,\xi)}.
+\]
+Thus the conditional density of \(g_i\) is
+\[
+p(g_i\mid \mu,\sigma^2,\vartheta)
+=\frac{1}{\sqrt{2\pi v_i(\vartheta)}}
+\exp\!\left(-\frac{(g_i-\mu)^2}{2v_i(\vartheta)}\right)
+=\frac{\sqrt{\omega_i}}{\sqrt{2\pi\sigma^2}}
+\exp\!\left(-\frac{\omega_i}{2\sigma^2}(g_i-\mu)^2\right),
+\]
+where, for brevity, we write \(\omega_i=\omega_i(\beta,\xi)\).
+By independence across \(i\),
+\[
+p(\mathbf g\mid \mu,\sigma^2,\vartheta)
+=\prod_{i=1}^G p(g_i\mid \mu,\sigma^2,\vartheta)
+=(2\pi\sigma^2)^{-G/2}\Bigg(\prod_{i=1}^G \omega_i^{1/2}\Bigg)
+\exp\!\left(-\frac{1}{2\sigma^2}\sum_{i=1}^G \omega_i(g_i-\mu)^2\right).
+\]
+Multiplying by the priors \(p(\mu)\propto 1\) and \(p(\sigma^2)\propto 1/\sigma^2\) yields the unnormalized joint posterior
+\begin{equation}
+\label{eq:joint-posterior}
+p(\mu,\sigma^2\mid\mathbf g,\vartheta)
+\;\propto\;
+(\sigma^2)^{-G/2}\frac{1}{\sigma^2}
+\Bigg(\prod_{i=1}^G \omega_i^{1/2}\Bigg)
+\exp\!\left(-\frac{1}{2\sigma^2}\sum_{i=1}^G \omega_i(g_i-\mu)^2\right).
+\end{equation}
+Next we complete the square in \(\mu\).
+Let
+\[
+T=\sum_{i=1}^G \omega_i g_i,\qquad
+\Lambda_\omega=\sum_{i=1}^G \omega_i,
+\qquad
+m=\frac{T}{\Lambda_\omega}.
+\]
+Then
+\[
+\sum_{i=1}^G \omega_i(g_i-\mu)^2
+=\sum_{i=1}^G \omega_i\big[(g_i-m)+(m-\mu)\big]^2
+=\sum_{i=1}^G \omega_i(g_i-m)^2
++2(m-\mu)\sum_{i=1}^G \omega_i(g_i-m)
++\Lambda_\omega(\mu-m)^2.
+\]
+The middle term vanishes because
+\[
+\sum_{i=1}^G \omega_i(g_i-m)
+=\sum_{i=1}^G \omega_i g_i - m\sum_{i=1}^G \omega_i
+=T-\Lambda_\omega m
+=0.
+\]
+Hence
+\[
+\sum_{i=1}^G \omega_i(g_i-\mu)^2
+=\Lambda_\omega(\mu-m)^2 + \sum_{i=1}^G \omega_i(g_i-m)^2
+=\Lambda_\omega(\mu-m)^2 + \mathrm{RSS}_\omega,
+\]
+with \(\mathrm{RSS}_\omega\) as in \eqref{eq:Lambda-RSS}.
+Substituting into \eqref{eq:joint-posterior} gives
+\[
+p(\mu,\sigma^2\mid\mathbf g,\vartheta)
+\;\propto\;
+(\sigma^2)^{-(G/2+1)}
+\Bigg(\prod_{i=1}^G \omega_i^{1/2}\Bigg)
+\exp\!\left(-\frac{\Lambda_\omega}{2\sigma^2}(\mu-m)^2\right)
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right).
+\]
+
+\emph{Conditional posterior of \(\mu\).}  
+For fixed \(\sigma^2\), the dependence on \(\mu\) is exactly that of a Normal kernel with mean \(m\) and variance \(\sigma^2/\Lambda_\omega\).
+Normalizing in \(\mu\) therefore yields
+\[
+\mu\mid\sigma^2,\mathbf g,\vartheta
+\sim \mathcal N\!\big(m(\beta,\xi),\,\sigma^2/\Lambda_\omega(\beta,\xi)\big).
+\]
+
+\emph{Marginal posterior of \(\sigma^2\).}  
+Integrate out \(\mu\) from \(p(\mu,\sigma^2\mid\mathbf g,\vartheta)\).
+The \(\mu\)-integral is
+\[
+\int_{-\infty}^{\infty}
+\exp\!\left(-\frac{\Lambda_\omega}{2\sigma^2}(\mu-m)^2\right)\,d\mu
+=\sqrt{\frac{2\pi\sigma^2}{\Lambda_\omega}}.
+\]
+Thus
+\[
+p(\sigma^2\mid\mathbf g,\vartheta)
+\;\propto\;
+(\sigma^2)^{-(G/2+1)}
+\sqrt{\frac{2\pi\sigma^2}{\Lambda_\omega}}
+\Bigg(\prod_{i=1}^G \omega_i^{1/2}\Bigg)
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right).
+\]
+The multiplicative constant
+\(\sqrt{2\pi/\Lambda_\omega}\prod_i \omega_i^{1/2}\) does not depend on \(\sigma^2\), so we drop it.
+We are left with
+\[
+p(\sigma^2\mid\mathbf g,\vartheta)
+\;\propto\;
+(\sigma^2)^{-(G/2+1-1/2)}\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right)
+=(\sigma^2)^{-(G+1)/2}\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right).
+\]
+Comparing with the inverse-gamma kernel
+\(x^{-(a+1)}\exp(-b/x)\) on \(x>0\),
+we read off \(a=(G-1)/2\) and \(b=\mathrm{RSS}_\omega/2\).
+This proves the claimed inverse-gamma posterior for \(\sigma^2\).
+\end{proof}
+
+\begin{proposition}[GLS optimality of the aggregator]
+\label{prop:gls}
+Fix \((\beta,\xi)\).
+Among all linear unbiased estimators \(\tilde\mu=\sum_{i=1}^G a_i g_i\) with \(\sum_{i=1}^G a_i=1\),
+\(m(\beta,\xi)\) in \eqref{eq:mu-agg} attains the minimum variance
+\(\mathrm{Var}(\tilde\mu)=\sigma^2/\Lambda_\omega(\beta,\xi)\).
+\end{proposition}
+\begin{proof}
+For fixed \(\vartheta\), the model \eqref{eq:model} implies
+\[
+\mathbb E[g_i\mid\mu,\vartheta]=\mu,
+\qquad
+\mathrm{Var}(g_i\mid\mu,\vartheta)=v_i(\vartheta)
+=\frac{\sigma^2}{\omega_i},
+\]
+and the \(g_i\) are conditionally independent.
+Consider a generic linear estimator
+\(\tilde\mu=\sum_i a_i g_i\) with coefficients \(a_i\in\mathbb R\).
+
+\emph{Unbiasedness constraint.}
+\[
+\mathbb E[\tilde\mu\mid\mu,\vartheta]
+=\sum_{i=1}^G a_i \mathbb E[g_i\mid\mu,\vartheta]
+=\sum_{i=1}^G a_i \mu
+=\mu \sum_{i=1}^G a_i.
+\]
+Thus \(\tilde\mu\) is unbiased for \(\mu\) if and only if
+\(\sum_{i=1}^G a_i=1\).
+
+\emph{Variance under the constraint.}
+Using independence and \(\mathrm{Var}(g_i)=\sigma^2/\omega_i\),
+\[
+\mathrm{Var}(\tilde\mu\mid\mu,\vartheta)
+=\sum_{i=1}^G a_i^2\,\mathrm{Var}(g_i\mid\mu,\vartheta)
+=\sigma^2 \sum_{i=1}^G \frac{a_i^2}{\omega_i}.
+\]
+We must minimize \(\sum_i a_i^2/\omega_i\) subject to \(\sum_i a_i=1\).
+Introduce a Lagrange multiplier \(\lambda\) and consider
+\[
+\mathcal L(a_1,\dots,a_G,\lambda)
+=\sum_{i=1}^G \frac{a_i^2}{\omega_i}
+-\lambda\Bigg(\sum_{i=1}^G a_i -1\Bigg).
+\]
+Setting partial derivatives to zero,
+\[
+\frac{\partial \mathcal L}{\partial a_i}
+=\frac{2a_i}{\omega_i}-\lambda
+=0
+\quad\Rightarrow\quad
+a_i=\frac{\lambda}{2}\,\omega_i,\qquad i=1,\dots,G.
+\]
+Imposing \(\sum_i a_i=1\) gives
+\[
+\sum_{i=1}^G a_i
+=\frac{\lambda}{2}\sum_{i=1}^G \omega_i
+=\frac{\lambda}{2}\Lambda_\omega
+=1
+\quad\Rightarrow\quad
+\lambda=\frac{2}{\Lambda_\omega}.
+\]
+Thus
+\[
+a_i
+=\frac{\omega_i}{\Lambda_\omega}
+=w_i(\beta,\xi),
+\]
+and the unique minimizer is exactly the weight vector in \eqref{eq:mu-agg}.
+The corresponding variance is
+\[
+\mathrm{Var}(m(\beta,\xi)\mid\mu,\vartheta)
+=\sigma^2 \sum_{i=1}^G \frac{w_i^2}{\omega_i}
+=\sigma^2 \sum_{i=1}^G \frac{\omega_i^2}{\Lambda_\omega^2\,\omega_i}
+=\sigma^2 \frac{\sum_i \omega_i}{\Lambda_\omega^2}
+=\frac{\sigma^2}{\Lambda_\omega}.
+\]
+Hence \(m(\beta,\xi)\) is the Gauss–Markov / GLS estimator with minimum variance among all linear unbiased estimators.
+\end{proof}
+
+\begin{theorem}[EB marginal objective for \((\beta,\xi)\)]
+\label{thm:EB-obj}
+Under \eqref{eq:model} with the above priors, the marginal type-II log-posterior for \(\vartheta=(\beta,\xi)\) is (up to an additive constant)
+\begin{equation}
+\label{eq:EB-obj}
+\ell(\beta,\xi)
+=\log \pi_\beta(\beta)+\log \pi_\xi(\xi)
++\tfrac{1}{2}\sum_{i=1}^G \log \omega_i(\beta,\xi)
+-\tfrac{1}{2}\log \Lambda_\omega(\beta,\xi)
+-\tfrac{G-1}{2}\log \mathrm{RSS}_\omega(\beta,\xi).
+\end{equation}
+\end{theorem}
+\begin{proof}
+We integrate out \(\mu\) and \(\sigma^2\) from the joint model
+\[
+p(\mathbf g,\mu,\sigma^2\mid\vartheta)
+=p(\mathbf g\mid\mu,\sigma^2,\vartheta)\,p(\mu)\,p(\sigma^2)
+\]
+and then add the priors \(\pi_\beta,\pi_\xi\) on \((\beta,\xi)\).
+
+From the likelihood calculation in the proof of Proposition~\ref{prop:posterior}, we have
+\[
+p(\mathbf g\mid \mu,\sigma^2,\vartheta)
+=(2\pi\sigma^2)^{-G/2}\left(\prod_{i=1}^G \omega_i^{1/2}\right)
+\exp\!\left(-\frac{1}{2\sigma^2}\sum_{i=1}^G \omega_i(g_i-\mu)^2\right),
+\]
+and
+\(\sum_{i=1}^G \omega_i(g_i-\mu)^2
+=\Lambda_\omega(\mu-m)^2+\mathrm{RSS}_\omega\).
+Using \(p(\mu)\propto 1\) and \(p(\sigma^2)\propto 1/\sigma^2\),
+\[
+p(\mathbf g,\mu,\sigma^2\mid\vartheta)
+\propto
+(\sigma^2)^{-(G/2+1)}
+\left(\prod_{i=1}^G \omega_i^{1/2}\right)
+\exp\!\left(-\frac{\Lambda_\omega}{2\sigma^2}(\mu-m)^2\right)
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right).
+\]
+Integrate with respect to \(\mu\).
+As in Proposition~\ref{prop:posterior},
+\[
+\int_{-\infty}^\infty
+\exp\!\left(-\frac{\Lambda_\omega}{2\sigma^2}(\mu-m)^2\right)\,d\mu
+=\sqrt{\frac{2\pi\sigma^2}{\Lambda_\omega}},
+\]
+hence
+\[
+p(\mathbf g,\sigma^2\mid\vartheta)
+\propto
+(\sigma^2)^{-(G/2+1)}
+\sqrt{\frac{2\pi\sigma^2}{\Lambda_\omega}}
+\left(\prod_{i=1}^G \omega_i^{1/2}\right)
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right)
+\]
+\[
+\propto
+(\sigma^2)^{-(G+1)/2}
+\left(\prod_{i=1}^G \omega_i^{1/2}\right)
+\Lambda_\omega^{-1/2}
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right),
+\]
+where we have absorbed constants depending on \(2\pi\) into a factor that does not depend on \(\vartheta\).
+
+Now integrate out \(\sigma^2\) using the standard identity for inverse-gamma integrals:
+\[
+\int_0^\infty
+(\sigma^2)^{-(a+1)} \exp\!\left(-\frac{b}{\sigma^2}\right)\,d\sigma^2
+=2\,b^{-a}\,\Gamma(a),
+\qquad a>0,\,b>0.
+\]
+Here we take
+\(a=(G-1)/2\), \(b=\mathrm{RSS}_\omega/2\).
+Thus
+\[
+\int_0^\infty
+(\sigma^2)^{-(G+1)/2}
+\exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right)\,d\sigma^2
+\propto \mathrm{RSS}_\omega^{-(G-1)/2}.
+\]
+It follows that the marginal likelihood of the data given \(\vartheta\) is
+\[
+p(\mathbf g\mid\vartheta)
+\propto
+\left(\prod_{i=1}^G \omega_i^{1/2}\right)
+\Lambda_\omega^{-1/2}
+\mathrm{RSS}_\omega^{-(G-1)/2},
+\]
+up to factors independent of \(\vartheta\).
+Taking logarithms and adding \(\log \pi_\beta(\beta)+\log \pi_\xi(\xi)\) yields
+\[
+\ell(\beta,\xi)
+=\log p(\mathbf g\mid\vartheta)
++\log \pi_\beta(\beta)+\log \pi_\xi(\xi)
+=\log \pi_\beta(\beta)+\log \pi_\xi(\xi)
++\frac{1}{2}\sum_{i=1}^G \log \omega_i
+-\frac{1}{2}\log \Lambda_\omega
+-\frac{G-1}{2}\log \mathrm{RSS}_\omega
++ C,
+\]
+where \(C\) does not depend on \((\beta,\xi)\).
+Dropping the additive constant proves \eqref{eq:EB-obj}.
+\end{proof}
+
+\begin{lemma}[Weighted RSS derivative identity]
+\label{lem:rss-deriv}
+For any component \(\phi\in\{\beta\}\cup\{\xi\text{ components}\}\),
+\begin{equation}
+\label{eq:rss-deriv}
+\frac{\partial}{\partial \phi}\,\mathrm{RSS}_\omega(\beta,\xi)
+=\sum_{i=1}^G \frac{\partial \omega_i}{\partial \phi}\,e_i^2
+=\sum_{i=1}^G \omega_i\,e_i^2\,\frac{\partial \log \omega_i}{\partial \phi}.
+\end{equation}
+\end{lemma}
+\begin{proof}
+Recall
+\(\mathrm{RSS}_\omega(\beta,\xi)=\sum_{i=1}^G \omega_i e_i^2\),
+with \(e_i=g_i-m\) and \(m=m(\beta,\xi)\).
+We differentiate \(\mathrm{RSS}_\omega\) with respect to \(\phi\).
+Using the product and chain rules,
+\[
+\frac{\partial}{\partial\phi}\,\mathrm{RSS}_\omega
+=\sum_{i=1}^G \left[
+\frac{\partial \omega_i}{\partial\phi}\,e_i^2
++\omega_i \frac{\partial}{\partial\phi}(e_i^2)
+\right].
+\]
+Since \(e_i=g_i-m\) and \(g_i\) does not depend on \(\phi\),
+\(\frac{\partial e_i}{\partial\phi}=-\frac{\partial m}{\partial\phi}\), so
+\[
+\frac{\partial}{\partial\phi}(e_i^2)
+=2e_i\,\frac{\partial e_i}{\partial\phi}
+=2e_i\left(-\frac{\partial m}{\partial\phi}\right)
+=-2e_i\,\frac{\partial m}{\partial\phi}.
+\]
+Therefore,
+\[
+\frac{\partial}{\partial\phi}\,\mathrm{RSS}_\omega
+=\sum_{i=1}^G \frac{\partial \omega_i}{\partial\phi}\,e_i^2
+-2\frac{\partial m}{\partial\phi}\sum_{i=1}^G \omega_i e_i.
+\]
+To simplify the second term, observe that
+\[
+\sum_{i=1}^G \omega_i e_i
+=\sum_{i=1}^G \omega_i(g_i-m)
+=\sum_{i=1}^G \omega_i g_i - m\sum_{i=1}^G \omega_i
+=T - m\Lambda_\omega
+=0,
+\]
+because \(m=T/\Lambda_\omega\).
+Thus the term involving \(\partial m/\partial\phi\) cancels, and we obtain
+\[
+\frac{\partial}{\partial\phi}\,\mathrm{RSS}_\omega
+=\sum_{i=1}^G \frac{\partial \omega_i}{\partial\phi}\,e_i^2.
+\]
+Finally, use \(\frac{\partial \omega_i}{\partial\phi}=\omega_i\,\frac{\partial \log \omega_i}{\partial\phi}\) to get the second equality:
+\[
+\sum_{i=1}^G \frac{\partial \omega_i}{\partial\phi}\,e_i^2
+=\sum_{i=1}^G \omega_i e_i^2\,\frac{\partial \log \omega_i}{\partial\phi}.
+\]
+\end{proof}
+
+\begin{proposition}[Gradient of the EB objective]
+\label{prop:grad}
+With \(\Lambda_\omega,\mathrm{RSS}_\omega\) as above,
+\begin{equation}
+\label{eq:EB-grad-general}
+\frac{\partial \ell}{\partial \phi}
+=\frac{1}{2}\!\left[
+\sum_{i=1}^G \frac{\partial \log \omega_i}{\partial \phi}
+-\frac{1}{\Lambda_\omega}\sum_{i=1}^G \frac{\partial \omega_i}{\partial \phi}
+\right]
+-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\sum_{i=1}^G \omega_i e_i^2\,\frac{\partial \log \omega_i}{\partial \phi}
++\frac{\partial \log \pi(\phi)}{\partial \phi},
+\end{equation}
+where \(\pi(\phi)\) denotes the marginal prior factor in \(\pi_\beta\pi_\xi\) involving \(\phi\).
+\end{proposition}
+\begin{proof}
+Starting from \eqref{eq:EB-obj}, we differentiate term by term with respect to \(\phi\).
+
+\emph{Prior term.}
+By definition,
+\[
+\frac{\partial}{\partial\phi}\big(\log \pi_\beta(\beta)+\log \pi_\xi(\xi)\big)
+=\frac{\partial \log \pi(\phi)}{\partial \phi},
+\]
+where \(\pi(\phi)\) denotes the appropriate prior factor.
+
+\emph{Sum of log-precisions.}
+For the third term in \eqref{eq:EB-obj},
+\[
+\frac{\partial}{\partial\phi}\left(\frac{1}{2}\sum_{i=1}^G \log\omega_i\right)
+=\frac{1}{2}\sum_{i=1}^G \frac{1}{\omega_i}\frac{\partial \omega_i}{\partial\phi}
+=\frac{1}{2}\sum_{i=1}^G \frac{\partial \log \omega_i}{\partial\phi}.
+\]
+
+\emph{Log of total precision.}
+For the fourth term,
+\[
+\frac{\partial}{\partial\phi}\left(-\frac{1}{2}\log\Lambda_\omega\right)
+=-\frac{1}{2}\frac{1}{\Lambda_\omega}\frac{\partial \Lambda_\omega}{\partial\phi}
+=-\frac{1}{2}\frac{1}{\Lambda_\omega}\sum_{i=1}^G \frac{\partial \omega_i}{\partial\phi}.
+\]
+
+\emph{Residual sum of squares term.}
+For the final term,
+\[
+\frac{\partial}{\partial\phi}\left(-\frac{G-1}{2}\log \mathrm{RSS}_\omega\right)
+=-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\frac{\partial \mathrm{RSS}_\omega}{\partial\phi}.
+\]
+By Lemma~\ref{lem:rss-deriv},
+\(\frac{\partial \mathrm{RSS}_\omega}{\partial\phi}
+=\sum_i \omega_i e_i^2\,\frac{\partial \log \omega_i}{\partial\phi}\),
+hence
+\[
+-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\frac{\partial \mathrm{RSS}_\omega}{\partial\phi}
+=-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\sum_{i=1}^G \omega_i e_i^2\,\frac{\partial \log \omega_i}{\partial\phi}.
+\]
+
+Collecting the contributions from all terms gives \eqref{eq:EB-grad-general}.
+\end{proof}
+
+\begin{corollary}[Gradient in the length direction]
+\label{cor:grad-beta}
+Since \(\log\omega_i=-\beta\log L_i-\log s(L_i;\xi)\),
+\(\partial \log\omega_i/\partial\beta=-\log L_i\) and \(\partial \omega_i/\partial\beta=-\omega_i \log L_i\).
+Hence
+\begin{equation}
+\label{eq:EB-grad-beta}
+\frac{\partial \ell}{\partial \beta}
+=\frac{1}{2}\!\left[-\sum_{i=1}^G \log L_i
++\frac{\sum_{i=1}^G \omega_i \log L_i}{\Lambda_\omega}\right]
++\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}\sum_{i=1}^G \omega_i e_i^2 \log L_i
++\frac{\partial \log \pi_\beta(\beta)}{\partial \beta}.
+\end{equation}
+\end{corollary}
+\begin{proof}
+Apply Proposition~\ref{prop:grad} with \(\phi=\beta\).
+We have
+\[
+\frac{\partial \log\omega_i}{\partial\beta}
+=-\log L_i,
+\qquad
+\frac{\partial \omega_i}{\partial\beta}
+=\omega_i\,\frac{\partial \log\omega_i}{\partial\beta}
+=-\omega_i \log L_i.
+\]
+Substitute these into \eqref{eq:EB-grad-general}.
+The first bracketed term becomes
+\[
+\frac{1}{2}\left[
+\sum_{i=1}^G \frac{\partial \log\omega_i}{\partial\beta}
+-\frac{1}{\Lambda_\omega}\sum_{i=1}^G \frac{\partial \omega_i}{\partial\beta}
+\right]
+=\frac{1}{2}\left[
+\sum_{i=1}^G (-\log L_i)
+-\frac{1}{\Lambda_\omega}\sum_{i=1}^G (-\omega_i \log L_i)
+\right]
+\]
+\[
+=\frac{1}{2}\left[
+-\sum_{i=1}^G \log L_i
++\frac{\sum_{i=1}^G \omega_i \log L_i}{\Lambda_\omega}
+\right].
+\]
+The second term in \eqref{eq:EB-grad-general} becomes
+\[
+-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\sum_{i=1}^G \omega_i e_i^2\,\frac{\partial \log\omega_i}{\partial\beta}
+=-\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\sum_{i=1}^G \omega_i e_i^2 (-\log L_i)
+\]
+\[
+=\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+\sum_{i=1}^G \omega_i e_i^2 \log L_i.
+\]
+Adding the prior derivative \(\partial \log \pi_\beta(\beta)/\partial\beta\) yields \eqref{eq:EB-grad-beta}.
+\end{proof}
+
+\begin{definition}[Stretched-geometric \(k\)-band dependence]
+\label{def:kband}
+Given \(k\in\mathbb N\), \(\rho\in(-1,1)\), \(\eta\ge 0\), define with \(m=\min\{k,L-1\}\)
+\begin{equation}
+\label{eq:s-family}
+s(L;\rho,k,\eta)=1+\frac{2}{L}\sum_{h=1}^m (L-h)\,\rho^{\,h^{\eta}}.
+\end{equation}
+\end{definition}
+
+\begin{lemma}[Derivatives of the \(k\)-band shape]
+\label{lem:kband-deriv}
+Let \(s_i=s(L_i;\rho,k,\eta)\), \(m_i=\min\{k,L_i-1\}\).
+Then
+\[
+\frac{\partial \log \omega_i}{\partial \rho}
+=-\frac{1}{s_i}\frac{\partial s_i}{\partial \rho},
+\quad
+\frac{\partial s_i}{\partial \rho}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\, h^{\eta}\, \rho^{\,h^{\eta}-1},
+\]
+\[
+\frac{\partial \log \omega_i}{\partial \eta}
+=-\frac{1}{s_i}\frac{\partial s_i}{\partial \eta},
+\quad
+\frac{\partial s_i}{\partial \eta}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\, \rho^{\,h^{\eta}} (\log \rho)\, h^{\eta}\log h.
+\]
+\end{lemma}
+\begin{proof}
+By Definition~\ref{def:kband},
+\[
+s_i
+=1+\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho^{\,h^{\eta}}.
+\]
+For \(\partial s_i/\partial \rho\), note that \(\partial(1)/\partial\rho=0\) and
+we can differentiate the sum termwise:
+\[
+\frac{\partial s_i}{\partial \rho}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\frac{\partial}{\partial\rho}\big(\rho^{\,h^{\eta}}\big).
+\]
+Using \(\rho^{\,h^{\eta}}=\exp(h^{\eta}\log\rho)\), the chain rule gives
+\[
+\frac{\partial}{\partial\rho}\big(\rho^{\,h^{\eta}}\big)
+=h^{\eta} \rho^{\,h^{\eta}-1},
+\]
+so
+\[
+\frac{\partial s_i}{\partial \rho}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,h^{\eta}\,\rho^{\,h^{\eta}-1}.
+\]
+
+For \(\partial s_i/\partial \eta\), again differentiate termwise:
+\[
+\frac{\partial s_i}{\partial \eta}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\frac{\partial}{\partial\eta}\big(\rho^{\,h^{\eta}}\big).
+\]
+Write \(\rho^{\,h^{\eta}}=\exp(h^{\eta}\log\rho)\).
+Then
+\[
+\frac{\partial}{\partial\eta}\big(\rho^{\,h^{\eta}}\big)
+=\rho^{\,h^{\eta}}\frac{\partial}{\partial\eta}\big(h^{\eta}\log\rho\big)
+=\rho^{\,h^{\eta}}(\log\rho)h^{\eta}\log h.
+\]
+Thus
+\[
+\frac{\partial s_i}{\partial \eta}
+=\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\,\rho^{\,h^{\eta}}(\log\rho)h^{\eta}\log h.
+\]
+
+Finally, since \(\omega_i=L_i^{-\beta}s(L_i;\xi)^{-1}\),
+\[
+\log\omega_i
+=-\beta\log L_i-\log s_i,
+\]
+so
+\[
+\frac{\partial \log \omega_i}{\partial\rho}
+=-\frac{1}{s_i}\frac{\partial s_i}{\partial\rho},
+\qquad
+\frac{\partial \log \omega_i}{\partial\eta}
+=-\frac{1}{s_i}\frac{\partial s_i}{\partial\eta}.
+\]
+\end{proof}
+
+\begin{proposition}[Unbiasedness of \(m(\beta,\xi)\)]
+\label{prop:unbiased}
+For fixed \((\beta,\xi)\), the estimator \(m(\beta,\xi)\) in \eqref{eq:mu-agg} is unbiased for \(\mu\).
+\end{proposition}
+\begin{proof}
+By \eqref{eq:model}, for each \(i\),
+\(\mathbb E[g_i\mid\mu,\vartheta]=\mu\).
+Using \eqref{eq:mu-agg},
+\[
+\mathbb E[m(\beta,\xi)\mid\mu,\vartheta]
+=\mathbb E\Bigg[\sum_{i=1}^G w_i g_i\;\bigg|\;\mu,\vartheta\Bigg]
+=\sum_{i=1}^G w_i\,\mathbb E[g_i\mid\mu,\vartheta]
+=\mu\sum_{i=1}^G w_i.
+\]
+From \eqref{eq:prec-weights}, \(\sum_i w_i=1\).
+Therefore \(\mathbb E[m(\beta,\xi)\mid\mu,\vartheta]=\mu\), i.e., \(m(\beta,\xi)\) is unbiased.
+\end{proof}
+
+\begin{proposition}[Link to the \(\Delta L\) rule]
+\label{prop:deltaL}
+If \(s(L;\xi)\equiv 1\) and \(\beta=1\), then \(\omega_i=1/L_i\) and \(w_i \propto 1/L_i\), recovering the \(\Delta L\) baseline weighting.
+\end{proposition}
+\begin{proof}
+If \(s(L;\xi)\equiv 1\) and \(\beta=1\), then for each \(i\),
+\[
+\omega_i
+=\frac{1}{L_i^{\beta}s(L_i;\xi)}
+=\frac{1}{L_i\cdot 1}
+=\frac{1}{L_i}.
+\]
+Hence
+\[
+w_i
+=\frac{\omega_i}{\sum_{j=1}^G \omega_j}
+=\frac{L_i^{-1}}{\sum_{j=1}^G L_j^{-1}}
+\propto \frac{1}{L_i},
+\]
+which is the standard \(\Delta L\) choice of weights.
+\end{proof}
+
+\begin{assumption}[Regularity and identifiability]
+\label{assump:reg}
+(i) \(\{(g_i,L_i)\}_{i\ge 1}\) are i.i.d.\ or strictly stationary and ergodic with \(\sup_i \mathbb E[g_i^4]<\infty\).  
+
+(ii) The parameter space \(\Theta=\{\beta\}\times\Xi\) is compact (for example, \(\beta\in[\beta_{\min},\beta_{\max}]\), \(|\rho|\le \rho_{\max}<1\), \(\eta\in[0,\eta_{\max}]\), and fixed \(k\)).  
+
+(iii) The population objective \(\ell_\infty(\vartheta):=\lim_{G\to\infty}G^{-1}\,\mathbb E[\ell_G(\vartheta)]\) exists and has a unique maximizer \(\vartheta^\star=(\beta^\star,\xi^\star)\).  
+
+(iv) \(s(L;\xi)\) is smooth in \(\xi\) and bounded away from \(0\) and \(+\infty\) on \(\mathrm{supp}(L)\times\Xi\).
+\end{assumption}
+
+Here \(\ell_G(\vartheta)\) denotes the EB objective \eqref{eq:EB-obj} built from the first \(G\) trajectories; we may equivalently work with the rescaled version \(G^{-1}\ell_G(\vartheta)\), which only differs by a factor independent of \(\vartheta\).
+
+\begin{theorem}[Consistency \& asymptotic normality of the EB estimator]
+\label{thm:consistency}
+Let \(\widehat\vartheta_G=\arg\max_{\vartheta\in\Theta}\ell_G(\vartheta)\) be any (measurable) maximizer.
+Under Assumption~\ref{assump:reg}, \(\widehat\vartheta_G \xrightarrow{p} \vartheta^\star\) as \(G\to\infty\).
+
+If, in addition, \(\ell_\infty\) is twice continuously differentiable at \(\vartheta^\star\) with negative-definite Hessian \(H=-\nabla^2\ell_\infty(\vartheta^\star)\), and
+the gradient process satisfies a suitable central limit theorem (for example,
+\(\sqrt{G}\,\nabla \ell_G(\vartheta^\star)\xrightarrow{d}\mathcal N(0,J)\) for some positive semi-definite matrix \(J\)),
+then
+\[
+\sqrt{G}(\widehat\vartheta_G-\vartheta^\star)\ \xrightarrow{d}\ \mathcal N\!\big(0,\; H^{-1}\,J\,H^{-1}\big),
+\]
+where \(J\) is the asymptotic covariance of \(\sqrt{G}\,\nabla \ell_G(\vartheta^\star)\).
+\end{theorem}
+\begin{proof}
+\emph{Consistency.}
+We can write \(\ell_G(\vartheta)\) as a continuous function of empirical averages of bounded (or suitably integrable) functions of \((g_i,L_i)\).
+Indeed, the terms \(\sum_i \log\omega_i\), \(\Lambda_\omega\), and \(\mathrm{RSS}_\omega\) are all sums of such functions, and the mapping from these empirical sums to \(\ell_G(\vartheta)\) is continuous in both the empirical sums and in \(\vartheta\).
+By the (vector) law of large numbers and the continuous mapping theorem, for each fixed \(\vartheta\), the rescaled objective \(G^{-1}\ell_G(\vartheta)\) converges almost surely to a deterministic limit \(\ell_\infty(\vartheta)\).
+Under the compactness of \(\Theta\) and smoothness/boundedness conditions in Assumption~\ref{assump:reg}, standard results in M-estimation (e.g., an argmax continuous mapping theorem) imply that this convergence is uniform on \(\Theta\).
+By assumption, \(\ell_\infty\) has a unique maximizer \(\vartheta^\star\).
+The uniform convergence combined with uniqueness yields
+\(\widehat\vartheta_G\xrightarrow{p}\vartheta^\star\) (see, e.g., \citet{vandervaart1998}, Theorem~5.7).
+
+\emph{Asymptotic normality.}
+Consider the first-order optimality condition
+\[
+\nabla \ell_G(\widehat\vartheta_G)=0.
+\]
+Assume \(\ell_G\) is twice continuously differentiable in a neighborhood of \(\vartheta^\star\) with probability tending to one, and expand \(\nabla \ell_G\) in a Taylor series around \(\vartheta^\star\):
+\[
+\nabla \ell_G(\widehat\vartheta_G)
+=\nabla \ell_G(\vartheta^\star)
++\nabla^2\ell_G(\tilde\vartheta_G)(\widehat\vartheta_G-\vartheta^\star),
+\]
+for some intermediate point \(\tilde\vartheta_G\) on the line segment between \(\widehat\vartheta_G\) and \(\vartheta^\star\).
+Setting \(\nabla \ell_G(\widehat\vartheta_G)=0\) and rearranging gives
+\[
+\sqrt{G}(\widehat\vartheta_G-\vartheta^\star)
+=-\Big(\nabla^2\ell_G(\tilde\vartheta_G)\Big)^{-1}\sqrt{G}\,\nabla \ell_G(\vartheta^\star).
+\]
+By the consistency already established, \(\tilde\vartheta_G\xrightarrow{p}\vartheta^\star\).
+Under the stated differentiability and regularity assumptions,
+\(\nabla^2\ell_G(\tilde\vartheta_G)\) converges in probability to \(\nabla^2\ell_\infty(\vartheta^\star)=-H\),
+so \(\big(\nabla^2\ell_G(\tilde\vartheta_G)\big)^{-1}\xrightarrow{p}H^{-1}\).
+
+By assumption,
+\(\sqrt{G}\,\nabla \ell_G(\vartheta^\star)\xrightarrow{d}\mathcal N(0,J)\).
+Applying Slutsky’s theorem to the product of the converging matrices and vectors yields
+\[
+\sqrt{G}(\widehat\vartheta_G-\vartheta^\star)
+\xrightarrow{d}
+-H^{-1}\,\mathcal N(0,J)
+=\mathcal N(0,H^{-1}JH^{-1}),
+\]
+which proves the stated asymptotic normality.
+\end{proof}
+
+\begin{remark}[Smooth but not globally concave]
+While \(\ell(\beta,\xi)\) is generally not globally concave, the gradient \(\nabla \ell\) and local Hessian \(\nabla^2\ell\) are explicit via Lemma~\ref{lem:rss-deriv},
+Proposition~\ref{prop:grad}, and Lemma~\ref{lem:kband-deriv}.
+In practice, damping or exponential moving averages in \((\beta,\xi)\) and simple box constraints on the parameter space \(\Theta\) yield stable online updates; see the separate Algorithms section for concrete update rules.
+\end{remark}
+
+% \subsection{Empirical Bayes estimator for length and dependence}
+% \label{sec:eb-theory}
+
+% % --- Safe theorem/proof envs if not already defined in the preamble
+% \makeatletter
+% \@ifundefined{theorem}{\newtheorem{theorem}{Theorem}[section]}{}
+% \@ifundefined{lemma}{\newtheorem{lemma}[theorem]{Lemma}}{}
+% \@ifundefined{proposition}{\newtheorem{proposition}[theorem]{Proposition}}{}
+% \@ifundefined{corollary}{\newtheorem{corollary}[theorem]{Corollary}}{}
+% \@ifundefined{assumption}{\newtheorem{assumption}[theorem]{Assumption}}{}
+% \@ifundefined{definition}{\newtheorem{definition}[theorem]{Definition}}{}
+% \@ifundefined{remark}{\newtheorem{remark}[theorem]{Remark}}{}
+% \makeatother
+% \ifx\proof\undefined
+%   \newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par}
+% \fi
+
+% We consider trajectories \(i=1,\dots,G\) with length \(L_i\in\mathbb N\) and scalarized return \(g_i\in\mathbb R\).
+% Adopt the Normal working model
+% \begin{equation}
+% \label{eq:model}
+% g_i \mid \mu,\sigma^2,\vartheta \sim \mathcal N\!\big(\mu,\; v_i(\vartheta)\big),
+% \qquad
+% v_i(\vartheta)=\sigma^2\,L_i^{\beta}\,s(L_i;\xi),
+% \end{equation}
+% where \(\mu\in\mathbb R\) is the common location, \(\sigma^2>0\) is a global scale,
+% \(\beta\in\mathbb R\) (the length exponent) controls the length–variance law,
+% and \(s(L;\xi)>0\) captures within-trajectory dependence via a low-dimensional shape \(\xi\).
+% Define the precisions and normalized weights
+% \begin{equation}
+% \label{eq:prec-weights}
+% \omega_i(\beta,\xi)=\frac{1}{L_i^{\beta}\,s(L_i;\xi)},
+% \qquad
+% w_i(\beta,\xi)=\frac{\omega_i(\beta,\xi)}{\sum_{j=1}^G \omega_j(\beta,\xi)}.
+% \end{equation}
+% We take \(p(\mu)\propto 1\) and Jeffreys \(p(\sigma^2)\propto 1/\sigma^2\); weak priors \(\pi_{\beta},\pi_{\xi}\) may be used or set flat for EB/type-II ML.
+
+% \paragraph{Weighted aggregator.}
+% The Bayes estimator of \(\mu\) under \eqref{eq:model} is the precision-weighted mean
+% \begin{equation}
+% \label{eq:mu-agg}
+% m(\beta,\xi)=\sum_{i=1}^G w_i(\beta,\xi)\,g_i
+% =\frac{\sum_{i=1}^G \omega_i(\beta,\xi)\,g_i}{\sum_{i=1}^G \omega_i(\beta,\xi)}.
+% \end{equation}
+% Let \(e_i(\beta,\xi)=g_i-m(\beta,\xi)\),
+% \(\Lambda_\omega(\beta,\xi)=\sum_{i=1}^G \omega_i(\beta,\xi)\), and
+% \begin{equation}
+% \label{eq:Lambda-RSS}
+% \mathrm{RSS}_\omega(\beta,\xi)=\sum_{i=1}^G \omega_i(\beta,\xi)\,e_i(\beta,\xi)^2.
+% \end{equation}
+
+% \begin{proposition}[Posterior in closed form, conditional on \((\beta,\xi)\)]
+% \label{prop:posterior}
+% Under \eqref{eq:model} with \(p(\mu)\propto 1\) and \(p(\sigma^2)\propto \frac{1}{\sigma^2}\),
+% \[
+% \mu \mid \sigma^2,\mathbf g,\vartheta \sim \mathcal N\!\big(m(\beta,\xi),\,\sigma^2/\Lambda_\omega(\beta,\xi)\big),
+% \quad
+% \sigma^2 \mid \mathbf g,\vartheta \sim \mathrm{Inv\!-\!Gamma}\!\left(\frac{G-1}{2},\,\frac{\mathrm{RSS}_\omega(\beta,\xi)}{2}\right).
+% \]
+% \end{proposition}
+% \begin{proof}
+% Complete the square in \(\mu\) and integrate the Normal kernel to obtain the Normal posterior for \(\mu\) with variance \(\sigma^2/\Lambda_\omega\).
+% Collecting \(\sigma^2\)-powers and exponentials yields an inverse-gamma kernel with shape \((G-1)/2\) and scale \(\mathrm{RSS}_\omega/2\).
+% \end{proof}
+
+% \begin{proposition}[GLS optimality of the aggregator]
+% \label{prop:gls}
+% Fix \((\beta,\xi)\). Among all linear unbiased estimators \(\tilde\mu=\sum_i a_i g_i\) with \(\sum_i a_i=1\),
+% \(m(\beta,\xi)\) in \eqref{eq:mu-agg} attains the minimum variance \(\mathrm{Var}(\tilde\mu)=\sigma^2/\Lambda_\omega(\beta,\xi)\).
+% \end{proposition}
+% \begin{proof}
+% This is the Gauss–Markov/GLS result with known heteroscedastic variances
+% \(\mathrm{Var}(g_i\mid\mu,\vartheta)=\sigma^2/\omega_i\): the BLUE uses weights proportional to \(\omega_i\), giving variance \(\sigma^2/\sum_i \omega_i\).
+% \end{proof}
+
+% \begin{theorem}[EB marginal objective for \((\beta,\xi)\)]
+% \label{thm:EB-obj}
+% Under \eqref{eq:model} with the above priors, the marginal type-II log-posterior is (up to an additive constant)
+% \begin{equation}
+% \label{eq:EB-obj}
+% \ell(\beta,\xi)
+% =\log \pi_\beta(\beta)+\log \pi_\xi(\xi)
+% +\tfrac{1}{2}\sum_{i=1}^G \log \omega_i(\beta,\xi)
+% -\tfrac{1}{2}\log \Lambda_\omega(\beta,\xi)
+% -\tfrac{G-1}{2}\log \mathrm{RSS}_\omega(\beta,\xi).
+% \end{equation}
+% \end{theorem}
+% \begin{proof}
+% Integrate \(\mu\) using completion of the square:
+% \(\sum_i \omega_i(g_i-\mu)^2=\Lambda_\omega(\mu-m)^2+\mathrm{RSS}_\omega\).
+% The \(\mu\)-integral contributes \(-\tfrac{1}{2}\log\Lambda_\omega\).
+% Integrate \(\sigma^2\) with Jeffreys prior to obtain a factor proportional to \(\mathrm{RSS}_\omega^{-(G-1)/2}\).
+% Collect \(\prod_i \omega_i^{1/2}\) from the Normalizer. Take logs and add priors.
+% \end{proof}
+
+% \begin{lemma}[Weighted RSS derivative identity]
+% \label{lem:rss-deriv}
+% For any component \(\phi\in\{\beta\}\cup\{\xi\text{ components}\}\),
+% \begin{equation}
+% \label{eq:rss-deriv}
+% \frac{\partial}{\partial \phi}\,\mathrm{RSS}_\omega(\beta,\xi)
+% =\sum_{i=1}^G \frac{\partial \omega_i}{\partial \phi}\,e_i^2
+% =\sum_{i=1}^G \omega_i\,e_i^2\,\frac{\partial \log \omega_i}{\partial \phi}.
+% \end{equation}
+% \end{lemma}
+% \begin{proof}
+% Differentiate \(\sum_i \omega_i (g_i-m)^2\). The cross-term \(2\sum_i \omega_i (g_i-m)(-\partial m)\) vanishes because \(\sum_i \omega_i (g_i-m)=0\) by the definition of \(m\).
+% \end{proof}
+
+% \begin{proposition}[Gradient of the EB objective]
+% \label{prop:grad}
+% With \(\Lambda_\omega,\mathrm{RSS}_\omega\) as above,
+% \begin{equation}
+% \label{eq:EB-grad-general}
+% \frac{\partial \ell}{\partial \phi}
+% =\frac{1}{2}\!\left[
+% \sum_{i=1}^G \frac{\partial \log \omega_i}{\partial \phi}
+% -\frac{1}{\Lambda_\omega}\sum_{i=1}^G \frac{\partial \omega_i}{\partial \phi}
+% \right]
+% -\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}
+% \sum_{i=1}^G \omega_i e_i^2\,\frac{\partial \log \omega_i}{\partial \phi}
+% +\frac{\partial \log \pi(\phi)}{\partial \phi}.
+% \end{equation}
+% \end{proposition}
+% \begin{proof}
+% Differentiate \eqref{eq:EB-obj}; use \(\partial\log\Lambda_\omega/\partial\phi=\Lambda_\omega^{-1}\sum_i \partial\omega_i/\partial\phi\) and Lemma~\ref{lem:rss-deriv}.
+% \end{proof}
+
+% \begin{corollary}[Gradient in the length direction]
+% \label{cor:grad-beta}
+% Since \(\log\omega_i=-\beta\log L_i-\log s(L_i;\xi)\),
+% \(\partial \log\omega_i/\partial\beta=-\log L_i\) and \(\partial \omega_i/\partial\beta=-\omega_i \log L_i\).
+% Hence
+% \begin{equation}
+% \label{eq:EB-grad-beta}
+% \frac{\partial \ell}{\partial \beta}
+% =\frac{1}{2}\!\left[-\sum_{i=1}^G \log L_i
+% +\frac{\sum_{i=1}^G \omega_i \log L_i}{\Lambda_\omega}\right]
+% +\frac{G-1}{2}\frac{1}{\mathrm{RSS}_\omega}\sum_{i=1}^G \omega_i e_i^2 \log L_i
+% +\frac{\partial \log \pi_\beta(\beta)}{\partial \beta}.
+% \end{equation}
+% \end{corollary}
+
+% \begin{definition}[Stretched-geometric \(k\)-band dependence]
+% \label{def:kband}
+% Given \(k\in\mathbb N\), \(\rho\in(-1,1)\), \(\eta\ge 0\), define with \(m=\min\{k,L-1\}\)
+% \begin{equation}
+% \label{eq:s-family}
+% s(L;\rho,k,\eta)=1+\frac{2}{L}\sum_{h=1}^m (L-h)\,\rho^{\,h^{\eta}}.
+% \end{equation}
+% \end{definition}
+
+% \begin{lemma}[Derivatives of the \(k\)-band shape]
+% \label{lem:kband-deriv}
+% Let \(s_i=s(L_i;\rho,k,\eta)\), \(m_i=\min\{k,L_i-1\}\). Then
+% \[
+% \frac{\partial \log \omega_i}{\partial \rho}
+% =-\frac{1}{s_i}\frac{\partial s_i}{\partial \rho},
+% \quad
+% \frac{\partial s_i}{\partial \rho}
+% =\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\, h^{\eta}\, \rho^{\,h^{\eta}-1},
+% \]
+% \[
+% \frac{\partial \log \omega_i}{\partial \eta}
+% =-\frac{1}{s_i}\frac{\partial s_i}{\partial \eta},
+% \quad
+% \frac{\partial s_i}{\partial \eta}
+% =\frac{2}{L_i}\sum_{h=1}^{m_i} (L_i-h)\, \rho^{\,h^{\eta}} (\log \rho)\, h^{\eta}\log h.
+% \]
+% \end{lemma}
+% \begin{proof}
+% Differentiate \eqref{eq:s-family} termwise; use \(\partial\log\omega_i/\partial\cdot=-\partial\log s_i/\partial\cdot\).
+% \end{proof}
+
+% \begin{proposition}[Unbiasedness of \(m(\beta,\xi)\)]
+% \label{prop:unbiased}
+% For fixed \((\beta,\xi)\), \(m(\beta,\xi)\) in \eqref{eq:mu-agg} is unbiased for \(\mu\).
+% \end{proposition}
+% \begin{proof}
+% \(\mathbb E[g_i\mid\mu,\vartheta]=\mu\). Since \(\sum_i w_i=1\), \(\mathbb E[m]=\sum_i w_i\mu=\mu\).
+% \end{proof}
+
+% \begin{proposition}[Link to the \(\Delta L\) rule]
+% \label{prop:deltaL}
+% If \(s(L;\xi)\equiv 1\) and \(\beta=1\), then \(\omega_i=1/L_i\) and \(w_i \propto 1/L_i\), recovering the \(\Delta L\) baseline weighting.
+% \end{proposition}
+% \begin{proof}
+% Immediate from \eqref{eq:prec-weights}.
+% \end{proof}
+
+% \begin{assumption}[Regularity and identifiability]
+% \label{assump:reg}
+% (i) \(\{(g_i,L_i)\}\) are i.i.d.\ or strictly stationary ergodic with \(\sup_i \mathbb E[g_i^4]<\infty\).
+% (ii) \(\Theta=\{\beta\}\times\Xi\) is compact (\(\beta\in[\beta_{\min},\beta_{\max}]\), \(|\rho|\le \rho_{\max}<1\), \(\eta\in[0,\eta_{\max}]\), fixed \(k\)).
+% (iii) \(\ell_\infty(\vartheta)=\mathbb E[\ell(\vartheta;\mathbf g)]\) has a unique maximizer \(\vartheta^\star\).
+% (iv) \(s(L;\xi)\) is smooth in \(\xi\) and bounded away from \(0\) and \(\infty\) on \(\mathrm{supp}(L)\times\Xi\).
+% \end{assumption}
+
+% \begin{theorem}[Consistency \& asymptotic normality of the EB estimator]
+% \label{thm:consistency}
+% Let \(\widehat\vartheta_G=\arg\max_{\vartheta\in\Theta}\ell_G(\vartheta)\).
+% Under Assumption~\ref{assump:reg}, \(\widehat\vartheta_G \xrightarrow{p} \vartheta^\star\) as \(G\to\infty\).
+% If additionally \(\ell_\infty\) is twice continuously differentiable at \(\vartheta^\star\) with negative-definite Hessian \(H=-\nabla^2\ell_\infty(\vartheta^\star)\) and \(\mathbb E[\|\nabla \ell_1(\vartheta^\star)\|^2]<\infty\),
+% then
+% \[
+% \sqrt{G}(\widehat\vartheta_G-\vartheta^\star)\ \xrightarrow{d}\ \mathcal N\!\big(0,\; H^{-1}\,J\,H^{-1}\big),\qquad
+% J=\mathrm{Var}\!\big(\nabla \ell_1(\vartheta^\star)\big).
+% \]
+% \end{theorem}
+% \begin{proof}
+% Uniform LLN on compact \(\Theta\) with the stated moments gives \(\ell_G\to\ell_\infty\) uniformly; uniqueness of the maximizer yields argmax consistency (standard M-estimation).
+% A Taylor expansion of \(\nabla \ell_G\) at \(\vartheta^\star\) together with a CLT for \(\nabla \ell_1(\vartheta^\star)\) yields the sandwich limit.
+% \end{proof}
+
+% \begin{remark}[Smooth but not globally concave]
+% While \(\ell(\beta,\xi)\) is not globally concave, \(\nabla \ell\) and the local Hessian are explicit via Lemma~\ref{lem:rss-deriv}, Proposition~\ref{prop:grad}, and Lemma~\ref{lem:kband-deriv}.
+% In practice, damping/EMA and box constraints produce stable online updates; see the separate Algorithms section.
+% \end{remark}
+
+% \subsection{Weights under $k$-banded dependence with parameter $\rho$}\label{subsec:kband-rho}
+
+% We work with the scalarized series $Y_{i,t}:=\bm{u}^\top \boldsymbol{Z}_{i,t}$ for a fixed unit vector $\bm{u}$ as in \eqref{eq:def_gi_scalar}, so that
+% \[
+% v_i \;=\; \mathrm{Var}(g_i)\;=\; \sum_{h=-(L_i-1)}^{L_i-1}(L_i-|h|)\,\gamma(h),
+% \qquad \gamma(h):=\mathrm{Cov}(Y_{i,t},Y_{i,t-h}).
+% \]
+% Assume second–order stationarity and the \emph{$k$-banded, geometric} dependence template
+% \begin{equation}
+% \gamma(0)=\tau^2,\qquad
+% \gamma(h)=\tau^2\,\rho^{|h|}\ \mathbf{1}\{|h|\le k\},
+% \qquad |\rho|<1,
+% \label{eq:kband-geom}
+% \end{equation}
+% so correlations decay geometrically up to lag $k$ and vanish thereafter.
+
+% \begin{lemma}[Dependence shape factor for geometric $k$-band]\label{lem:sL-kband}
+% Let $m_i:=\min\{k,L_i-1\}$. Under \eqref{eq:kband-geom},
+% \begin{equation}
+% v_i \;=\; \tau^2\!\left[
+%   L_i \;+\; 2\sum_{h=1}^{m_i} (L_i-h)\,\rho^{h}
+% \right]
+% \;=\; \tau^2\,L_i\,s(L_i;\rho,k),
+% \qquad
+% s(L;\rho,k)\;=\;1+\frac{2}{L}\sum_{h=1}^{m} (L-h)\rho^{h}.
+% \label{eq:v-and-s-kband}
+% \end{equation}
+% Moreover, the sum admits the closed form
+% \begin{equation}
+% s(L;\rho,k)
+% \;=\;
+% 1+\frac{2}{L}\Bigg(
+%   L\underbrace{\frac{\rho\,(1-\rho^{m})}{1-\rho}}_{S_1(m)}
+%   \;-\;
+%   \underbrace{\frac{\rho\big(1-(m+1)\rho^{m}+m\rho^{m+1}\big)}{(1-\rho)^2}}_{S_2(m)}
+% \Bigg),
+% \qquad m=\min\{k,L-1\}.
+% \label{eq:s-closed-form}
+% \end{equation}
+% \end{lemma}
+
+% \begin{proof}
+% By Bartlett’s identity (Lemma~\ref{lem:bartlett} in your text),
+% \(
+% v_i=\sum_{h=-(L_i-1)}^{L_i-1}(L_i-|h|)\gamma(h)
+% \).
+% Insert \eqref{eq:kband-geom}, collect symmetric lags, and restrict to $|h|\le m_i$:
+% \[
+% v_i=\tau^2\left[L_i + 2\sum_{h=1}^{m_i}(L_i-h)\rho^h\right].
+% \]
+% Define $s(L_i;\rho,k):=v_i/(\tau^2 L_i)$ to obtain \eqref{eq:v-and-s-kband}. The closed form \eqref{eq:s-closed-form} follows from
+% \(
+% \sum_{h=1}^{m}\rho^h=\rho(1-\rho^m)/(1-\rho)
+% \)
+% and
+% \(
+% \sum_{h=1}^{m} h\rho^h=\rho\big(1-(m+1)\rho^{m}+m\rho^{m+1}\big)/(1-\rho)^2
+% \).
+% \end{proof}
+
+% \paragraph{Asymptotics (fixed $k$).}
+% For $L\to\infty$ with fixed $k$,
+% \begin{equation}
+% s(L;\rho,k)
+% \;=\;
+% 1+2\sum_{h=1}^{k}\rho^h \;-\; \frac{2}{L}\sum_{h=1}^{k} h\rho^h
+% \;=\;
+% \underbrace{1+\frac{2\rho(1-\rho^{k})}{1-\rho}}_{=:s_\infty(\rho,k)}
+% \;+\; O\!\left(\frac{1}{L}\right),
+% \label{eq:s-asymp}
+% \end{equation}
+% so the dependence correction tends to a constant $s_\infty(\rho,k)>0$ (for $|\rho|<1$).
+
+% \begin{proposition}[Weighting rule under geometric $k$-band]\label{prop:weights-kband}
+% Under the heteroscedastic model \eqref{eq:hetero_general_prior} with variance law
+% \(
+% v_i(\vartheta)=\sigma^2 L_i^{\beta}\,s(L_i;\rho,k)
+% \),
+% the posterior-precision (Bayes) weights satisfy, up to a common factor,
+% \begin{equation}
+% x_i^{\mathrm{Bayes}} \ \propto\ \frac{1}{L_i^{\beta}\,s(L_i;\rho,k)}.
+% \label{eq:weights-kband}
+% \end{equation}
+% In particular, under the Jeffreys baseline and length exponent $\beta=1$,
+% \begin{equation}
+% x_i \ \propto\ \frac{1}{\,L_i\,\Big[\,1+\frac{2}{L_i}\sum_{h=1}^{m_i}(L_i-h)\rho^{h}\,\Big]}
+% \ =\ \frac{1}{\,L_i + 2\sum_{h=1}^{m_i}(L_i-h)\rho^{h}\,}\!,
+% \qquad m_i=\min\{k,L_i-1\}.
+% \label{eq:weights-kband-beta1}
+% \end{equation}
+% For $L_i\to\infty$ with fixed $k$, this is asymptotically
+% \(
+% x_i \propto \big[L_i\,s_\infty(\rho,k)\big]^{-1}
+% \),
+% so the length exponent is unchanged and dependence acts as a multiplicative constant.
+% \end{proposition}
+
+% \begin{proof}
+% From \eqref{eq:hetero_general_prior} with the $k$-banded shape $s(\cdot)$, precision factorizes as
+% \(
+% \lambda_i(\vartheta)=1/v_i(\vartheta)=(1/\sigma^2)\,L_i^{-\beta}\,s(L_i;\rho,k)^{-1}
+% \).
+% By Theorem~\ref{thm:ppa}, Bayes weights are proportional to the posterior mean precision; the nuisance scale $1/\sigma^2$ cancels upon normalization (Proposition: Scale cancellation), yielding \eqref{eq:weights-kband}. The $\beta=1$ specialization gives \eqref{eq:weights-kband-beta1}. The asymptotic statement follows from \eqref{eq:s-asymp}.
+% \end{proof}
+
+% \paragraph{Variant: flat correlation within the $k$-band.}
+% If instead $\gamma(h)=\tau^2\rho\,\mathbf{1}\{1\le |h|\le k\}$ (same correlation for all lags up to $k$), then with $m=\min\{k,L-1\}$,
+% \[
+% s(L;\rho,k) \;=\; 1 + \frac{2}{L}\sum_{h=1}^{m}(L-h)\rho
+% \;=\; 1 + 2m\rho - \frac{m(m+1)}{L}\rho,
+% \]
+% and the weights are again $x_i \propto \big[L_i^{\beta}\,s(L_i;\rho,k)\big]^{-1}$. (Positive definiteness places constraints on $\rho$ in this template; the geometric form \eqref{eq:kband-geom} with $|\rho|<1$ is always safe.)
+
+
+\subsection{Weights under non-vanishing constant-lag covariance (compound symmetry)}\label{subsec:cs}
+
+We work with the scalarized token series $Y_{i,t}:=\bm{u}^\top\boldsymbol{Z}_{i,t}$ as in \eqref{eq:def_gi_scalar}. Assume second–order stationarity and
+\begin{equation}
+  \gamma(0)=\mathrm{Var}(Y_{i,t})=\tau^2,\qquad
+  \gamma(h)=\mathrm{Cov}(Y_{i,t},Y_{i,t-h})=\tau^2\rho\quad\text{for all } h\neq 0,
+  \label{eq:cs-cov}
+\end{equation}
+with $\rho\in(-1/(L_i-1),\,1)$ to ensure positive definiteness for a given length $L_i$. (For uniformly valid models across unbounded $L$, take $\rho\in[0,1)$.)
+
+\begin{lemma}[Trajectory variance under compound symmetry]\label{lem:cs-var}
+Let $g_i=\sum_{t=1}^{L_i} Y_{i,t}$. Under \eqref{eq:cs-cov},
+\begin{equation}
+  \mathrm{Var}(g_i)
+  \;=\; \tau^2\!\left[\,L_i \;+\; 2\rho\!\sum_{h=1}^{L_i-1} (L_i-h)\right]
+  \;=\; \tau^2\,L_i\Big(1+\rho(L_i-1)\Big)
+  \;=\; \tau^2\Big((1-\rho)L_i + \rho L_i^2\Big).
+  \label{eq:cs-var}
+\end{equation}
+Equivalently, with the shape factor $s(L;\rho):=\mathrm{Var}(g_i)/(\tau^2 L)$,
+\begin{equation}
+  s(L;\rho) \;=\; 1+\rho(L-1) \;=\; (1-\rho)+\rho L.
+  \label{eq:cs-shape}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By Bartlett’s identity (Lemma~\ref{lem:bartlett}),
+\[
+\mathrm{Var}(g_i)
+=\sum_{h=-(L_i-1)}^{L_i-1}(L_i-|h|)\gamma(h)
+= L_i\gamma(0)+2\sum_{h=1}^{L_i-1}(L_i-h)\gamma(h).
+\]
+Insert \eqref{eq:cs-cov} to obtain the first equality in \eqref{eq:cs-var}; the second follows from
+$\sum_{h=1}^{L-1}(L-h)=L(L-1)/2$. The shape factor is \eqref{eq:cs-shape}.
+\smallskip
+
+(Alternative matrix proof.) The $L_i\times L_i$ covariance matrix of $(Y_{i,1},\dots,Y_{i,L_i})$ is
+$\tau^2\!\big((1-\rho)\boldsymbol{I}+\rho\,\boldsymbol{1}\boldsymbol{1}^\top\big)$. Then
+$\mathrm{Var}(g_i)=\boldsymbol{1}^\top \mathrm{Cov}\,\boldsymbol{1}
+=\tau^2\big((1-\rho)L_i+\rho L_i^2\big)$.
+\end{proof}
+
+\begin{proposition}[Weighting rule under constant-lag covariance]\label{prop:cs-weights}
+Under the heteroscedastic model \eqref{eq:hetero_general_prior} with
+\(
+v_i(\vartheta)=\sigma^2 L_i^{\beta}\,s(L_i;\rho)
+\)
+and $s(L;\rho)$ from \eqref{eq:cs-shape}, the posterior-precision (Bayes) weights satisfy, up to a common factor,
+\begin{equation}
+  x_i^{\mathrm{Bayes}}
+  \ \propto\ 
+  \frac{1}{L_i^{\beta}\,s(L_i;\rho)}
+  \;=\;
+  \frac{1}{L_i^{\beta}\big(1+\rho(L_i-1)\big)}.
+  \label{eq:cs-weights}
+\end{equation}
+In particular, under the Jeffreys baseline with $\beta=1$,
+\begin{equation}
+  x_i \ \propto\ \frac{1}{L_i\big(1+\rho(L_i-1)\big)}
+  \;=\; \frac{1}{(1-\rho)L_i + \rho L_i^2}.
+  \label{eq:cs-weights-beta1}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+From \eqref{eq:hetero_general_prior} and Lemma~\ref{lem:cs-var},
+\(
+\lambda_i(\vartheta)=1/v_i(\vartheta)=(1/\sigma^2)\,L_i^{-\beta}\,s(L_i;\rho)^{-1}.
+\)
+By Theorem~\ref{thm:ppa}, $x_i^{\mathrm{Bayes}}\propto \mathbb{E}[\lambda_i(\vartheta)\mid\{g\}]$; the factor $1/\sigma^2$ cancels upon normalization, yielding \eqref{eq:cs-weights}. The specialization $\beta=1$ gives \eqref{eq:cs-weights-beta1}.
+\end{proof}
+
+\begin{corollary}[Asymptotics and effective length law]\label{cor:cs-asymp}
+If $\rho>0$ is fixed and $L\to\infty$, then $s(L;\rho)\sim \rho L$ and
+\[
+v_i(\vartheta)\ \sim\ \sigma^2 L_i^{\beta}\,\rho L_i
+\quad\Longrightarrow\quad
+v_i(\vartheta)=\Theta(L_i^{\beta+1}).
+\]
+Under the Jeffreys baseline $\beta=1$, $v_i=\Theta(L_i^2)$ and $x_i\propto L_i^{-2}$ asymptotically. Thus persistent positive correlation induces a quadratic penalty in length relative to the i.i.d.\ case.
+\end{corollary}
+
+\begin{remark}[Parameter constraints]
+For a fixed length $L$, compound symmetry is positive definite for $\rho\in(-1/(L-1),1)$. To model batches with unbounded $L$, take $\rho\in[0,1)$ so that $s(L;\rho)$ remains positive and the covariance is valid for all $L$.
+\end{remark}
