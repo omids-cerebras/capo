@@ -72,7 +72,7 @@ We summarize the Empirical Bayes CAPO model from \S\ref{sec:method} and \S\ref{s
 At a given outer optimization step (suppressing the step index \(t\) for clarity):
 
 \begin{enumerate}
-  \item \textbf{Hyperparameters.}  
+  \item \textbf{Hyperparameters.}
   Draw global parameters
   \[
     \mu \sim p(\mu)\propto 1,\quad
@@ -81,14 +81,14 @@ At a given outer optimization step (suppressing the step index \(t\) for clarity
     \xi \sim \pi_\xi,
   \]
   where \(\beta\) controls the length–variance law and \(\xi\) parameterizes the dependence shape \(s(L;\xi)\) (e.g., \(\xi=(\rho,k,\eta)\) under the stretched-geometric $k$-band model of Definition~\ref{def:kband}).
-  \item \textbf{Trajectory-level structure.}  
+  \item \textbf{Trajectory-level structure.}
 
   For each trajectory \(i=1,\dots,G\):
   \begin{enumerate}
     \item The trajectory length \(L_i\in\mathbb N\) is observed (exogenous, determined by prompts and stopping rules).
     \item Conditional on \(\xi\) and \(L_i\), the token-level increments \(\{Y_{i,\tau}\}_{\tau=1}^{L_i}\) form a second–order stationary process with auto-covariance \(\gamma(h;\xi)\). Under the $k$-banded stretched-geometric family,
     \[
-      \gamma(0)=\tau^2,\qquad 
+      \gamma(0)=\tau^2,\qquad
       \gamma(h)=\tau^2\rho^{\,|h|^{\eta}}\mathbf 1\{|h|\le k\},
     \]
     so that the induced variance of the scalarized trajectory gradient \(g_i=\sum_{\tau=1}^{L_i} Y_{i,\tau}\) is
@@ -109,7 +109,7 @@ At a given outer optimization step (suppressing the step index \(t\) for clarity
 \end{enumerate}
 
 \paragraph{Empirical Bayes layer and CAPO aggregator.}
-Given observed \(\{(g_i,L_i,\{Y_{i,\tau}\})\}_{i=1}^G\), CAPO performs Empirical Bayes (type-II ML) estimation of \(\vartheta=(\beta,\xi)\) by maximizing the marginal objective \(\ell(\beta,\xi)\) in Theorem~\ref{thm:EB-obj}.  
+Given observed \(\{(g_i,L_i,\{Y_{i,\tau}\})\}_{i=1}^G\), CAPO performs Empirical Bayes (type-II ML) estimation of \(\vartheta=(\beta,\xi)\) by maximizing the marginal objective \(\ell(\beta,\xi)\) in Theorem~\ref{thm:EB-obj}.
 This induces precision factors
 \[
   \omega_i(\beta,\xi)
@@ -121,7 +121,7 @@ and the CAPO aggregator
 \[
   m(\beta,\xi) = \sum_{i=1}^G w_i(\beta,\xi)\,g_i,
 \]
-which is the GLS/Bayes estimator of \(\mu\) for fixed \(\vartheta\) (Proposition~\ref{prop:gls}).  
+which is the GLS/Bayes estimator of \(\mu\) for fixed \(\vartheta\) (Proposition~\ref{prop:gls}).
 The weights \(w_i(\beta,\xi)\) are then fed into the CAPO update as trajectory weights for the policy/teacher loss.
 
 \paragraph{Plate diagram.}
@@ -230,7 +230,7 @@ Figure~\ref{fig:capo-plate} shows the corresponding Bayesian plate model, highli
 
 \newpage
 \bibliographystyle{iclr2026_conference}
-\bibliography{reference/ref}    
+\bibliography{reference/ref}
 
 \newpage
 \input{sections/appendix_a}

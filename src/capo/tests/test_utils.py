@@ -75,7 +75,9 @@ class TestBuildDummyPrompt:
     def test_returns_list_of_messages(self):
         """Returns a list of chat messages."""
         messages = build_dummy_prompt(
-            question="What is 2+2?", solution="2+2 = 4", ground_truth="4",
+            question="What is 2+2?",
+            solution="2+2 = 4",
+            ground_truth="4",
         )
         assert isinstance(messages, list)
         assert len(messages) >= 2
@@ -83,7 +85,9 @@ class TestBuildDummyPrompt:
     def test_messages_have_role_and_content(self):
         """Each message has 'role' and 'content' keys."""
         messages = build_dummy_prompt(
-            question="Test question", solution="Test solution", ground_truth=None,
+            question="Test question",
+            solution="Test solution",
+            ground_truth=None,
         )
         for msg in messages:
             assert "role" in msg
@@ -103,14 +107,20 @@ class TestBuildDummyPrompt:
     def test_includes_ground_truth_when_provided(self):
         """Ground truth is included when provided."""
         messages = build_dummy_prompt(
-            question="Q", solution="A", ground_truth="correct_answer_xyz",
+            question="Q",
+            solution="A",
+            ground_truth="correct_answer_xyz",
         )
         all_content = " ".join(msg["content"] for msg in messages)
         assert "correct_answer_xyz" in all_content
 
     def test_works_without_ground_truth(self):
         """Works when ground_truth is None."""
-        messages = build_dummy_prompt(question="Q", solution="A", ground_truth=None,)
+        messages = build_dummy_prompt(
+            question="Q",
+            solution="A",
+            ground_truth=None,
+        )
         # Should have system and user messages at minimum
         assert len(messages) >= 2
 

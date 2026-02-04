@@ -6,7 +6,7 @@ We address gradient aggregation for Reinforcement Learning with Verifiable Rewar
 \paragraph{Key contributions.}
 \begin{itemize}
   \item \textbf{Unified analysis.} We place existing length-normalization rules (including $\Delta L$) on a coherent Bayesian footing via scale-invariant reasoning, clarifying the invariances and assumptions behind them.
-  
+
   \item \textbf{Vector-valued optimality under common covariance shape.} We show that when per-trajectory covariances share a common ``shape'' up to a scalar factor, the inverse-variance rule remains optimal for a broad class of matrix risk functionals (Proposition~\ref{prop:common_shape_weights}), justifying scalar proxy modeling in high-dimensional policy gradients.
   \item \textbf{Robustness to variance misestimation.} We prove that plug-in inverse-variance weights degrade variance by at most a quadratic factor in the multiplicative error of the variance estimates (Proposition~\ref{prop:plugin_robust}), providing a formal stability guarantee under model misspecification.
   \item \textbf{CAPO aggregator.} We generalize beyond independence by estimating per-trajectory variance from short-range covariance structure and combining it with sublinear length dampening (\(\beta<1\)) to hedge estimation noise.

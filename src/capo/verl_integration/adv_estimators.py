@@ -23,7 +23,7 @@ consumes.
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
 import torch
 
@@ -62,8 +62,9 @@ def _cfg_get(config, path, default):
 
 
 def _lengths_and_scalar_returns(
-    token_level_rewards: Tensor, response_mask: Tensor,
-) -> Tuple[Tensor, Tensor, Tensor]:
+    token_level_rewards: Tensor,
+    response_mask: Tensor,
+) -> tuple[Tensor, Tensor, Tensor]:
     r"""
     Compute (L_i, g_i) from token-level rewards.
 
@@ -101,7 +102,7 @@ def compute_capo_advantage(
     config: Any = None,
     epsilon: float = 1e-8,
     **kwargs,
-) -> Tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor]:
     """
     Plain CAPO advantage: GRPO-style token-wise z-normalization.
 
@@ -162,7 +163,7 @@ def compute_capo_eb_lite_advantage(
     max_iters: int = 20,
     tol: float = 1e-4,
     **kwargs,
-) -> Tuple[Tensor, Tensor, dict]:
+) -> tuple[Tensor, Tensor, dict]:
     """
     EB–CAPO-lite advantage (Algorithm~\\ref{alg:eb-lite}).
 
@@ -203,9 +204,7 @@ def compute_capo_eb_lite_advantage(
     adv_metrics : dict
         Lightweight diagnostics for logging (JSON-serializable floats).
     """
-    lengths, returns_scalar, valid = _lengths_and_scalar_returns(
-        token_level_rewards, response_mask
-    )
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
 
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)
@@ -213,7 +212,11 @@ def compute_capo_eb_lite_advantage(
         return advantages, returns, {}
 
     beta_hat, w, m = eb_lite_fit_beta_and_weights(
-        g=returns_scalar, L=lengths, eps=epsilon, max_iters=max_iters, tol=tol,
+        g=returns_scalar,
+        L=lengths,
+        eps=epsilon,
+        max_iters=max_iters,
+        tol=tol,
     )
 
     # Per-trajectory scalar advantages A_i = w_i (g_i - m̂).
@@ -274,7 +277,7 @@ def compute_capo_eb_full_advantage(
     dlog_pi_rho: float = 0.0,
     dlog_pi_eta: float = 0.0,
     **kwargs,
-) -> Tuple[Tensor, Tensor, dict]:
+) -> tuple[Tensor, Tensor, dict]:
     """
     Full EB–CAPO advantage (Algorithms~\\ref{alg:eb-capo} and
     ~\\ref{alg:joint-eb-kband}).
@@ -333,9 +336,7 @@ def compute_capo_eb_full_advantage(
     returns : Tensor, shape [B, T]
         Returns (here equal to CAPO token-level rewards masked).
     """
-    lengths, returns_scalar, valid = _lengths_and_scalar_returns(
-        token_level_rewards, response_mask
-    )
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
 
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)
@@ -409,9 +410,5 @@ compute_capo_empirical_bayes_advantage = compute_capo_eb_full_advantage
 
 # Re-export functions from eb_core that tests expect to find here
 from capo.eb_core import (  # noqa: F401, E402
-    eb_lite_fit_beta_and_weights,
     s_kband,
-    eb_statistics as eb_stats,
-    grad_ell_beta_closed_form as grad_ell_beta,
-    numeric_grad_rho_eta as grad_ell_rho_eta,
 )

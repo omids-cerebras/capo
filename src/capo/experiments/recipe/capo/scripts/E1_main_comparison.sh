@@ -100,6 +100,6 @@ done
 
 echo
 echo "E1 complete. Next steps:"
-echo "  - Run artifact collection/build:" 
+echo "  - Run artifact collection/build:"
 echo "      python experiments/capo_paper/analysis/collect_runs.py --runs_dir outputs --out artifacts/collected"
 echo "      python experiments/capo_paper/analysis/make_paper_artifacts.py --collected artifacts/collected --out artifacts/paper"

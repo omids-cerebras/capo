@@ -42,4 +42,4 @@ for k in "${K_BANDS[@]}"; do
 done
 
 echo
-echo "E3 complete. The paper artifact builder will use these runs to produce fig_stability.pdf and tab_stability_efficiency.tex."  
+echo "E3 complete. The paper artifact builder will use these runs to produce fig_stability.pdf and tab_stability_efficiency.tex."

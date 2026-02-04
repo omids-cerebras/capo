@@ -8,21 +8,19 @@ inject a dummy GenPRM client that returns hard-coded step judgements.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import pytest
+
+# Create a module-level alias for compatibility with existing tests
+import capo.verl_integration.reward_fn as rf
 
 # Import directly from reward_fn to avoid pulling in VERL dependency
 # through the verl_integration __init__.py
 from capo.verl_integration.reward_fn import (
-    CAPOConfig,
     GenPRMClient,
-    capo_reward_fn,
-    _get_or_create_genprm_client,
 )
-
-# Create a module-level alias for compatibility with existing tests
-import capo.verl_integration.reward_fn as rf
 
 
 class DummyGenPRMClient(GenPRMClient):
@@ -62,7 +60,7 @@ def _run_capo_reward(
     step_sequence: Sequence[bool],
     correct_reward: float = 2.0,
     process_penalty: float = 1.0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Helper to run the CAPO reward function with a dummy GenPRM.
     """
@@ -77,9 +75,7 @@ def _run_capo_reward(
 
     # Monkeypatch the internal client creation helper so that the
     # reward function uses our dummy client.
-    def _fake_get_client(
-        config: rf.CAPOConfig, reward_kwargs: Dict[str, Any]
-    ) -> rf.GenPRMClient:
+    def _fake_get_client(config: rf.CAPOConfig, reward_kwargs: dict[str, Any]) -> rf.GenPRMClient:
         return client
 
     # Store original helper and restore afterwards.
@@ -152,9 +148,7 @@ def test_capo_reward_missing_is_correct_raises():
     cfg = rf.CAPOConfig()
     client = DummyGenPRMClient(config=cfg, step_sequences=[[True, True]])
 
-    def _fake_get_client(
-        config: rf.CAPOConfig, reward_kwargs: Dict[str, Any]
-    ) -> rf.GenPRMClient:
+    def _fake_get_client(config: rf.CAPOConfig, reward_kwargs: dict[str, Any]) -> rf.GenPRMClient:
         return client
 
     orig_get_client = rf._get_or_create_genprm_client
@@ -199,7 +193,10 @@ def test_capo_reward_custom_cp_values():
 
 def test_capo_reward_returns_steps():
     """Check that the result contains step information."""
-    result = _run_capo_reward(is_correct=True, step_sequence=[True, True],)
+    result = _run_capo_reward(
+        is_correct=True,
+        step_sequence=[True, True],
+    )
     assert "steps" in result
     assert "step_correctness" in result
     assert "wrong_step_indices" in result
@@ -207,7 +204,10 @@ def test_capo_reward_returns_steps():
 
 def test_capo_reward_all_wrong_steps():
     """All steps wrong case."""
-    result = _run_capo_reward(is_correct=False, step_sequence=[False, False, False],)
+    result = _run_capo_reward(
+        is_correct=False,
+        step_sequence=[False, False, False],
+    )
     # -P = -1.0
     assert result["score"] == pytest.approx(-1.0)
     assert result["wrong_step_indices"] == [0, 1, 2]
@@ -215,7 +215,10 @@ def test_capo_reward_all_wrong_steps():
 
 def test_capo_reward_single_step():
     """Single step solution."""
-    result = _run_capo_reward(is_correct=True, step_sequence=[True],)
+    result = _run_capo_reward(
+        is_correct=True,
+        step_sequence=[True],
+    )
     assert result["score"] == pytest.approx(2.0)
     assert len(result["steps"]) >= 1  # At least one step
 
@@ -260,7 +263,10 @@ class TestGenPRMClient:
 
         with pytest.raises(NotImplementedError):
             client.judge_steps(
-                question="Q", solution="S", ground_truth="G", steps=["step1", "step2"],
+                question="Q",
+                solution="S",
+                ground_truth="G",
+                steps=["step1", "step2"],
             )
 
 

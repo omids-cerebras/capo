@@ -22,13 +22,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
-def _safe_float(x: Any) -> Optional[float]:
+def _safe_float(x: Any) -> float | None:
     try:
         if x is None:
             return None
@@ -39,8 +38,8 @@ def _safe_float(x: Any) -> Optional[float]:
         return None
 
 
-def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     if not path.exists():
         return rows
     with path.open("r", encoding="utf-8") as f:
@@ -52,7 +51,7 @@ def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
-def _read_hydra_cfg(cfg_path: Path) -> Dict[str, Any]:
+def _read_hydra_cfg(cfg_path: Path) -> dict[str, Any]:
     # No yaml dependency: parse as JSON when possible; else do minimal YAML parse.
     try:
         import yaml  # type: ignore
@@ -60,7 +59,7 @@ def _read_hydra_cfg(cfg_path: Path) -> Dict[str, Any]:
         return yaml.safe_load(cfg_path.read_text()) or {}
     except Exception:
         # ultra-minimal fallback
-        out: Dict[str, Any] = {}
+        out: dict[str, Any] = {}
         for line in cfg_path.read_text().splitlines():
             if ":" not in line:
                 continue
@@ -78,13 +77,13 @@ class RunSummary:
     timestamp: str
     adv_estimator: str
     last_step: int
-    last_metrics: Dict[str, Any]
-    best_val_step: Optional[int]
-    best_val_metric: Optional[float]
-    cfg: Dict[str, Any]
+    last_metrics: dict[str, Any]
+    best_val_step: int | None
+    best_val_metric: float | None
+    cfg: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "run_dir": str(self.run_dir),
             "exp_name": self.exp_name,
             "timestamp": self.timestamp,
@@ -114,8 +113,8 @@ class RunSummary:
 
 
 def _extract_best_val(
-    rows: List[Dict[str, Any]],
-) -> Tuple[Optional[int], Optional[float]]:
+    rows: list[dict[str, Any]],
+) -> tuple[int | None, float | None]:
     # Prefer CountDown acc metrics when available; fall back to legacy keys.
     candidates = [
         # VERL validation summary keys (preferred)
@@ -126,8 +125,8 @@ def _extract_best_val(
         "val/score",
         "val/reward",
     ]
-    best_step: Optional[int] = None
-    best_val: Optional[float] = None
+    best_step: int | None = None
+    best_val: float | None = None
     for r in rows:
         step = r.get("step")
         for k in candidates:
@@ -140,7 +139,7 @@ def _extract_best_val(
     return best_step, best_val
 
 
-def summarize_run(run_dir: Path) -> Optional[RunSummary]:
+def summarize_run(run_dir: Path) -> RunSummary | None:
     hydra_cfg = run_dir / ".hydra" / "config.yaml"
     metrics_path = run_dir / "metrics.jsonl"
     if not hydra_cfg.exists() or not metrics_path.exists():
@@ -164,7 +163,6 @@ def summarize_run(run_dir: Path) -> Optional[RunSummary]:
     best_step, best_val = _extract_best_val(rows_sorted)
 
     # Hydra default output structure: outputs/<exp>/<timestamp>/
-    parts = run_dir.parts
     exp_name = run_dir.parent.name
     ts = run_dir.name
 
@@ -183,9 +181,7 @@ def summarize_run(run_dir: Path) -> Optional[RunSummary]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--runs_dir", type=str, default="outputs", help="Hydra outputs directory"
-    )
+    ap.add_argument("--runs_dir", type=str, default="outputs", help="Hydra outputs directory")
     # Backwards/alias for older automation scripts.
     ap.add_argument(
         "--outputs_root",
@@ -193,9 +189,7 @@ def main() -> None:
         default=None,
         help="Alias for --runs_dir (kept for compatibility)",
     )
-    ap.add_argument(
-        "--out", type=str, default="artifacts/collected", help="Output directory"
-    )
+    ap.add_argument("--out", type=str, default="artifacts/collected", help="Output directory")
     args = ap.parse_args()
 
     runs_dir = Path(args.outputs_root) if args.outputs_root else Path(args.runs_dir)
@@ -203,7 +197,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     run_dirs = [p for p in runs_dir.glob("*/**/") if (p / "metrics.jsonl").exists()]
-    summaries: List[RunSummary] = []
+    summaries: list[RunSummary] = []
     for rd in sorted(set(run_dirs)):
         s = summarize_run(rd)
         if s is not None:
@@ -214,7 +208,7 @@ def main() -> None:
 
     # CSV
     if rows:
-        fieldnames = sorted({k for r in rows for k in r.keys()})
+        fieldnames = sorted({k for r in rows for k in r})
         with (out_dir / "runs.csv").open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()

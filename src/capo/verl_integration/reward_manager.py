@@ -18,7 +18,8 @@ rewards, which can then be fed into a GRPO / PPO trainer.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import torch
 
@@ -29,7 +30,6 @@ from capo.verl_integration.reward_fn import CAPOConfig, capo_reward_fn
 # supposed to be imported in isolation without VERL.
 try:
     from verl import DataProto
-    from verl.utils.reward_score import _default_compute_score
 except ImportError as exc:  # pragma: no cover - only triggered w/o VERL
     raise ImportError(
         "CAPORewardManager requires VERL to be installed. "
@@ -114,7 +114,8 @@ def _build_wrong_step_token_mask(
 
         # Check that the response tokens match the step tokens at this offset.
         if not torch.equal(
-            response_ids[offset : offset + step_len], step_token_ids_tensor,
+            response_ids[offset : offset + step_len],
+            step_token_ids_tensor,
         ):
             # Alignment failure; see comment above.
             return mask
@@ -208,8 +209,10 @@ class CAPORewardManager:
         self.reward_kwargs = reward_kwargs
 
     def __call__(
-        self, data: DataProto, return_dict: bool = False,
-    ) -> torch.Tensor | Dict[str, Any]:
+        self,
+        data: DataProto,
+        return_dict: bool = False,
+    ) -> torch.Tensor | dict[str, Any]:
         """
         Compute CAPO token-level rewards for a batch of data.
 
@@ -238,9 +241,7 @@ class CAPORewardManager:
             reward_tensor = data.batch["token_level_rewards"]
             if return_dict:
                 reward_extra_keys = data.meta_info.get("reward_extra_keys", [])
-                reward_extra_info = {
-                    key: data.non_tensor_batch[key] for key in reward_extra_keys
-                }
+                reward_extra_info = {key: data.non_tensor_batch[key] for key in reward_extra_keys}
                 return {
                     "reward_tensor": reward_tensor,
                     "reward_extra_info": reward_extra_info,
@@ -250,11 +251,13 @@ class CAPORewardManager:
         # Initialize reward tensor with zeros.
         responses = data.batch["responses"]
         reward_tensor = torch.zeros_like(
-            responses, dtype=torch.float32, device=responses.device,
+            responses,
+            dtype=torch.float32,
+            device=responses.device,
         )
 
-        reward_extra_info: Dict[str, List[Any]] = defaultdict(list)
-        already_print_data_sources: Dict[str, int] = {}
+        reward_extra_info: dict[str, list[Any]] = defaultdict(list)
+        already_print_data_sources: dict[str, int] = {}
 
         batch_size = len(data)
 
@@ -276,12 +279,8 @@ class CAPORewardManager:
             valid_response_ids = response_ids[:valid_response_length]
 
             # Decode prompt and response into strings.
-            prompt_str = self.tokenizer.decode(
-                valid_prompt_ids, skip_special_tokens=True
-            )
-            solution_str = self.tokenizer.decode(
-                valid_response_ids, skip_special_tokens=True
-            )
+            prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
+            solution_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
 
             # Extract non-tensor metadata.
             non_tensor = data_item.non_tensor_batch
@@ -310,8 +309,8 @@ class CAPORewardManager:
                 )
 
             score = float(result["score"])
-            steps: List[str] = list(result.get("steps", []))
-            wrong_step_indices: List[int] = list(result.get("wrong_step_indices", []))
+            steps: list[str] = list(result.get("steps", []))
+            wrong_step_indices: list[int] = list(result.get("wrong_step_indices", []))
 
             # 2. Convert flawed-step info into a token mask.
             wrong_token_mask = _build_wrong_step_token_mask(

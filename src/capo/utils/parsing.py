@@ -8,10 +8,8 @@ to test and to evolve without touching the core VERL integration.
 
 from __future__ import annotations
 
-from typing import List
 
-
-def segment_solution_into_steps(solution_str: str) -> List[str]:
+def segment_solution_into_steps(solution_str: str) -> list[str]:
     """
     Segment a solution string into reasoning steps.
 

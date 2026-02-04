@@ -1,13 +1,13 @@
 # tests/test_s_kband_and_grad.py
-import pytest
-import torch
 import math
 
+import torch
+
 from capo.eb_core import (
-    s_kband,
     eb_statistics,
     grad_ell_beta_closed_form,
     numeric_grad_rho_eta,
+    s_kband,
 )
 
 
@@ -60,7 +60,14 @@ def test_eb_stats_and_gradients_are_finite():
     assert math.isfinite(grad_beta)
 
     grad_rho, grad_eta = numeric_grad_rho_eta(
-        L=L, g=g, beta=beta, rho=rho, k=k, eta=eta, dlog_pi_rho=0.0, dlog_pi_eta=0.0,
+        L=L,
+        g=g,
+        beta=beta,
+        rho=rho,
+        k=k,
+        eta=eta,
+        dlog_pi_rho=0.0,
+        dlog_pi_eta=0.0,
     )
     assert math.isfinite(grad_rho)
     assert math.isfinite(grad_eta)

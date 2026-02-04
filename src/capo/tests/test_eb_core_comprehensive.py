@@ -20,17 +20,15 @@ import torch
 
 from capo.eb_core import (
     EBStats,
-    s_kband,
-    eb_statistics,
-    eb_objective,
-    grad_ell_beta_closed_form,
-    numeric_grad_rho_eta,
     acf_moment_estimate,
     eb_lite_fit_beta_and_weights,
-    kband_weights,
+    eb_objective,
+    eb_statistics,
+    grad_ell_beta_closed_form,
     joint_eb_update_kband,
+    numeric_grad_rho_eta,
+    s_kband,
 )
-
 
 # ===========================================================================
 # Tests for s_kband (stretched-geometric k-banded dependence factor)
@@ -286,7 +284,12 @@ class TestJointEBUpdate:
         L = torch.rand(16) * 100 + 16
 
         beta_new, rho_new, eta_new, w = joint_eb_update_kband(
-            g=g, L=L, beta_init=1.0, rho_init=0.0, eta_init=1.0, k=16,
+            g=g,
+            L=L,
+            beta_init=1.0,
+            rho_init=0.0,
+            eta_init=1.0,
+            k=16,
         )
 
         assert isinstance(beta_new, float)
@@ -302,7 +305,12 @@ class TestJointEBUpdate:
         L = torch.rand(32) * 200 + 16
 
         _, _, _, w = joint_eb_update_kband(
-            g=g, L=L, beta_init=1.0, rho_init=0.3, eta_init=1.0, k=32,
+            g=g,
+            L=L,
+            beta_init=1.0,
+            rho_init=0.3,
+            eta_init=1.0,
+            k=32,
         )
 
         assert math.isclose(w.sum().item(), 1.0, rel_tol=1e-5)
@@ -428,7 +436,7 @@ class TestEdgeCases:
 
     def test_high_rho(self):
         """High ρ (near 1) should not cause numerical issues."""
-        g = torch.randn(8)
+        torch.randn(8)
         L = torch.rand(8) * 200 + 16
 
         s = s_kband(L, rho=0.99, k=32, eta=1.0)

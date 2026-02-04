@@ -30,7 +30,6 @@ The VERL integration code (advantage estimators) calls into this module.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import torch
 
@@ -77,7 +76,13 @@ class EBStats:
     RSS_omega: float
 
 
-def s_kband(L: Tensor, rho: float, k: int, eta: float, eps: float = 1e-8,) -> Tensor:
+def s_kband(
+    L: Tensor,
+    rho: float,
+    k: int,
+    eta: float,
+    eps: float = 1e-8,
+) -> Tensor:
     """
     Stretched-geometric k-banded dependence factor s(L; ρ, k, η).
 
@@ -133,7 +138,7 @@ def s_kband(L: Tensor, rho: float, k: int, eta: float, eps: float = 1e-8,) -> Te
 
         h = torch.arange(1, m_i + 1, dtype=torch.double)
         # Use h^η in the exponent, as in the stretched-geometric model.
-        powers = rho ** (h ** eta)
+        powers = rho ** (h**eta)
         summand = (Li - h) * powers
         s_vals[idx] = 1.0 + (2.0 / Li) * summand.sum()
 
@@ -332,7 +337,7 @@ def grad_ell_beta_closed_form(
 
     term1 = 0.5 * (-sum_logL + sum_omega_logL / Lambda)
 
-    sum_omega_e2_logL = (omega * (e ** 2) * logL).sum()
+    sum_omega_e2_logL = (omega * (e**2) * logL).sum()
     term2 = 0.5 * (G - 1) * sum_omega_e2_logL / RSS
 
     g_beta = term1 + term2 + dlog_pi_beta
@@ -351,7 +356,7 @@ def numeric_grad_rho_eta(
     dlog_pi_rho: float = 0.0,
     dlog_pi_eta: float = 0.0,
     eps: float = 1e-8,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Numerical gradients (∂ℓ/∂ρ, ∂ℓ/∂η) via central finite differences.
 
@@ -404,10 +409,10 @@ def acf_moment_estimate(
     increments: Tensor,
     mask: Tensor,
     k: int,
-    rho_grid: Optional[Tensor] = None,
-    eta_grid: Optional[Tensor] = None,
+    rho_grid: Tensor | None = None,
+    eta_grid: Tensor | None = None,
     eps: float = 1e-8,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     ACF-moment estimator for dependence shape ξ = (ρ, η).
 
@@ -512,7 +517,7 @@ def acf_moment_estimate(
     for rho in rho_grid:
         for eta in eta_grid:
             # Predicted correlation ρ^{h^η} for observed lags h.
-            preds = rho ** (h_vals ** eta)
+            preds = rho ** (h_vals**eta)
             loss = torch.mean((r - preds) ** 2).item()
             if loss < best_loss:
                 best_loss = loss
@@ -523,8 +528,12 @@ def acf_moment_estimate(
 
 
 def eb_lite_fit_beta_and_weights(
-    g: Tensor, L: Tensor, eps: float = 1e-8, max_iters: int = 20, tol: float = 1e-4,
-) -> Tuple[float, Tensor, Tensor]:
+    g: Tensor,
+    L: Tensor,
+    eps: float = 1e-8,
+    max_iters: int = 20,
+    tol: float = 1e-4,
+) -> tuple[float, Tensor, Tensor]:
     """
     EB-lite (Algorithm~\\ref{alg:eb-lite}): length-only EB estimator.
 
@@ -598,10 +607,7 @@ def eb_lite_fit_beta_and_weights(
         # Provisional weights: ω_i ∝ L_i^{-β_new}
         omega = L.pow(-beta_new)
         omega_sum = omega.sum()
-        if omega_sum <= eps:
-            w = torch.full_like(omega, 1.0 / omega.numel())
-        else:
-            w = omega / omega_sum
+        w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
 
         m_new = (w * g).sum()
 
@@ -616,18 +622,20 @@ def eb_lite_fit_beta_and_weights(
     # Final weights at β̂.
     omega = L.pow(-beta_hat)
     omega_sum = omega.sum()
-    if omega_sum <= eps:
-        w = torch.full_like(omega, 1.0 / omega.numel())
-    else:
-        w = omega / omega_sum
+    w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
 
     m = (w * g).sum()
     return float(beta_hat), w.float(), m.float()
 
 
 def kband_weights(
-    L: Tensor, beta: float, rho: float, eta: float, k: int, eps: float = 1e-8,
-) -> Tuple[Tensor, Tensor]:
+    L: Tensor,
+    beta: float,
+    rho: float,
+    eta: float,
+    k: int,
+    eps: float = 1e-8,
+) -> tuple[Tensor, Tensor]:
     """
     k-banded covariance weights (Algorithm~\\ref{alg:kband-weights}).
 
@@ -663,10 +671,7 @@ def kband_weights(
     omega = omega.clamp_min(eps)
 
     omega_sum = omega.sum()
-    if omega_sum <= eps:
-        w = torch.full_like(omega, 1.0 / omega.numel())
-    else:
-        w = omega / omega_sum
+    w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
 
     return s.float(), w.float()
 
@@ -685,16 +690,16 @@ def joint_eb_update_kband(
     steps_xi: int = 1,
     ema_beta: float = 1.0,
     ema_xi: float = 1.0,
-    beta_bounds: Tuple[float, float] = (0.0, 2.0),
+    beta_bounds: tuple[float, float] = (0.0, 2.0),
     rho_max: float = 0.99,
     dlog_pi_beta: float = 0.0,
     dlog_pi_rho: float = 0.0,
     dlog_pi_eta: float = 0.0,
     use_acf_warmstart: bool = False,
-    increments: Optional[Tensor] = None,
-    increments_mask: Optional[Tensor] = None,
+    increments: Tensor | None = None,
+    increments_mask: Tensor | None = None,
     eps: float = 1e-8,
-) -> Tuple[float, float, float, Tensor]:
+) -> tuple[float, float, float, Tensor]:
     """
     Joint EB update for (β, ρ, η) under the k-banded dependence model.
 
@@ -767,9 +772,7 @@ def joint_eb_update_kband(
 
     # Optional warm-start for (ρ, η) from token-level autocorrelations.
     if use_acf_warmstart and increments is not None and increments_mask is not None:
-        rho_hat, eta_hat = acf_moment_estimate(
-            increments=increments, mask=increments_mask, k=k
-        )
+        rho_hat, eta_hat = acf_moment_estimate(increments=increments, mask=increments_mask, k=k)
         # Project into admissible region and blend with old parameters.
         rho = max(-rho_max, min(rho_hat, rho_max))
         eta = max(0.0, eta_hat)

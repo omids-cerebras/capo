@@ -87,7 +87,7 @@ At step \(t\):
   - Algorithm: “EB-lite (no dependence)” in the text.
   - Function implementing EB fit:
     `eb_lite_fit_beta_and_weights(g, L)`
-  - VERL estimator: `capo_eb_lite`  
+  - VERL estimator: `capo_eb_lite`
     (`compute_capo_eb_lite_advantage`):
     - Collapses to \((g_i, L_i)\),
     - Runs EB-lite,
@@ -108,7 +108,7 @@ At step \(t\):
     - `acf_moment_fit(Y, mask, k)` – moment-based estimator for
       \((\rho, \eta)\) from increments \(\{Y_{i,\tau}\}\).
 
-  - VERL estimator: `capo_eb`  
+  - VERL estimator: `capo_eb`
     (`compute_capo_eb_full_advantage`):
     - Optional ACF-based initialization of \((\rho, \eta)\),
     - Few gradient steps for β and ξ,

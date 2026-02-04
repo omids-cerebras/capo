@@ -145,9 +145,9 @@ and priors $p(\mu)\propto 1$, $\ \sigma^2\sim\mathrm{Inv\text{-}Gamma}(a_0,b_0)$
 the conditional posterior of $\sigma^2$ given $(\beta,\xi)$ and data $\{g_i\}_{i=1}^G$ is
 \begin{equation}
   \sigma^2 \,\big|\, \beta,\xi,\{g_i\}
-  \ \sim\ 
+  \ \sim\
   \mathrm{Inv\text{-}Gamma}\!\left(
-    a_0+\frac{G-1}{2},\ 
+    a_0+\frac{G-1}{2},\
     b_0+\frac{1}{2}\,\mathrm{RSS}_\omega(\beta,\xi)
   \right),
   \tag{\ref{eq:sigma2_posterior}}
@@ -174,7 +174,7 @@ p(\{g_i\}\mid \mu,\sigma^2,\beta,\xi)
 \]
 Dropping factors independent of $(\mu,\sigma^2)$ (i.e., $\prod_i \sqrt{\omega_i}$), the kernel is
 \begin{equation}
-p(\{g_i\}\mid \mu,\sigma^2,\beta,\xi)\ \propto\ 
+p(\{g_i\}\mid \mu,\sigma^2,\beta,\xi)\ \propto\
 (\sigma^2)^{-G/2}\,
 \exp\!\left\{-\frac{1}{2\sigma^2}\sum_{i=1}^G \omega_i(g_i-\mu)^2\right\}.
 \label{eq:lik-kernel}
@@ -886,7 +886,7 @@ p(\mu,\sigma^2\mid\mathbf g,\vartheta)
 \exp\!\left(-\frac{\mathrm{RSS}_\omega}{2\sigma^2}\right).
 \]
 
-\emph{Conditional posterior of \(\mu\).}  
+\emph{Conditional posterior of \(\mu\).}
 For fixed \(\sigma^2\), the dependence on \(\mu\) is exactly that of a Normal kernel with mean \(m\) and variance \(\sigma^2/\Lambda_\omega\).
 Normalizing in \(\mu\) therefore yields
 \[
@@ -894,7 +894,7 @@ Normalizing in \(\mu\) therefore yields
 \sim \mathcal N\!\big(m(\beta,\xi),\,\sigma^2/\Lambda_\omega(\beta,\xi)\big).
 \]
 
-\emph{Marginal posterior of \(\sigma^2\).}  
+\emph{Marginal posterior of \(\sigma^2\).}
 Integrate out \(\mu\) from \(p(\mu,\sigma^2\mid\mathbf g,\vartheta)\).
 The \(\mu\)-integral is
 \[
@@ -1412,11 +1412,11 @@ which is the standard \(\Delta L\) choice of weights.
 
 \begin{assumption}[Regularity and identifiability]
 \label{assump:reg}
-(i) \(\{(g_i,L_i)\}_{i\ge 1}\) are i.i.d.\ or strictly stationary and ergodic with \(\sup_i \mathbb E[g_i^4]<\infty\).  
+(i) \(\{(g_i,L_i)\}_{i\ge 1}\) are i.i.d.\ or strictly stationary and ergodic with \(\sup_i \mathbb E[g_i^4]<\infty\).
 
-(ii) The parameter space \(\Theta=\{\beta\}\times\Xi\) is compact (for example, \(\beta\in[\beta_{\min},\beta_{\max}]\), \(|\rho|\le \rho_{\max}<1\), \(\eta\in[0,\eta_{\max}]\), and fixed \(k\)).  
+(ii) The parameter space \(\Theta=\{\beta\}\times\Xi\) is compact (for example, \(\beta\in[\beta_{\min},\beta_{\max}]\), \(|\rho|\le \rho_{\max}<1\), \(\eta\in[0,\eta_{\max}]\), and fixed \(k\)).
 
-(iii) The population objective \(\ell_\infty(\vartheta):=\lim_{G\to\infty}G^{-1}\,\mathbb E[\ell_G(\vartheta)]\) exists and has a unique maximizer \(\vartheta^\star=(\beta^\star,\xi^\star)\).  
+(iii) The population objective \(\ell_\infty(\vartheta):=\lim_{G\to\infty}G^{-1}\,\mathbb E[\ell_G(\vartheta)]\) exists and has a unique maximizer \(\vartheta^\star=(\beta^\star,\xi^\star)\).
 
 (iv) \(s(L;\xi)\) is smooth in \(\xi\) and bounded away from \(0\) and \(+\infty\) on \(\mathrm{supp}(L)\times\Xi\).
 \end{assumption}
@@ -1871,7 +1871,7 @@ v_i(\vartheta)=\sigma^2 L_i^{\beta}\,s(L_i;\rho)
 and $s(L;\rho)$ from \eqref{eq:cs-shape}, the posterior-precision (Bayes) weights satisfy, up to a common factor,
 \begin{equation}
   x_i^{\mathrm{Bayes}}
-  \ \propto\ 
+  \ \propto\
   \frac{1}{L_i^{\beta}\,s(L_i;\rho)}
   \;=\;
   \frac{1}{L_i^{\beta}\big(1+\rho(L_i-1)\big)}.

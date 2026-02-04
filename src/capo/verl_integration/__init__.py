@@ -26,9 +26,9 @@ adv_estimators
     Empirical Bayes advantage estimators (EB-lite and full EB).
 """
 
+from .adv_estimators import compute_capo_empirical_bayes_advantage
 from .reward_fn import CAPOConfig, capo_reward_fn
 from .reward_manager import CAPORewardManager
-from .adv_estimators import compute_capo_empirical_bayes_advantage
 
 __all__ = [
     "CAPOConfig",

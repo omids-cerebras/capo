@@ -61,4 +61,4 @@ for method in "${METHODS[@]}"; do
 done
 
 echo
-echo "E4 complete. The paper artifact builder will use these runs to produce fig_length_deciles.pdf." 
+echo "E4 complete. The paper artifact builder will use these runs to produce fig_length_deciles.pdf."

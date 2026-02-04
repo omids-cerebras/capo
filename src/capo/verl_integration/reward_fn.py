@@ -25,8 +25,9 @@ where C = `correct_reward`, P = `process_penalty`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 
 @dataclass
@@ -74,7 +75,7 @@ class CAPOConfig:
     process_penalty: float = 1.0
     num_critiques: int = 4
     vote_mode: str = "intersection"
-    genprm_model_name: Optional[str] = None
+    genprm_model_name: str | None = None
     genprm_temperature: float = 0.0
 
 
@@ -104,7 +105,7 @@ class GenPRMClient:
         self,
         question: str,
         solution: str,
-        ground_truth: Optional[str],
+        ground_truth: str | None,
         steps: Sequence[str],
     ) -> Sequence[bool]:
         """
@@ -143,7 +144,7 @@ class GenPRMClient:
         )
 
 
-def _get_or_create_config(reward_kwargs: Dict[str, Any]) -> CAPOConfig:
+def _get_or_create_config(reward_kwargs: dict[str, Any]) -> CAPOConfig:
     """
     Build a CAPOConfig from generic reward_kwargs.
 
@@ -162,7 +163,8 @@ def _get_or_create_config(reward_kwargs: Dict[str, Any]) -> CAPOConfig:
 
 
 def _get_or_create_genprm_client(
-    config: CAPOConfig, reward_kwargs: Dict[str, Any],
+    config: CAPOConfig,
+    reward_kwargs: dict[str, Any],
 ) -> GenPRMClient:
     """
     Obtain a GenPRMClient for CAPO.
@@ -193,7 +195,7 @@ def _get_or_create_genprm_client(
     return GenPRMClient(config=config)
 
 
-def _segment_solution_into_steps(solution_str: str) -> List[str]:
+def _segment_solution_into_steps(solution_str: str) -> list[str]:
     """
     Very simple solution segmentation into steps.
 
@@ -215,8 +217,9 @@ def _segment_solution_into_steps(solution_str: str) -> List[str]:
 
 
 def _aggregate_step_judgements(
-    critiques: Sequence[Sequence[bool]], vote_mode: str,
-) -> Tuple[List[bool], List[int]]:
+    critiques: Sequence[Sequence[bool]],
+    vote_mode: str,
+) -> tuple[list[bool], list[int]]:
     """
     Aggregate multiple GenPRM critiques into final per-step judgements.
 
@@ -257,8 +260,8 @@ def _aggregate_step_judgements(
                 f"expected {num_steps}, got {len(c)}."
             )
 
-    wrong_step_indices: List[int] = []
-    step_correctness: List[bool] = []
+    wrong_step_indices: list[int] = []
+    step_correctness: list[bool] = []
 
     for j in range(num_steps):
         # Collect the decision for step j across all critiques.
@@ -284,10 +287,10 @@ def _aggregate_step_judgements(
 def capo_reward_fn(
     data_source: str,
     solution_str: str,
-    ground_truth: Optional[str],
-    extra_info: Optional[Dict[str, Any]] = None,
+    ground_truth: str | None,
+    extra_info: dict[str, Any] | None = None,
     **reward_kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Core CAPO reward function: outcome + process composition.
 
@@ -387,7 +390,7 @@ def capo_reward_fn(
     # 3. Run GenPRM several times (num_critiques) and collect per-step
     #    judgements. Each critique is a sequence of booleans of length
     #    len(steps), where False indicates a flawed step.
-    critiques: List[Sequence[bool]] = []
+    critiques: list[Sequence[bool]] = []
     for _ in range(config.num_critiques):
         step_is_correct = genprm_client.judge_steps(
             question=data_source,
@@ -398,7 +401,8 @@ def capo_reward_fn(
         critiques.append(step_is_correct)
 
     step_correctness, wrong_step_indices = _aggregate_step_judgements(
-        critiques=critiques, vote_mode=config.vote_mode,
+        critiques=critiques,
+        vote_mode=config.vote_mode,
     )
 
     # If there are no steps, treat as "no process information".
