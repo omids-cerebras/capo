@@ -27,7 +27,6 @@ keywords = ["reinforcement-learning", "rlhf", "rlvr", "policy-optimization", "ve
 dependencies = [
   "torch>=2.1",
   "numpy>=1.24",
-  "verl>=0.3",
 ]
 
 [project.optional-dependencies]
@@ -64,7 +63,7 @@ addopts = "-ra -q"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = ["src/capo/experiments/recipe", "src/capo/experiments/scripts"]
+exclude = ["src/capo/experiments/verl", "src/capo/experiments/recipe", "src/capo/experiments/scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -1,0 +1,57 @@
+# Minimal smoke test config for CAPO training
+#
+# This config overrides the base capo_trainer.yaml with minimal settings
+# suitable for quick local testing without GPUs.
+#
+# Usage:
+#   python -m capo.experiments.recipe.capo.main_capo \
+#     --config-name smoke_test \
+#     actor_rollout_ref.model.path=<model>
+#
+# Or for a truly minimal test with a tiny model:
+#   python -m capo.experiments.recipe.capo.main_capo \
+#     --config-name smoke_test \
+#     actor_rollout_ref.model.path=sshleifer/tiny-gpt2
+
+defaults:
+  - capo_trainer
+  - _self_
+
+seed: 42
+
+trainer:
+  project_name: capo_smoke
+  # Minimal training settings
+  total_training_steps: 2
+  test_freq: 1
+  save_freq: -1
+  val_before_train: true
+  # Single node, minimal GPU
+  nnodes: 1
+  n_gpus_per_node: 1
+
+data:
+  # Small batch for smoke test
+  train_batch_size: 4
+  max_prompt_length: 64
+  max_response_length: 64
+
+actor_rollout_ref:
+  rollout:
+    # Minimal rollouts
+    n: 2
+    val_kwargs:
+      n: 2
+  actor:
+    # Smaller learning rate for stability
+    optim:
+      lr: 1e-6
+
+# Use simplest CAPO estimator for smoke test
+algorithm:
+  adv_estimator: capo_eb_lite
+
+capo:
+  eb_lite:
+    max_iters: 5
+    tol: 1e-3

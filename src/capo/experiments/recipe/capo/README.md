@@ -15,8 +15,8 @@ Set:
 
 - `algorithm.adv_estimator: capo | capo_eb_lite | capo_eb`
 
-These advantage estimators are registered in the vendored runtime:
-- `experiments/capo_paper/verl/trainer/ppo/core_algos.py`
+These advantage estimators are registered in the vendored VERL:
+- `experiments/verl/trainer/ppo/core_algos.py`
 
 CAPO hyperparameters live under the `capo:` config block.
 
@@ -69,7 +69,8 @@ capo:
 Override any field from the CLI, e.g.:
 
 ```bash
-python experiments/capo_paper/recipe/capo/main_capo.py \
+cd src/capo/experiments
+python recipe/capo/main_capo.py \
   algorithm.adv_estimator=capo_eb \
   capo.eb_full.k_band=16
 ```

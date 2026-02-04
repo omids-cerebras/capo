@@ -5,20 +5,21 @@ set -euo pipefail
 # Common helpers for CAPO paper experiment scripts.
 #
 # Goals:
-#   - Keep each experiment script short and readable (DeltaL-style).
+#   - Keep each experiment script short and readable.
 #   - Provide a single, consistent CLI across scripts.
 #   - Ensure the vendored VERL runtime is used (via PYTHONPATH).
 #   - Make output directories deterministic and paper-artifact friendly.
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../../.." && pwd)"
 
 export PYTHONUNBUFFERED=1
 export HYDRA_FULL_ERROR=1
 
-# Ensure vendored VERL is imported instead of any site-packages `verl`.
-export PYTHONPATH="$REPO_ROOT/experiments/capo_paper:$REPO_ROOT:${PYTHONPATH:-}"
+# Ensure vendored VERL is imported instead of any site-packages verl.
+# The vendored copy has CAPO-specific patches (advantage estimators, etc.).
+export PYTHONPATH="$REPO_ROOT/src/capo/experiments:$REPO_ROOT:${PYTHONPATH:-}"
 
 common_usage() {
   cat <<USAGE
@@ -123,7 +124,7 @@ run_one() {
   local outdir="$OUTPUT_ROOT/$exp_name/$now"
   mkdir -p "$outdir"
 
-  local entrypoint="$REPO_ROOT/experiments/capo_paper/recipe/capo/main_capo.py"
+  local entrypoint="$REPO_ROOT/src/capo/experiments/recipe/capo/main_capo.py"
   if [[ ! -f "$entrypoint" ]]; then
     echo "ERROR: entrypoint not found: $entrypoint" >&2
     exit 1

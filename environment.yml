@@ -7,7 +7,7 @@ channels:
 
 dependencies:
   - python=3.11
-  - pytorch=2.4.1
+  - pytorch>=2.4
   - pytorch-cuda=12.1
   - numpy=1.26
   - pandas
@@ -22,6 +22,10 @@ dependencies:
   - wandb
   - matplotlib
   - seaborn
-  - pip
-  - pip:
-      - verl==0.3.0.post1
+  # Dev tools
+  - pre-commit
+  - ruff
+  # Vendored verl dependencies
+  - tensordict
+  - codetiming
+  - cloudpickle
