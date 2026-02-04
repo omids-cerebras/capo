@@ -132,12 +132,15 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                 if debug:
                     print(f"type 0 compilation error = {e}")
                 results.append(-2)
-                return results, {
-                    "error": repr(e),
-                    # "error_code": -1,
-                    # "error_message": "Compilation Error",
-                    "traceback": clean_traceback(error_traceback),
-                }
+                return (
+                    results,
+                    {
+                        "error": repr(e),
+                        # "error_code": -1,
+                        # "error_message": "Compilation Error",
+                        "traceback": clean_traceback(error_traceback),
+                    },
+                )
             signal.alarm(0)
 
         elif which_type == CODE_TYPE.standard_input:
@@ -196,12 +199,15 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                 if debug:
                     print(f"type 1 compilation error = {e}")
                 results.append(-2)
-                return results, {
-                    "error": repr(e),
-                    # "error_code": -1,
-                    # "error_message": "Compilation Error",
-                    "traceback": clean_traceback(error_traceback),
-                }
+                return (
+                    results,
+                    {
+                        "error": repr(e),
+                        # "error_code": -1,
+                        # "error_message": "Compilation Error",
+                        "traceback": clean_traceback(error_traceback),
+                    },
+                )
             signal.alarm(0)
         if debug:
             print(f"get method = {datetime.now().time()}")
@@ -214,12 +220,15 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
             error_info = sys.exc_info()
             print(f"unable to get function error = {error_info}")
             results.append(-2)
-            return results, {
-                "error": repr(error_info),
-                # "error_code": -1,
-                # "error_message": "Unable to extract code",
-                "traceback": clean_traceback(error_traceback),
-            }
+            return (
+                results,
+                {
+                    "error": repr(error_info),
+                    # "error_code": -1,
+                    # "error_message": "Unable to extract code",
+                    "traceback": clean_traceback(error_traceback),
+                },
+            )
 
         for index, inputs in enumerate(in_outs["inputs"]):
             raw_inputs = inputs
@@ -298,13 +307,16 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                         pass
                     results.append(tmp_result)
                     if tmp_result is not True:
-                        return results, {
-                            "output": raw_true_output_copy,
-                            "expected": raw_outputs,
-                            "inputs": raw_inputs,
-                            # "error_code": -2,
-                            "error_message": "Wrong Answer",
-                        }
+                        return (
+                            results,
+                            {
+                                "output": raw_true_output_copy,
+                                "expected": raw_outputs,
+                                "inputs": raw_inputs,
+                                # "error_code": -2,
+                                "error_message": "Wrong Answer",
+                            },
+                        )
                     # reset the alarm
                     signal.alarm(0)
                 except Exception as e:
@@ -316,10 +328,13 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                             f"Standard input runtime error or time limit exceeded error = {e}"
                         )
                     results.append(-1)
-                    return results, {
-                        "error": repr(e),
-                        "traceback": clean_traceback(error_traceback),
-                    }
+                    return (
+                        results,
+                        {
+                            "error": repr(e),
+                            "traceback": clean_traceback(error_traceback),
+                        },
+                    )
                 faulthandler.disable()
                 signal.alarm(0)
                 if debug:
@@ -350,10 +365,13 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                             f"Call-based runtime error or time limit exceeded error = {repr(e)}{e}"
                         )
                         results.append(-1)
-                        return results, {
-                            "error": repr(e),
-                            "traceback": clean_traceback(error_traceback),
-                        }
+                        return (
+                            results,
+                            {
+                                "error": repr(e),
+                                "traceback": clean_traceback(error_traceback),
+                            },
+                        )
                     signal.alarm(0)
                 raw_true_output = output[0]
                 raw_true_output_copy = truncatefn(raw_true_output, 200)
@@ -553,13 +571,16 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
 
                 results.append(tmp_result)
                 if tmp_result is not True:
-                    return results, {
-                        "output": raw_true_output_copy,
-                        "expected": raw_outputs,
-                        "inputs": raw_inputs,
-                        # "error_code": -2,
-                        "error_message": "Wrong Answer",
-                    }
+                    return (
+                        results,
+                        {
+                            "output": raw_true_output_copy,
+                            "expected": raw_outputs,
+                            "inputs": raw_inputs,
+                            # "error_code": -2,
+                            "error_message": "Wrong Answer",
+                        },
+                    )
 
                 if debug:
                     nl = "\n"

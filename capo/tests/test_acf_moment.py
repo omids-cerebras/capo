@@ -26,12 +26,7 @@ def _simulate_ar1_increments(
 
     for i in range(num_traj):
         # Simple AR(1): Y_{τ} = ρ Y_{τ-1} + ε_τ, ε_τ ~ N(0, σ^2)
-        eps = torch.normal(
-            mean=0.0,
-            std=sigma_eps,
-            size=(length,),
-            generator=rng,
-        )
+        eps = torch.normal(mean=0.0, std=sigma_eps, size=(length,), generator=rng,)
         y = torch.zeros(length, dtype=torch.float32)
         for t in range(1, length):
             y[t] = rho_star * y[t - 1] + eps[t]

@@ -147,11 +147,47 @@ echo
 echo "Installing CAPO in editable mode (pip-style -e .) into $VENV_DIR using uv..."
 VIRTUAL_ENV="$VENV_DIR" "$UV_BIN" pip install --python "$ENV_PY" -e .
 
+###############################################################################
+# Step 6: Set up PYTHONPATH for vendored VERL
+###############################################################################
+
+ACTIVATE_SCRIPT="$VENV_DIR/bin/activate"
+CANONICAL_ROOT="$(cd "$(dirname "$0")" && pwd)"
+VERL_PATH="$CANONICAL_ROOT/experiments/capo_paper"
+
+# Check if we already added VERL to activate script
+if ! grep -q "CAPO_VERL_PATH" "$ACTIVATE_SCRIPT" 2>/dev/null; then
+  echo
+  echo "Adding vendored VERL to PYTHONPATH in activate script..."
+  cat >> "$ACTIVATE_SCRIPT" << 'VERL_BLOCK'
+
+# --- CAPO: Add vendored VERL to PYTHONPATH ---
+export CAPO_VERL_PATH="__VERL_PATH__"
+export CAPO_ROOT="__CAPO_ROOT__"
+if [[ ":$PYTHONPATH:" != *":$CAPO_VERL_PATH:"* ]]; then
+  export PYTHONPATH="${CAPO_VERL_PATH}:${CAPO_ROOT}:${PYTHONPATH:-}"
+fi
+# --- End CAPO VERL setup ---
+VERL_BLOCK
+
+  # Replace placeholders with actual paths
+  sed -i "s|__VERL_PATH__|$VERL_PATH|g" "$ACTIVATE_SCRIPT"
+  sed -i "s|__CAPO_ROOT__|$CANONICAL_ROOT|g" "$ACTIVATE_SCRIPT"
+fi
+
 echo
-echo "Environment setup complete."
+echo "============================================================"
+echo "Environment setup complete!"
+echo "============================================================"
 echo
 echo "To activate the environment, run:"
 echo "  source \"$VENV_DIR/bin/activate\""
 echo
+echo "This will automatically set PYTHONPATH to include:"
+echo "  - CAPO root: $CANONICAL_ROOT"
+echo "  - Vendored VERL: $VERL_PATH"
+echo
 echo "Then you can run tests with:"
 echo "  pytest"
+echo
+echo "Or run experiments (see experiments/capo_paper/docs/TUTORIAL.md)"

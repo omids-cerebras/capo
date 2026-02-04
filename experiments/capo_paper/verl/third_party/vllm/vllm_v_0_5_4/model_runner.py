@@ -104,7 +104,8 @@ class ModelRunner(ModelRunner):
             )
         self.model_memory_usage = m.consumed_memory
         logger.info(
-            "Loading model weights took %.4f GB", self.model_memory_usage / float(2**30)
+            "Loading model weights took %.4f GB",
+            self.model_memory_usage / float(2 ** 30),
         )
 
         if self.lora_config:

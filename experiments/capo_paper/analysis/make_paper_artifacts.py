@@ -370,11 +370,7 @@ def main() -> None:
 
     tab_main = _latex_tabular(
         "lcc",
-        [
-            "Method",
-            "CountDown (1.5B, 2048)",
-            "CountDown (1.5B, 8192)",
-        ],
+        ["Method", "CountDown (1.5B, 2048)", "CountDown (1.5B, 8192)",],
         table_rows,
     )
     (paper_out / "tab_main_accuracy.tex").write_text(tab_main, encoding="utf-8")

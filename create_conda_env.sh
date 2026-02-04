@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#
+# create_conda_env.sh
+#
+# Create a Conda environment for CAPO with all dependencies including the
+# vendored VERL.
+#
+# This script:
+#   1. Creates a conda environment with Python 3.11
+#   2. Installs PyTorch with CUDA support
+#   3. Installs all dependencies from requirements.in
+#   4. Installs CAPO in editable mode
+#   5. Sets up PYTHONPATH for the vendored VERL
+#
+# Usage:
+#   ./create_conda_env.sh              # creates 'capo' environment
+#   ./create_conda_env.sh myenv        # creates 'myenv' environment
+#
+#   CUDA_VERSION=cu118 ./create_conda_env.sh  # use CUDA 11.8 PyTorch wheel
+#   PYTHON_VERSION=3.10 ./create_conda_env.sh # use Python 3.10
+#
+# Requirements:
+#   - conda or mamba must be installed and available on PATH
+#
+
+set -euo pipefail
+
+# Configuration
+ENV_NAME="${1:-capo}"
+PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
+CUDA_VERSION="${CUDA_VERSION:-cu121}"
+PYTORCH_VERSION="${PYTORCH_VERSION:-2.4.1}"
+
+# Get the directory where this script is located (CAPO root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERL_PATH="$SCRIPT_DIR/experiments/capo_paper"
+
+echo "============================================================"
+echo "CAPO Conda Environment Setup"
+echo "============================================================"
+echo
+echo "Configuration:"
+echo "  Environment name: $ENV_NAME"
+echo "  Python version:   $PYTHON_VERSION"
+echo "  CUDA version:     $CUDA_VERSION"
+echo "  PyTorch version:  $PYTORCH_VERSION"
+echo "  CAPO root:        $SCRIPT_DIR"
+echo "  VERL path:        $VERL_PATH"
+echo
+
+###############################################################################
+# Step 1: Check for conda/mamba
+###############################################################################
+
+if command -v mamba >/dev/null 2>&1; then
+    CONDA_CMD="mamba"
+    echo "Using mamba for faster package resolution."
+elif command -v conda >/dev/null 2>&1; then
+    CONDA_CMD="conda"
+    echo "Using conda (consider installing mamba for faster setup)."
+else
+    echo "ERROR: Neither 'conda' nor 'mamba' found on PATH." >&2
+    echo "       Please install Miniconda or Anaconda first." >&2
+    echo "       See: https://docs.conda.io/en/latest/miniconda.html" >&2
+    exit 1
+fi
+
+###############################################################################
+# Step 2: Create or update the conda environment
+###############################################################################
+
+# Check if environment already exists
+if conda env list | grep -q "^${ENV_NAME} "; then
+    echo
+    echo "Environment '$ENV_NAME' already exists."
+    read -p "Do you want to update it? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborting. Use a different environment name or remove the existing one with:"
+        echo "  conda env remove -n $ENV_NAME"
+        exit 1
+    fi
+    echo "Updating existing environment..."
+else
+    echo
+    echo "Creating new conda environment: $ENV_NAME"
+    $CONDA_CMD create -n "$ENV_NAME" python="$PYTHON_VERSION" -y
+fi
+
+###############################################################################
+# Step 3: Install packages
+###############################################################################
+
+echo
+echo "Installing PyTorch ${PYTORCH_VERSION} with ${CUDA_VERSION} support..."
+
+# Determine PyTorch index URL based on CUDA version
+case "$CUDA_VERSION" in
+    cu121|cu12.1)
+        TORCH_INDEX="https://download.pytorch.org/whl/cu121"
+        ;;
+    cu118|cu11.8)
+        TORCH_INDEX="https://download.pytorch.org/whl/cu118"
+        ;;
+    cpu)
+        TORCH_INDEX="https://download.pytorch.org/whl/cpu"
+        ;;
+    *)
+        TORCH_INDEX="https://download.pytorch.org/whl/${CUDA_VERSION}"
+        ;;
+esac
+
+# Activate and install
+eval "$(conda shell.bash hook)"
+conda activate "$ENV_NAME"
+
+echo "Installing PyTorch from $TORCH_INDEX"
+pip install torch==${PYTORCH_VERSION} --index-url "$TORCH_INDEX"
+
+echo
+echo "Installing dependencies from requirements.in..."
+pip install -r "$SCRIPT_DIR/requirements.in"
+
+echo
+echo "Installing CAPO in editable mode..."
+pip install -e "$SCRIPT_DIR"
+
+echo
+echo "Installing development dependencies..."
+pip install pytest pytest-cov ruff mypy
+
+###############################################################################
+# Step 4: Set up environment variables
+###############################################################################
+
+# Get the conda environment path
+CONDA_ENV_PATH="$(conda info --envs | grep "^${ENV_NAME} " | awk '{print $NF}')"
+if [ -z "$CONDA_ENV_PATH" ]; then
+    CONDA_ENV_PATH="$(conda info --envs | grep "^${ENV_NAME}$" | awk '{print $NF}')"
+fi
+
+# Create activation script for PYTHONPATH
+ACTIVATE_D="$CONDA_ENV_PATH/etc/conda/activate.d"
+DEACTIVATE_D="$CONDA_ENV_PATH/etc/conda/deactivate.d"
+
+mkdir -p "$ACTIVATE_D" "$DEACTIVATE_D"
+
+# Activation script
+cat > "$ACTIVATE_D/capo_env.sh" << EOF
+#!/bin/bash
+# CAPO environment activation script
+# Auto-generated by create_conda_env.sh
+
+export CAPO_ROOT="$SCRIPT_DIR"
+export CAPO_VERL_PATH="$VERL_PATH"
+
+# Save old PYTHONPATH for deactivation
+export _OLD_CAPO_PYTHONPATH="\${PYTHONPATH:-}"
+
+# Add CAPO and vendored VERL to PYTHONPATH
+export PYTHONPATH="\${CAPO_VERL_PATH}:\${CAPO_ROOT}:\${PYTHONPATH:-}"
+
+# Useful environment variables for experiments
+export HYDRA_FULL_ERROR=1
+export PYTHONUNBUFFERED=1
+
+echo "CAPO environment activated."
+echo "  CAPO_ROOT=\$CAPO_ROOT"
+echo "  CAPO_VERL_PATH=\$CAPO_VERL_PATH"
+EOF
+
+# Deactivation script
+cat > "$DEACTIVATE_D/capo_env.sh" << 'EOF'
+#!/bin/bash
+# CAPO environment deactivation script
+
+# Restore old PYTHONPATH
+if [ -n "${_OLD_CAPO_PYTHONPATH:-}" ]; then
+    export PYTHONPATH="$_OLD_CAPO_PYTHONPATH"
+else
+    unset PYTHONPATH
+fi
+
+unset CAPO_ROOT
+unset CAPO_VERL_PATH
+unset _OLD_CAPO_PYTHONPATH
+EOF
+
+chmod +x "$ACTIVATE_D/capo_env.sh" "$DEACTIVATE_D/capo_env.sh"
+
+###############################################################################
+# Step 5: Verify installation
+###############################################################################
+
+echo
+echo "============================================================"
+echo "Verifying installation..."
+echo "============================================================"
+
+# Test imports
+python -c "import torch; print(f'PyTorch {torch.__version__} - CUDA available: {torch.cuda.is_available()}')"
+python -c "import capo; print(f'CAPO imported successfully')"
+python -c "import verl; print(f'VERL (vendored) imported successfully')"
+
+echo
+echo "============================================================"
+echo "Setup complete!"
+echo "============================================================"
+echo
+echo "To activate the environment, run:"
+echo "  conda activate $ENV_NAME"
+echo
+echo "To run tests:"
+echo "  pytest"
+echo
+echo "To run experiments (see experiments/capo_paper/docs/TUTORIAL.md):"
+echo "  python experiments/capo_paper/scripts/data/prepare_countdown_dataset.py \\"
+echo "    --out_dir data/countdown --seed 123 --test_size 0.1"
+echo
+echo "For GPU diagnostics:"
+echo "  bash experiments/capo_paper/scripts/a10/a10_diagnose_env.sh"

@@ -839,14 +839,14 @@ class ActorRolloutRefWorker(Worker):
                 / promised_flops
                 / self.world_size
             )
-            metrics["perf/max_memory_allocated_gb"] = (
-                get_torch_device().max_memory_allocated() / (1024**3)
-            )
-            metrics["perf/max_memory_reserved_gb"] = (
-                get_torch_device().max_memory_reserved() / (1024**3)
-            )
+            metrics[
+                "perf/max_memory_allocated_gb"
+            ] = get_torch_device().max_memory_allocated() / (1024 ** 3)
+            metrics[
+                "perf/max_memory_reserved_gb"
+            ] = get_torch_device().max_memory_reserved() / (1024 ** 3)
             metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (
-                1024**3
+                1024 ** 3
             )
 
             lr = self.actor_lr_scheduler.get_last_lr()[0]
@@ -934,12 +934,12 @@ class ActorRolloutRefWorker(Worker):
         )
         data = data.to(get_torch_device().current_device())
         # we should always recompute old_log_probs when it is HybridEngine
-        data.meta_info["micro_batch_size"] = (
-            self.config.rollout.log_prob_micro_batch_size_per_gpu
-        )
-        data.meta_info["max_token_len"] = (
-            self.config.rollout.log_prob_max_token_len_per_gpu
-        )
+        data.meta_info[
+            "micro_batch_size"
+        ] = self.config.rollout.log_prob_micro_batch_size_per_gpu
+        data.meta_info[
+            "max_token_len"
+        ] = self.config.rollout.log_prob_max_token_len_per_gpu
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         # perform recompute log_prob
@@ -1407,9 +1407,11 @@ class CriticWorker(Worker):
 
         from verl.workers.critic import DataParallelPPOCritic
 
-        self.critic_module, self.critic_optimizer, self.critic_lr_scheduler = (
-            self._build_critic_model_optimizer(self.config)
-        )
+        (
+            self.critic_module,
+            self.critic_optimizer,
+            self.critic_lr_scheduler,
+        ) = self._build_critic_model_optimizer(self.config)
 
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.critic_module)
@@ -1741,12 +1743,14 @@ class RewardModelWorker(Worker):
 
                 # pad and slice the inputs if sp > 1
                 if self.ulysses_sequence_parallel_size > 1:
-                    input_ids_rmpad, position_ids_rmpad, pad_size = (
-                        ulysses_pad_and_slice_inputs(
-                            input_ids_rmpad,
-                            position_ids_rmpad,
-                            sp_size=self.ulysses_sequence_parallel_size,
-                        )
+                    (
+                        input_ids_rmpad,
+                        position_ids_rmpad,
+                        pad_size,
+                    ) = ulysses_pad_and_slice_inputs(
+                        input_ids_rmpad,
+                        position_ids_rmpad,
+                        sp_size=self.ulysses_sequence_parallel_size,
                     )
 
                 # only pass input_ids and position_ids to enable flash_attn_varlen

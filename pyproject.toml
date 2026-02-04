@@ -58,7 +58,13 @@ include = ["capo*"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
-testpaths = ["tests"]
+testpaths = ["capo/tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 # --- HOW TO PUBLISH --------------------------------
 # 1. Ensure you have up-to-date build tools:

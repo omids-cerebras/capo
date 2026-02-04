@@ -206,7 +206,7 @@ def masked_var(values, mask, unbiased=True):
     """Compute variance of tensor with masked values."""
     mean = masked_mean(values, mask)
     centered_values = values - mean
-    variance = masked_mean(centered_values**2, mask)
+    variance = masked_mean(centered_values ** 2, mask)
     if unbiased:
         mask_sum = mask.sum()
         if mask_sum == 0:
@@ -631,9 +631,7 @@ def get_cosine_schedule_with_warmup(
 
 
 def get_constant_schedule_with_warmup(
-    optimizer: Optimizer,
-    num_warmup_steps: int,
-    last_epoch: int = -1,
+    optimizer: Optimizer, num_warmup_steps: int, last_epoch: int = -1,
 ):
     """
     Create a constant LR schedule with a linear warmup phase.
@@ -661,9 +659,7 @@ def prepare_decoder_attention_mask(attention_mask, input_shape, inputs_embeds):
     combined_attention_mask = None
     if input_shape[-1] > 1:
         combined_attention_mask = _make_causal_mask(
-            input_shape,
-            inputs_embeds.dtype,
-            device=inputs_embeds.device,
+            input_shape, inputs_embeds.dtype, device=inputs_embeds.device,
         )
 
     if attention_mask is not None:

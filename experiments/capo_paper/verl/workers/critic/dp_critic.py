@@ -115,12 +115,14 @@ class DataParallelPPOCritic(BasePPOCritic):
 
                 # pad and slice the inputs if sp > 1
                 if self.ulysses_sequence_parallel_size > 1:
-                    input_ids_rmpad, position_ids_rmpad, pad_size = (
-                        ulysses_pad_and_slice_inputs(
-                            input_ids_rmpad,
-                            position_ids_rmpad,
-                            sp_size=self.ulysses_sequence_parallel_size,
-                        )
+                    (
+                        input_ids_rmpad,
+                        position_ids_rmpad,
+                        pad_size,
+                    ) = ulysses_pad_and_slice_inputs(
+                        input_ids_rmpad,
+                        position_ids_rmpad,
+                        sp_size=self.ulysses_sequence_parallel_size,
                     )
 
                 # only pass input_ids and position_ids to enable flash_attn_varlen

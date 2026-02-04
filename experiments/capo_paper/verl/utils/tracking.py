@@ -208,17 +208,11 @@ class ClearMLLogger:
 
             if isinstance(v, (int, float, np.floating, np.integer)):
                 logger.report_scalar(
-                    title=title,
-                    series=series,
-                    value=v,
-                    iteration=step,
+                    title=title, series=series, value=v, iteration=step,
                 )
             elif isinstance(v, pd.DataFrame):
                 logger.report_table(
-                    title=title,
-                    series=series,
-                    table_plot=v,
-                    iteration=step,
+                    title=title, series=series, table_plot=v, iteration=step,
                 )
             else:
                 logger.warning(
@@ -404,12 +398,7 @@ class ValidationGenerationsLogger:
             return
 
         table = [
-            {
-                "step": step,
-                "input": sample[0],
-                "output": sample[1],
-                "score": sample[2],
-            }
+            {"step": step, "input": sample[0], "output": sample[1], "score": sample[2],}
             for sample in samples
         ]
 

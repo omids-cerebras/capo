@@ -353,8 +353,7 @@ def load_state_dict_to_megatron_qwen2(
     print_rank_0("loading final layernorm...")
     gpt_model_module = _get_gpt_model(models[-1])
     _fetch_tensor(
-        getattr(gpt_model_module.model.norm, "weight", None),
-        "model.norm.weight",
+        getattr(gpt_model_module.model.norm, "weight", None), "model.norm.weight",
     )
 
     if tie_word_embeddings:

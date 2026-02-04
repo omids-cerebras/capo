@@ -31,9 +31,7 @@ from verl.third_party.vllm import LLM, vllm_version
 from verl.third_party.vllm import parallel_state as vllm_ps
 from verl.utils.debug import GPUMemoryLogger
 from verl.utils.debug.performance import _timer
-from verl.utils.megatron_utils import (
-    per_tensor_generator,
-)
+from verl.utils.megatron_utils import per_tensor_generator
 from verl.utils.torch_functional import check_device_is_available
 from verl.utils.vllm_utils import patch_vllm_moe_model_weight_loader
 
@@ -95,10 +93,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
     def __enter__(self):
         self.timing = {}
         with _timer("reshard", self.timing):
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
+            if vllm_version in ("0.5.4", "0.6.3",):
                 per_tensor_param = per_tensor_generator(
                     self.actor_module,
                     self.model_config,
@@ -140,10 +135,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
 
     @GPUMemoryLogger(role="megatron vllm sharding_manager", logger=logger)
     def __exit__(self, exc_type, exc_value, traceback):
-        if vllm_version in (
-            "0.5.4",
-            "0.6.3",
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",):
             self.inference_engine.offload_model_weights()
         else:
             self.inference_engine.sleep(level=1)

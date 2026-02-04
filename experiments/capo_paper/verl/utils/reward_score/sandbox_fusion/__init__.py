@@ -75,9 +75,10 @@ def compute_score(
 
         if not test_cases or "inputs" not in test_cases or "outputs" not in test_cases:
             logger.error("Invalid test_cases structure.")
-            return 0.0, [
-                {"error": "Invalid test_cases structure (missing inputs/outputs)"}
-            ]
+            return (
+                0.0,
+                [{"error": "Invalid test_cases structure (missing inputs/outputs)"}],
+            )
 
         # Check all test cases
         # Note: The return value of check_correctness might need adaptation here
@@ -124,6 +125,7 @@ def compute_score(
         )
 
     # Ensure float and list are returned
-    return float(score), (
-        final_metadata if isinstance(final_metadata, list) else [final_metadata]
+    return (
+        float(score),
+        (final_metadata if isinstance(final_metadata, list) else [final_metadata]),
     )

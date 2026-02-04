@@ -14,10 +14,7 @@ from capo.eb_core import eb_lite_fit_beta_and_weights
 
 
 def _simulate_length_variance_data(
-    beta_star: float,
-    num_traj: int = 64,
-    sigma: float = 1.0,
-    seed: int = 0,
+    beta_star: float, num_traj: int = 64, sigma: float = 1.0, seed: int = 0,
 ):
     g_list = []
     L_list = []

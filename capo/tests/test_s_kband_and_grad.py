@@ -64,14 +64,7 @@ def test_eb_stats_and_gradients_are_finite():
     assert math.isfinite(grad_beta)
 
     grad_rho, grad_eta = grad_ell_rho_eta(
-        L=L,
-        g=g,
-        beta=beta,
-        rho=rho,
-        k=k,
-        eta=eta,
-        dlog_pi_rho=0.0,
-        dlog_pi_eta=0.0,
+        L=L, g=g, beta=beta, rho=rho, k=k, eta=eta, dlog_pi_rho=0.0, dlog_pi_eta=0.0,
     )
     assert math.isfinite(grad_rho)
     assert math.isfinite(grad_eta)

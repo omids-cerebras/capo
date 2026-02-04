@@ -287,11 +287,7 @@ def forward_with_triton_backend(
         )
 
     log_probs, entropy = linear_cross_entropy(
-        hidden_states,
-        self.lm_head.weight,
-        rolled_labels,
-        temperature,
-        "none",
+        hidden_states, self.lm_head.weight, rolled_labels, temperature, "none",
     )
 
     return Qwen2_5_VLCausalLMOutputForPPO(

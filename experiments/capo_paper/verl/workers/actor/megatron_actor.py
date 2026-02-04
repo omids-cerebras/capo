@@ -659,9 +659,11 @@ class MegatronPPOActor(BasePPOActor):
                     metrics, metric[0]
                 )  # append the metric from this micro-batch to global metrics.
 
-            update_successful, grad_norm, num_zeros_in_grad = (
-                self.actor_optimizer.step()
-            )
+            (
+                update_successful,
+                grad_norm,
+                num_zeros_in_grad,
+            ) = self.actor_optimizer.step()
             data = {"actor/grad_norm": grad_norm}
             append_to_dict(metrics, data)
 

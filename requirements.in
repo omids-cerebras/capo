@@ -4,6 +4,12 @@
 #   - Install a CUDA-enabled wheel separately (recommended) or use a pre-built
 #     CUDA container.
 #   - See experiments/capo_paper/docs/TUTORIAL.md for a concrete command.
+#
+# Notes on VERL:
+#   - A vendored copy of VERL is included in experiments/capo_paper/verl
+#   - The installation scripts automatically add it to PYTHONPATH
+#   - If you want to use upstream VERL, install it separately:
+#       pip install verl  # or from GitHub
 
 numpy>=1.24
 
@@ -16,6 +22,7 @@ ray[default]>=2.9
 transformers>=4.44
 datasets>=2.19
 accelerate>=0.30
+peft>=0.10  # Parameter-efficient fine-tuning (used by VERL)
 
 # Logging
 wandb>=0.16
@@ -32,3 +39,7 @@ matplotlib>=3.7
 tqdm>=4.66
 protobuf>=4.25
 sentencepiece>=0.2
+
+# Development tools (optional but recommended)
+pytest>=7.0
+black>=24.0

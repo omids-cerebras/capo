@@ -81,12 +81,7 @@ class MergedColumnParallelLinear(tensor_parallel.ColumnParallelLinear):
 
 class LinearForLastLayer(torch.nn.Linear):
     def __init__(
-        self,
-        input_size,
-        output_size,
-        *,
-        config,
-        bias=True,
+        self, input_size, output_size, *, config, bias=True,
     ):
         super().__init__(in_features=input_size, out_features=output_size, bias=bias)
         self.sequence_parallel = config.sequence_parallel
@@ -94,10 +89,7 @@ class LinearForLastLayer(torch.nn.Linear):
             self.weight.sequence_parallel = True
 
     def forward(
-        self,
-        input_,
-        weight=None,
-        runtime_gather_output=None,
+        self, input_, weight=None, runtime_gather_output=None,
     ):
         logits = super().forward(input_)
         logits = logits.float()

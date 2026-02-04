@@ -62,8 +62,7 @@ def _cfg_get(config, path, default):
 
 
 def _lengths_and_scalar_returns(
-    token_level_rewards: Tensor,
-    response_mask: Tensor,
+    token_level_rewards: Tensor, response_mask: Tensor,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     """
     Compute (L_i, g_i) from token-level rewards.
@@ -214,11 +213,7 @@ def compute_capo_eb_lite_advantage(
         return advantages, returns, {}
 
     beta_hat, w, m = eb_lite_fit_beta_and_weights(
-        g=returns_scalar,
-        L=lengths,
-        eps=epsilon,
-        max_iters=max_iters,
-        tol=tol,
+        g=returns_scalar, L=lengths, eps=epsilon, max_iters=max_iters, tol=tol,
     )
 
     # Per-trajectory scalar advantages A_i = w_i (g_i - m̂).

@@ -269,8 +269,7 @@ class Qwen2_5VLModel(MegatronModule):
             # If running inference, we can skip image token computation if they were computed already earlier for this sample.
             if use_inference_kv_cache:
                 language_embeddings: torch.Tensor = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
                 # NOTE: why not cat here? is it the combined embeddings useless?
                 combined_embeddings = language_embeddings
@@ -290,8 +289,7 @@ class Qwen2_5VLModel(MegatronModule):
                     )
 
                 combined_embeddings = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
 
                 if image_embeds is not None or video_embeds is not None:
@@ -320,14 +318,11 @@ class Qwen2_5VLModel(MegatronModule):
 
             else:
                 combined_embeddings = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
             if self.config.sequence_parallel:
-                combined_embeddings = (
-                    tensor_parallel.scatter_to_sequence_parallel_region(
-                        combined_embeddings
-                    )
+                combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(
+                    combined_embeddings
                 )
                 combined_embeddings = combined_embeddings.contiguous()
         else:

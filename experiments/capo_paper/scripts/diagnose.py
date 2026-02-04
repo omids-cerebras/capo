@@ -233,7 +233,7 @@ def _get_cpu_memory():
     Get the total CPU memory capacity in GB.
     """
     memory = psutil.virtual_memory()
-    return memory.total / (1024**3)
+    return memory.total / (1024 ** 3)
 
 
 def _get_gpu_info():
@@ -257,10 +257,7 @@ def _get_gpu_info():
         for line in gpu_lines:
             gpu_name, gpu_memory = line.split(", ")
             gpu_info.append(
-                {
-                    "type": gpu_name,
-                    "memory": float(gpu_memory) / 1024,  # Convert to GB
-                }
+                {"type": gpu_name, "memory": float(gpu_memory) / 1024,}  # Convert to GB
             )
         return gpu_count, gpu_info
     except subprocess.CalledProcessError:

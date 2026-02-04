@@ -179,8 +179,7 @@ class ModelConfig(ModelConfig):
             sliding_window_len=self.get_hf_config_sliding_window(),
         )
         self.served_model_name = get_served_model_name(
-            self.model,  # str
-            served_model_name,
+            self.model, served_model_name,  # str
         )
         self.multimodal_config = multimodal_config
 

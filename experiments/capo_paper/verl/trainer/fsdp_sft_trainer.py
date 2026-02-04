@@ -467,12 +467,14 @@ class FSDPSFTTrainer:
                 ).transpose(0, 1)
 
                 # Pad and slice inputs for sequence parallelism
-                input_ids_rmpad_sliced, position_ids_rmpad_padded, pad_size = (
-                    ulysses_pad_and_slice_inputs(
-                        input_ids_rmpad,
-                        position_ids_rmpad,
-                        sp_size=get_ulysses_sequence_parallel_world_size(),
-                    )
+                (
+                    input_ids_rmpad_sliced,
+                    position_ids_rmpad_padded,
+                    pad_size,
+                ) = ulysses_pad_and_slice_inputs(
+                    input_ids_rmpad,
+                    position_ids_rmpad,
+                    sp_size=get_ulysses_sequence_parallel_world_size(),
                 )
                 # For computing loss
                 input_ids_rmpad_rolled = torch.roll(

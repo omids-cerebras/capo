@@ -69,10 +69,7 @@ def call_search_api(
                 f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling search API at {retrieval_service_url}"
             )
             response = requests.post(
-                retrieval_service_url,
-                headers=headers,
-                json=payload,
-                timeout=timeout,
+                retrieval_service_url, headers=headers, json=payload, timeout=timeout,
             )
 
             # Check for Gateway Timeout (504) and other server errors for retrying
@@ -123,10 +120,13 @@ def call_search_api(
 
     # If loop finishes without returning success, return the last recorded error
     logger.error(f"{log_prefix}Search API call failed. Last error: {last_error}")
-    return None, (
-        last_error.replace(log_prefix, "API Call Failed: ")
-        if last_error
-        else "API Call Failed after retries"
+    return (
+        None,
+        (
+            last_error.replace(log_prefix, "API Call Failed: ")
+            if last_error
+            else "API Call Failed after retries"
+        ),
     )
 
 

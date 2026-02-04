@@ -330,8 +330,8 @@ class DataProto:
         for key, numpy_array in self.non_tensor_batch.items():
             size_of_numpy_array += numpy_array.nbytes
 
-        size_of_numpy_array /= 1024**3
-        size_of_tensordict /= 1024**3
+        size_of_numpy_array /= 1024 ** 3
+        size_of_tensordict /= 1024 ** 3
 
         message = f"Size of tensordict: {size_of_tensordict} GB, size of non_tensor_batch: {size_of_numpy_array} GB"
 
