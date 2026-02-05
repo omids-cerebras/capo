@@ -73,9 +73,7 @@ def _run_capo_reward(
 
     # Monkeypatch the internal client creation helper so that the
     # reward function uses our dummy client.
-    def _fake_get_client(
-        config: rf.CAPOConfig, reward_kwargs: dict[str, Any]
-    ) -> rf.GenPRMClient:
+    def _fake_get_client(config: rf.CAPOConfig, reward_kwargs: dict[str, Any]) -> rf.GenPRMClient:
         return client
 
     # Store original helper and restore afterwards.
@@ -148,9 +146,7 @@ def test_capo_reward_missing_is_correct_raises():
     cfg = rf.CAPOConfig()
     client = DummyGenPRMClient(config=cfg, step_sequences=[[True, True]])
 
-    def _fake_get_client(
-        config: rf.CAPOConfig, reward_kwargs: dict[str, Any]
-    ) -> rf.GenPRMClient:
+    def _fake_get_client(config: rf.CAPOConfig, reward_kwargs: dict[str, Any]) -> rf.GenPRMClient:
         return client
 
     orig_get_client = rf._get_or_create_genprm_client

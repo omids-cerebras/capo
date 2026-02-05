@@ -478,8 +478,7 @@ def load_state_dict_to_megatron_llama(
         print_rank_0("loading final layernorm...")
         gpt_model_module = _get_gpt_model(models[-1])
         _broadcast_tensor(
-            getattr(gpt_model_module.model.norm, "weight", None),
-            "model.norm.weight",
+            getattr(gpt_model_module.model.norm, "weight", None), "model.norm.weight",
         )
 
         print_rank_0("loading lm_head...")

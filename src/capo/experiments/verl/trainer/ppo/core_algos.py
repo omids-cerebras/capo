@@ -803,9 +803,7 @@ def kl_penalty(
 
 
 def compute_pf_ppo_reweight_data(
-    data,
-    reweight_method: str = "pow",
-    weight_pow: float = 2.0,
+    data, reweight_method: str = "pow", weight_pow: float = 2.0,
 ):
     """Reweight the data based on the token_level_scores.
 
@@ -1034,6 +1032,7 @@ try:
             dlog_pi_rho=dlog_pi_rho,
             dlog_pi_eta=dlog_pi_eta,
         )
+
 
 except Exception:
     # CAPO is optional from VERL's perspective.

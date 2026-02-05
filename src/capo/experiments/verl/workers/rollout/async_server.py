@@ -128,9 +128,7 @@ class AsyncLLMServerManager:
         self.async_llm_servers = [None] * self.rollout_dp_size
         self.server_addresses = [None] * self.rollout_dp_size
 
-        server_class = async_server_class(
-            rollout_backend=self.config.rollout.name,
-        )
+        server_class = async_server_class(rollout_backend=self.config.rollout.name,)
 
         # Start all server instances, restart if address already in use.
         unready_dp_ranks = set(range(self.rollout_dp_size))
@@ -182,8 +180,7 @@ class AsyncLLMServerManager:
         asyncio.set_event_loop(self.chat_scheduler_loop)
 
         self.chat_scheduler = ChatCompletionScheduler(
-            config=self.full_config,
-            server_addresses=self.server_addresses,
+            config=self.full_config, server_addresses=self.server_addresses,
         )
 
         self.chat_scheduler_ready.set()
@@ -198,9 +195,7 @@ class AsyncLLMServerManager:
         ray.get([server.sleep.remote() for server in self.async_llm_servers])
 
     def submit_chat_completions(
-        self,
-        messages: list[dict[str, str]],
-        sampling_params: dict[str, Any],
+        self, messages: list[dict[str, str]], sampling_params: dict[str, Any],
     ):
         """Submit a chat completion request to chat scheduler and wait until it is done.
         To submit multiple requests in parallel, please use `generate_sequences` instead.
@@ -210,9 +205,7 @@ class AsyncLLMServerManager:
         assert self.chat_scheduler is not None, "chat scheduler is not initialized."
         future = asyncio.run_coroutine_threadsafe(
             self.chat_scheduler._submit_chat_completions_semaphore(
-                messages=messages,
-                request_id=None,
-                sampling_params=sampling_params,
+                messages=messages, request_id=None, sampling_params=sampling_params,
             ),
             self.chat_scheduler_loop,
         )

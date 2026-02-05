@@ -92,10 +92,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
     def __enter__(self):
         self.timing = {}
         with _timer("reshard", self.timing):
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
+            if vllm_version in ("0.5.4", "0.6.3",):
                 per_tensor_param = per_tensor_generator(
                     self.actor_module,
                     self.model_config,
@@ -137,10 +134,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
 
     @GPUMemoryLogger(role="megatron vllm sharding_manager", logger=logger)
     def __exit__(self, exc_type, exc_value, traceback):
-        if vllm_version in (
-            "0.5.4",
-            "0.6.3",
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",):
             self.inference_engine.offload_model_weights()
         else:
             self.inference_engine.sleep(level=1)

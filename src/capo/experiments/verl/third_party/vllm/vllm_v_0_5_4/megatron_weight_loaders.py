@@ -159,10 +159,7 @@ def llama_megatron_core_weight_loader(
         ("embedding.word_embeddings", "model.embed_tokens"),
         ("self_attention.linear_qkv", "self_attn.qkv_proj"),
         ("self_attention.linear_proj", "self_attn.o_proj"),
-        (
-            "input_layernorm",
-            "input_layernorm",
-        ),
+        ("input_layernorm", "input_layernorm",),
         ("pre_mlp_layernorm", "post_attention_layernorm"),
         ("mlp.linear_fc1", "mlp.gate_up_proj"),
         ("mlp.linear_fc2", "mlp.down_proj"),

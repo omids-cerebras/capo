@@ -149,11 +149,11 @@ class AsyncRolloutRequest(BaseModel):
             values["input_ids"],
             values["attention_mask"],
         )
-        values["position_ids"] = values["prompt_position_ids"] = (
-            compute_position_id_with_mask(
-                torch.tensor(values["attention_mask"])
-            ).tolist()
-        )
+        values["position_ids"] = values[
+            "prompt_position_ids"
+        ] = compute_position_id_with_mask(
+            torch.tensor(values["attention_mask"])
+        ).tolist()
         values["loss_mask"] = values["prompt_loss_mask"] = [0] * len(
             values["input_ids"]
         )

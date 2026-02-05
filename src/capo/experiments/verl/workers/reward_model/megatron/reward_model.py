@@ -184,8 +184,7 @@ class MegatronRewardModel(BasePPORewardModel):
                     logits = logits[revert_indices]
             else:
                 logits = torch.empty(
-                    (input_ids.shape[0], input_ids.shape[1]),
-                    device=input_ids.device,
+                    (input_ids.shape[0], input_ids.shape[1]), device=input_ids.device,
                 )
             logits = logits.to(torch.float32)
 

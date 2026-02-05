@@ -707,12 +707,12 @@ class ActorRolloutRefWorker(MegatronWorker):
                 logger=logger,
             )
         # we should always recompute old_log_probs when it is HybridEngine
-        data.meta_info["micro_batch_size"] = (
-            self.config.rollout.log_prob_micro_batch_size_per_gpu
-        )
-        data.meta_info["max_token_len"] = (
-            self.config.rollout.log_prob_max_token_len_per_gpu
-        )
+        data.meta_info[
+            "micro_batch_size"
+        ] = self.config.rollout.log_prob_micro_batch_size_per_gpu
+        data.meta_info[
+            "max_token_len"
+        ] = self.config.rollout.log_prob_max_token_len_per_gpu
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         data = data.to(torch.cuda.current_device())

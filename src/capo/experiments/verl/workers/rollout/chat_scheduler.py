@@ -378,10 +378,7 @@ class ChatCompletionScheduler:
         task.add_done_callback(self.background_tasks.discard)
 
     async def _submit_chat_completions_and_callback(
-        self,
-        messages: list[dict[str, str]],
-        request_id: str,
-        info: dict[str, Any],
+        self, messages: list[dict[str, str]], request_id: str, info: dict[str, Any],
     ):
         """Submit chat completion request, wait request finish and do callback."""
         if request_id:

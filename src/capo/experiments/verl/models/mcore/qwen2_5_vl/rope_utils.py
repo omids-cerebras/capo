@@ -233,9 +233,7 @@ def get_rope_index(
                 .expand(3, input_ids.shape[0], -1)
             )
             mrope_position_deltas = torch.zeros(
-                [input_ids.shape[0], 1],
-                device=input_ids.device,
-                dtype=input_ids.dtype,
+                [input_ids.shape[0], 1], device=input_ids.device, dtype=input_ids.dtype,
             )
 
         return position_ids, mrope_position_deltas

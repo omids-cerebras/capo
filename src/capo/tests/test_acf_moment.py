@@ -43,9 +43,7 @@ def _simulate_ar1_increments(
 
 def test_acf_moment_estimate_ar1():
     rho_star = 0.7
-    Y, M = _simulate_ar1_increments(
-        rho_star=rho_star, num_traj=64, length=256, seed=123
-    )
+    Y, M = _simulate_ar1_increments(rho_star=rho_star, num_traj=64, length=256, seed=123)
 
     rho_hat, eta_hat = acf_moment_estimate(increments=Y, mask=M, k=20)
 

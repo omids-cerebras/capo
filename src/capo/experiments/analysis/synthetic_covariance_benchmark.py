@@ -34,14 +34,13 @@ from __future__ import annotations
 
 import argparse
 import math
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Mapping, Sequence, Tuple
-
-import numpy as np
 
 # Use a non-interactive backend for headless environments.
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -122,7 +121,7 @@ def _simulate_batch(
     N: int,
     length_bins: np.ndarray,
     v_map: Mapping[int, float],
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Simulate a prompt-grouped batch of (lengths, returns).
 
     Returns
@@ -170,8 +169,8 @@ def _capo_advantages(g_flat: np.ndarray, w_flat: np.ndarray) -> np.ndarray:
 
 def _msa_by_length(
     A_flat: np.ndarray, L_flat: np.ndarray, length_bins: np.ndarray
-) -> Dict[int, float]:
-    out: Dict[int, float] = {}
+) -> dict[int, float]:
+    out: dict[int, float] = {}
     for L in length_bins:
         L_int = int(L)
         mask = L_flat == L_int
@@ -181,8 +180,8 @@ def _msa_by_length(
 
 def _share_by_length(
     A_flat: np.ndarray, L_flat: np.ndarray, length_bins: np.ndarray
-) -> Dict[int, float]:
-    out: Dict[int, float] = {}
+) -> dict[int, float]:
+    out: dict[int, float] = {}
     denom = float(np.sum(A_flat**2))
     for L in length_bins:
         L_int = int(L)
@@ -341,7 +340,7 @@ def _latex_amp_table(
     col_spec = "l" + "c" * len(regimes)
     header = ["Method"] + [r.name for r in regimes]
 
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
     lines.append("\\toprule")
     lines.append(" & ".join(header) + " \\\\")
@@ -393,7 +392,7 @@ def build_synthetic_covariance_artifacts(
     L_max = int(np.max(L_bins))
 
     # Regimes (match Appendix E).
-    regimes: List[Regime] = [
+    regimes: list[Regime] = [
         Regime("IID", lambda L: _v_iid(L)),
         Regime("AR(1) ($\\rho=0.7$)", lambda L: _v_ar1(L, 0.7)),
         Regime("AR(1) ($\\rho=0.9$)", lambda L: _v_ar1(L, 0.9)),
@@ -406,7 +405,7 @@ def build_synthetic_covariance_artifacts(
     ]
 
     # Methods (match the LaTeX captions).
-    methods: List[Method] = [
+    methods: list[Method] = [
         Method("GRPO (z-score)", "grpo"),
         Method("$\\Delta L$ ($\\alpha=0.75$)", "deltal_0.75"),
         Method("$\\Delta L$ ($\\alpha=1.0$)", "deltal_1.0"),
@@ -417,9 +416,9 @@ def build_synthetic_covariance_artifacts(
     rng = np.random.default_rng(int(seed))
 
     # Outputs keyed by (regime_name, method_display).
-    msa_ratio: Dict[str, Dict[str, Dict[int, float]]] = {}
-    amp: Dict[str, Dict[str, float]] = {}
-    share: Dict[str, Dict[str, Dict[int, float]]] = {}
+    msa_ratio: dict[str, dict[str, dict[int, float]]] = {}
+    amp: dict[str, dict[str, float]] = {}
+    share: dict[str, dict[str, dict[int, float]]] = {}
 
     for reg in regimes:
         # Precompute v(L) for the discrete bins.
@@ -439,7 +438,7 @@ def build_synthetic_covariance_artifacts(
         w_lite = 1.0 / (L_flat.astype(float) ** 1.0)
         A_lite = _capo_advantages(g_flat, w_lite)
 
-        w_full = 1.0 / np.vectorize(lambda x: v_map[int(x)])(L_flat).astype(float)
+        w_full = 1.0 / np.vectorize(lambda x, v=v_map: v[int(x)])(L_flat).astype(float)
         A_full = _capo_advantages(g_flat, w_full)
 
         A_by_key = {

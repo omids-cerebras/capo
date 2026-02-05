@@ -140,9 +140,7 @@ class FusedLinearForPPOFunction(torch.autograd.Function):
 
     @staticmethod
     def backward(
-        ctx,
-        dlog_probs: torch.FloatTensor | None,
-        dentropy: torch.FloatTensor | None,
+        ctx, dlog_probs: torch.FloatTensor | None, dentropy: torch.FloatTensor | None,
     ):
         assert dlog_probs is not None or dentropy is not None
 
@@ -222,9 +220,5 @@ class FusedLinearForPPO(torch.nn.Module):
     ) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         input_ids = input_ids.to(torch.int64)
         return FusedLinearForPPOFunction.apply(
-            hidden_states,
-            vocab_weights,
-            input_ids,
-            temperature,
-            self.chunk_size,
+            hidden_states, vocab_weights, input_ids, temperature, self.chunk_size,
         )

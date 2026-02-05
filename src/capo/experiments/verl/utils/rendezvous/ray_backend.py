@@ -54,11 +54,7 @@ def create_nccl_communicator_in_ray(
         nccl_id_store = NCCLIDStore.options(name=group_name).remote(nccl_id)
 
         assert ray.get(nccl_id_store.get.remote()) == nccl_id
-        communicator = NcclCommunicator(
-            ndev=world_size,
-            commId=nccl_id,
-            rank=0,
-        )
+        communicator = NcclCommunicator(ndev=world_size, commId=nccl_id, rank=0,)
         return communicator
     else:
         for i in range(max_retries):
@@ -68,9 +64,7 @@ def create_nccl_communicator_in_ray(
                 nccl_id = ray.get(nccl_id_store.get.remote())
                 logging.info("nccl id for %s got: %s", group_name, nccl_id)
                 communicator = NcclCommunicator(
-                    ndev=world_size,
-                    commId=nccl_id,
-                    rank=rank,
+                    ndev=world_size, commId=nccl_id, rank=rank,
                 )
                 return communicator
             logging.info(

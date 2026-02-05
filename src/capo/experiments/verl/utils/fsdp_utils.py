@@ -152,8 +152,7 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
                 transformer_cls_to_wrap.add(transformer_cls)
 
         transformer_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls=transformer_cls_to_wrap,
+            transformer_auto_wrap_policy, transformer_layer_cls=transformer_cls_to_wrap,
         )
         policies.append(transformer_policy)
 

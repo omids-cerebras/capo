@@ -69,10 +69,7 @@ def call_search_api(
                 f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling search API at {retrieval_service_url}"
             )
             response = requests.post(
-                retrieval_service_url,
-                headers=headers,
-                json=payload,
-                timeout=timeout,
+                retrieval_service_url, headers=headers, json=payload, timeout=timeout,
             )
 
             # Check for Gateway Timeout (504) and other server errors for retrying
