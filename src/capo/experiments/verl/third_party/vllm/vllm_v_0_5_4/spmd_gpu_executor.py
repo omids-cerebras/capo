@@ -139,7 +139,9 @@ class SPMDGPUExecutor(ExecutorBase):
         # NOTE: We log here to avoid multiple logs when number of workers is
         # greater than one. We could log in the engine, but not all executors
         # have GPUs.
-        logger.info("# GPU blocks: %d, # CPU blocks: %d", num_gpu_blocks, num_cpu_blocks)
+        logger.info(
+            "# GPU blocks: %d, # CPU blocks: %d", num_gpu_blocks, num_cpu_blocks
+        )
 
         self.cache_config.num_gpu_blocks = num_gpu_blocks
         self.cache_config.num_cpu_blocks = num_cpu_blocks
@@ -148,7 +150,9 @@ class SPMDGPUExecutor(ExecutorBase):
             print(
                 f"before init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB"
             )
-        self.worker.initialize_cache(num_gpu_blocks=num_gpu_blocks, num_cpu_blocks=num_cpu_blocks)
+        self.worker.initialize_cache(
+            num_gpu_blocks=num_gpu_blocks, num_cpu_blocks=num_cpu_blocks
+        )
         if torch.distributed.get_rank() == 0:
             print(
                 f"after init cache memory allocated: {torch.cuda.memory_allocated() / 1e9}GB, reserved: {torch.cuda.memory_reserved() / 1e9}GB"
@@ -214,7 +218,9 @@ class SPMDGPUExecutor(ExecutorBase):
         self.worker.offload_model_weights()
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.worker.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.worker.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
 
 def initialize_cluster(

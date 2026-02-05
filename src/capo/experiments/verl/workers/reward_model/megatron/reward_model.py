@@ -99,15 +99,17 @@ class MegatronRewardModel(BasePPORewardModel):
                 )
                 print_decode = False
             # 3. encode by rm_tokenizer
-            rm_input_ids = self.rm_tokenizer(decode_with_rm_chat, return_tensors="pt")["input_ids"][
-                0
-            ].to(input_ids.device)
+            rm_input_ids = self.rm_tokenizer(decode_with_rm_chat, return_tensors="pt")[
+                "input_ids"
+            ][0].to(input_ids.device)
             # 4. generate attention_mask and position_ids
             rm_attention_mask = torch.ones_like(rm_input_ids, device=input_ids.device)
             cur_seqlen = rm_input_ids.shape[-1]
             # NOTE(gh): the later reward compute will process the shape (bs, seqlen_pad_128)
             if cur_seqlen > ori_seqlen:
-                print(f"warninig: rm encode seqlen {cur_seqlen} > sft encode seqlen {ori_seqlen}")
+                print(
+                    f"warninig: rm encode seqlen {cur_seqlen} > sft encode seqlen {ori_seqlen}"
+                )
                 rm_input_ids = rm_input_ids[:ori_seqlen]
                 rm_attention_mask = rm_attention_mask[:ori_seqlen]
             else:
@@ -115,7 +117,9 @@ class MegatronRewardModel(BasePPORewardModel):
                 rm_input_ids = pad_sequence_to_length(
                     rm_input_ids, ori_seqlen, self.rm_tokenizer.pad_token_id
                 )
-                rm_attention_mask = pad_sequence_to_length(rm_attention_mask, ori_seqlen, 0)
+                rm_attention_mask = pad_sequence_to_length(
+                    rm_attention_mask, ori_seqlen, 0
+                )
             rm_position_ids = torch.arange(0, ori_seqlen, device=input_ids.device)
             input_ids_for_rm.append(torch.unsqueeze(rm_input_ids, dim=0))
             attention_mask_for_rm.append(torch.unsqueeze(rm_attention_mask, dim=0))
@@ -146,9 +150,13 @@ class MegatronRewardModel(BasePPORewardModel):
         use_dynamic_bsz = data.meta_info.get("use_dynamic_bsz", False)
         micro_batch_size = data.meta_info.get("micro_batch_size", None)
         max_token_len = data.meta_info.get("max_token_len", None)
-        assert micro_batch_size is not None, "micro batch size is needed for forward compute"
+        assert (
+            micro_batch_size is not None
+        ), "micro batch size is needed for forward compute"
         if use_dynamic_bsz:
-            assert max_token_len is not None, "use_dynamic_bsz is True, but max_token_len is None!"
+            assert (
+                max_token_len is not None
+            ), "use_dynamic_bsz is True, but max_token_len is None!"
             max_token_len = max_token_len * self.config.megatron.context_parallel_size
 
         responses = data.batch["responses"]
@@ -167,13 +175,16 @@ class MegatronRewardModel(BasePPORewardModel):
                 if use_dynamic_bsz:
                     indices = output["indices"]
                     indices = list(itertools.chain.from_iterable(indices))
-                    assert len(indices) == logits.size(0), f"{len(indices)} vs. {logits.size()}"
-                    revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
+                    assert len(indices) == logits.size(
+                        0
+                    ), f"{len(indices)} vs. {logits.size()}"
+                    revert_indices = torch.tensor(
+                        get_reverse_idx(indices), dtype=torch.long
+                    )
                     logits = logits[revert_indices]
             else:
                 logits = torch.empty(
-                    (input_ids.shape[0], input_ids.shape[1]),
-                    device=input_ids.device,
+                    (input_ids.shape[0], input_ids.shape[1]), device=input_ids.device,
                 )
             logits = logits.to(torch.float32)
 
@@ -215,7 +226,9 @@ class MegatronRewardModel(BasePPORewardModel):
             # add empty cache after each compute
             torch.cuda.empty_cache()
 
-        batch = TensorDict({"rm_scores": token_level_rewards}, batch_size=input_ids.shape[0])
+        batch = TensorDict(
+            {"rm_scores": token_level_rewards}, batch_size=input_ids.shape[0]
+        )
 
         return DataProto(batch=batch)
 
@@ -243,7 +256,9 @@ class MegatronRewardModel(BasePPORewardModel):
 
         mini_batch.batch["attention_mask"] = mini_batch.batch["attention_mask"].to(bool)
 
-        self.has_multi_modal_inputs = "multi_modal_inputs" in mini_batch.non_tensor_batch.keys()
+        self.has_multi_modal_inputs = (
+            "multi_modal_inputs" in mini_batch.non_tensor_batch.keys()
+        )
         if self.has_multi_modal_inputs:
             mini_batch.batch["multi_modal_inputs"] = mini_batch.non_tensor_batch[
                 "multi_modal_inputs"
@@ -268,7 +283,9 @@ class MegatronRewardModel(BasePPORewardModel):
                     max_token_len=max_token_len,
                 )
                 assert (
-                    len(micro_batches) % self.tf_config.microbatch_group_size_per_vp_stage == 0
+                    len(micro_batches)
+                    % self.tf_config.microbatch_group_size_per_vp_stage
+                    == 0
                 ), f"micro_batches {micro_batches} must be divisible by microbatch_group_size_per_vp_stage {microbatch_group_size_per_vp_stage} for megatron backend"
             else:
                 micro_batches, indices = rearrange_micro_batches(
@@ -372,5 +389,7 @@ class MegatronRewardModel(BasePPORewardModel):
         if self.device == "cpu":
             for reward_model_module in self.reward_model_module:
                 for name, param in reward_model_module.named_parameters():
-                    param.data = param.data.to(torch.cuda.current_device(), non_blocking=True)
+                    param.data = param.data.to(
+                        torch.cuda.current_device(), non_blocking=True
+                    )
             self.device = "cuda"

@@ -111,7 +111,9 @@ def load_state_dict_to_megatron_qwen2(
         if tensor is not None:
             tensor = tensor.data.copy_(state_dict[name], non_blocking=True)
 
-    def _fetch_tp_shard_tensor_vocab(tensor, name, chunk_dim=0, mutate_func=None) -> torch.Tensor:
+    def _fetch_tp_shard_tensor_vocab(
+        tensor, name, chunk_dim=0, mutate_func=None
+    ) -> torch.Tensor:
         """fetch tensor in tp shards"""
         nonlocal state_dict
         tp_rank = mpu.get_tensor_model_parallel_rank()
@@ -127,7 +129,9 @@ def load_state_dict_to_megatron_qwen2(
         else:
             print(f"tp_shard tensor:[{name}] not in state_dict, skip loading")
 
-    def _fetch_tp_shard_tensor(tensor, name, chunk_dim=0, mutate_func=None) -> torch.Tensor:
+    def _fetch_tp_shard_tensor(
+        tensor, name, chunk_dim=0, mutate_func=None
+    ) -> torch.Tensor:
         """fetch tensor in tp shards"""
         nonlocal state_dict
         tp_rank = mpu.get_tensor_model_parallel_rank()
@@ -163,7 +167,9 @@ def load_state_dict_to_megatron_qwen2(
                 gate_weight_tp = gate_weight[
                     i * intermediate_size_tp : (i + 1) * intermediate_size_tp
                 ]
-                up_weight_tp = up_weight[i * intermediate_size_tp : (i + 1) * intermediate_size_tp]
+                up_weight_tp = up_weight[
+                    i * intermediate_size_tp : (i + 1) * intermediate_size_tp
+                ]
                 new_gate_up_weight[
                     intermediate_size_tp * 2 * i : intermediate_size_tp * 2 * (i + 1)
                 ].copy_(torch.cat([gate_weight_tp, up_weight_tp], dim=0))
@@ -172,9 +178,13 @@ def load_state_dict_to_megatron_qwen2(
             if tensor is not None:
                 tensor = tensor.data.copy_(tensor_chunk[tp_rank], non_blocking=True)
         else:
-            print(f"tp_shard tensor:[{gate_name}, {up_name}] not in state_dict, skip loading")
+            print(
+                f"tp_shard tensor:[{gate_name}, {up_name}] not in state_dict, skip loading"
+            )
 
-    def _fetch_tp_shard_tensor_qkv(tensor, q_name, k_name, v_name, bias=False) -> torch.Tensor:
+    def _fetch_tp_shard_tensor_qkv(
+        tensor, q_name, k_name, v_name, bias=False
+    ) -> torch.Tensor:
         """fetch tensor in tp shards across mp_group"""
         nonlocal state_dict
         nonlocal mp_group
@@ -231,8 +241,12 @@ def load_state_dict_to_megatron_qwen2(
                 )
             for i in range(tp_size):
                 q_part = full_weight_q[i * q_size_tp : (i + 1) * q_size_tp]
-                start_idx = i * config.num_key_value_heads // tp_size * hidden_size_per_head
-                end_idx = (i * config.num_key_value_heads // tp_size + 1) * hidden_size_per_head
+                start_idx = (
+                    i * config.num_key_value_heads // tp_size * hidden_size_per_head
+                )
+                end_idx = (
+                    i * config.num_key_value_heads // tp_size + 1
+                ) * hidden_size_per_head
                 k_part = full_weight_k[start_idx:end_idx]
                 v_part = full_weight_v[start_idx:end_idx]
                 new_weight_qkv[i * total_size : (i + 1) * total_size].copy_(
@@ -266,7 +280,8 @@ def load_state_dict_to_megatron_qwen2(
             num_layer_vpp_chunk = num_layer_per_pp // vpp_size
             num_layer_this_model = num_layer_vpp_chunk
             offset = vpp_rank * (
-                config.num_hidden_layers // mpu.get_virtual_pipeline_model_parallel_world_size()
+                config.num_hidden_layers
+                // mpu.get_virtual_pipeline_model_parallel_world_size()
             ) + (mpu.get_pipeline_model_parallel_rank() * num_layer_vpp_chunk)
             layer_list.extend(list(range(offset, offset + num_layer_this_model)))
     else:
@@ -313,7 +328,11 @@ def load_state_dict_to_megatron_qwen2(
         )
 
         _fetch_tensor(
-            (sync_layer.post_attention_layernorm.weight if dst_pp_rank == pp_rank else None),
+            (
+                sync_layer.post_attention_layernorm.weight
+                if dst_pp_rank == pp_rank
+                else None
+            ),
             f"{layer_name}.post_attention_layernorm.weight",
         )
 
@@ -333,8 +352,7 @@ def load_state_dict_to_megatron_qwen2(
     print_rank_0("loading final layernorm...")
     gpt_model_module = _get_gpt_model(models[-1])
     _fetch_tensor(
-        getattr(gpt_model_module.model.norm, "weight", None),
-        "model.norm.weight",
+        getattr(gpt_model_module.model.norm, "weight", None), "model.norm.weight",
     )
 
     if tie_word_embeddings:
@@ -345,7 +363,10 @@ def load_state_dict_to_megatron_qwen2(
             lm_head_weight = gpt_model_module.lm_head.weight
 
             if is_value_model:
-                if "lm_head.weight" in state_dict and state_dict["lm_head.weight"].shape[0] == 1:
+                if (
+                    "lm_head.weight" in state_dict
+                    and state_dict["lm_head.weight"].shape[0] == 1
+                ):
                     _fetch_tensor(lm_head_weight, "lm_head.weight")
                     print_rank_0("load lm_head from value_head weight")
                 elif (
@@ -363,4 +384,6 @@ def load_state_dict_to_megatron_qwen2(
 
     dist.barrier()
     torch.cuda.empty_cache()
-    print_rank_0(f"loading megatron ckpt done, time elapsed {time.time() - start_time}s")
+    print_rank_0(
+        f"loading megatron ckpt done, time elapsed {time.time() - start_time}s"
+    )

@@ -38,20 +38,24 @@ def preprocess_packed_seqs(
     seqlens_in_batch_padded = seqlens_in_batch + pad_size
     cu_seqlens = torch.zeros(batch_size + 1, dtype=torch.int32, device=input_ids.device)
     cu_seqlens[1:] = torch.cumsum(seqlens_in_batch, dim=0)
-    cu_seqlens_padded = torch.zeros(batch_size + 1, dtype=torch.int32, device=input_ids.device)
+    cu_seqlens_padded = torch.zeros(
+        batch_size + 1, dtype=torch.int32, device=input_ids.device
+    )
     cu_seqlens_padded[1:] = torch.cumsum(seqlens_in_batch_padded, dim=0)
     max_seqlen_in_batch = seqlens_in_batch_padded.max().item()
 
     shape = list(input_ids.shape[1:])
     shape[0] = seqlens_in_batch_padded.sum().item() // cp_size
     if pre_process:
-        input_ids_rmpad = torch.zeros(shape, dtype=input_ids.dtype, device=input_ids.device)
+        input_ids_rmpad = torch.zeros(
+            shape, dtype=input_ids.dtype, device=input_ids.device
+        )
         for i in range(batch_size):
             if cp_size <= 1:
                 seqlen = seqlens_in_batch[i]
-                input_ids_rmpad[cu_seqlens_padded[i] : cu_seqlens_padded[i] + seqlen] = input_ids[
-                    i, attention_mask[i]
-                ]
+                input_ids_rmpad[
+                    cu_seqlens_padded[i] : cu_seqlens_padded[i] + seqlen
+                ] = input_ids[i, attention_mask[i]]
                 continue
             seqlen = seqlens_in_batch_padded[i] // cp_size
             half_seqlen = seqlen // 2
@@ -67,9 +71,9 @@ def preprocess_packed_seqs(
             remain_end = min(remain_end, d.shape[0])
             remain_len = remain_end - remain_start
             if remain_len > 0:
-                input_ids_rmpad[start_idx + half_seqlen : start_idx + half_seqlen + remain_len] = d[
-                    remain_start:remain_end
-                ]
+                input_ids_rmpad[
+                    start_idx + half_seqlen : start_idx + half_seqlen + remain_len
+                ] = d[remain_start:remain_end]
 
     packed_seq_params = PackedSeqParams(
         qkv_format="thd",
@@ -120,12 +124,15 @@ def postprocess_packed_seqs(
         if cp_size <= 1:
             s = attention_mask[i].sum().item()
             output_new[i, attention_mask[i]] = output[0][
-                packed_seq_params.cu_seqlens_q_padded[i] : packed_seq_params.cu_seqlens_q_padded[i]
+                packed_seq_params.cu_seqlens_q_padded[
+                    i
+                ] : packed_seq_params.cu_seqlens_q_padded[i]
                 + s
             ]
             continue
         s_len_padded_chunk = (
-            packed_seq_params.cu_seqlens_q_padded[i + 1] - packed_seq_params.cu_seqlens_q_padded[i]
+            packed_seq_params.cu_seqlens_q_padded[i + 1]
+            - packed_seq_params.cu_seqlens_q_padded[i]
         ) // cp_size
         half_seqlen = s_len_padded_chunk // 2
         s_len = attention_mask[i].sum().item()
@@ -137,10 +144,16 @@ def postprocess_packed_seqs(
             packed_start_idx = packed_seq_params.cu_seqlens_q_padded[i] // cp_size
             o0, o1 = (
                 o[packed_start_idx : packed_start_idx + half_seqlen],
-                o[packed_start_idx + half_seqlen : packed_start_idx + s_len_padded_chunk],
+                o[
+                    packed_start_idx
+                    + half_seqlen : packed_start_idx
+                    + s_len_padded_chunk
+                ],
             )
             tmp[j * half_seqlen : (j + 1) * half_seqlen] = o0
-            tmp[s_len_padded - (j + 1) * half_seqlen : s_len_padded - j * half_seqlen] = o1
+            tmp[
+                s_len_padded - (j + 1) * half_seqlen : s_len_padded - j * half_seqlen
+            ] = o1
         output_new[i, attention_mask[i]] = tmp[:s_len]
 
     return output_new
@@ -171,7 +184,9 @@ def remove_left_padding(
         seq_len = seq_len + pad_size
     shape[1] = seq_len
     if pre_process:
-        new_input_ids = torch.zeros(dtype=input_ids.dtype, device=input_ids.device, size=shape)
+        new_input_ids = torch.zeros(
+            dtype=input_ids.dtype, device=input_ids.device, size=shape
+        )
     new_attention_mask = torch.zeros(
         dtype=attention_mask.dtype,
         device=attention_mask.device,

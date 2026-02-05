@@ -125,7 +125,8 @@ def normalize(answer, pi) -> str:
 
     # checking if answer is <number>% or <number>\\% and removing %
     if isinstance(answer, str) and (
-        bool(re.match(r"^\d+(\.\d+)?%$", answer)) or bool(re.match(r"^\d+(\.\d+)?\\%$", answer))
+        bool(re.match(r"^\d+(\.\d+)?%$", answer))
+        or bool(re.match(r"^\d+(\.\d+)?\\%$", answer))
     ):
         return answer.replace("\\%", "").replace("%", "")
 
@@ -188,7 +189,9 @@ def math_equal(
     prediction = normalize(prediction, pi)
     reference = normalize(reference, pi)
 
-    if isinstance(prediction, str) and len(prediction) > 1000:  # handling weird corner-cases
+    if (
+        isinstance(prediction, str) and len(prediction) > 1000
+    ):  # handling weird corner-cases
         prediction = prediction[:1000]
 
     # 0. string comparison
@@ -204,7 +207,9 @@ def math_equal(
             reference = is_digit(reference)[1]
             # number questions
             gt_result = (
-                [reference / 100, reference, reference * 100] if include_percentage else [reference]
+                [reference / 100, reference, reference * 100]
+                if include_percentage
+                else [reference]
             )
             for item in gt_result:
                 try:
@@ -228,9 +233,13 @@ def math_equal(
 
     pred_str, ref_str = prediction, reference
     if (
-        prediction.startswith("[") and prediction.endswith("]") and not reference.startswith("(")
+        prediction.startswith("[")
+        and prediction.endswith("]")
+        and not reference.startswith("(")
     ) or (
-        prediction.startswith("(") and prediction.endswith(")") and not reference.startswith("[")
+        prediction.startswith("(")
+        and prediction.endswith(")")
+        and not reference.startswith("[")
     ):
         pred_str = pred_str.strip("[]()")
         ref_str = ref_str.strip("[]()")
@@ -267,7 +276,9 @@ def math_equal(
             return bool(
                 all(
                     [
-                        math_equal(pred_parts[i], ref_parts[i], include_percentage, tolerance)
+                        math_equal(
+                            pred_parts[i], ref_parts[i], include_percentage, tolerance
+                        )
                         for i in range(len(pred_parts))
                     ]
                 )
@@ -299,7 +310,11 @@ def math_equal(
                 return True
         except Exception:
             pass
-    elif "\begin{pmatrix}" in reference and prediction.startswith("[") and prediction.endswith("]"):
+    elif (
+        "\begin{pmatrix}" in reference
+        and prediction.startswith("[")
+        and prediction.endswith("]")
+    ):
         if isinstance(eval(prediction), list):
             try:
                 pred_matrix = eval(prediction)
@@ -317,7 +332,9 @@ def math_equal(
                 if len(pred_matrix) == len(ref_matrix_items) and all(
                     [
                         math_equal(pred, ref, include_percentage, tolerance)
-                        for ref, pred in zip(ref_matrix_items, pred_matrix, strict=False)
+                        for ref, pred in zip(
+                            ref_matrix_items, pred_matrix, strict=False
+                        )
                     ]
                 ):
                     return True

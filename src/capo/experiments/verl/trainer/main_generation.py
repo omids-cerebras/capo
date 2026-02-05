@@ -53,7 +53,9 @@ def run_generation(config) -> None:
     if not ray.is_initialized():
         # this is for local ray cluster
         ray.init(
-            runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}},
+            runtime_env={
+                "env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}
+            },
             num_cpus=config.ray_init.num_cpus,
         )
 
@@ -62,7 +64,9 @@ def run_generation(config) -> None:
 
 @ray.remote(num_cpus=1)
 def main_task(config):
-    pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
+    pprint(
+        OmegaConf.to_container(config, resolve=True)
+    )  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
     local_path = copy_to_local(config.model.path)
@@ -138,9 +142,15 @@ def main_task(config):
             for i in range(len(output)):
                 data_item = output[i]
                 prompt_length = data_item.batch["prompts"].shape[-1]
-                valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
-                valid_response_ids = data_item.batch["responses"][:valid_response_length]
-                response_str = tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+                valid_response_length = data_item.batch["attention_mask"][
+                    prompt_length:
+                ].sum()
+                valid_response_ids = data_item.batch["responses"][
+                    :valid_response_length
+                ]
+                response_str = tokenizer.decode(
+                    valid_response_ids, skip_special_tokens=True
+                )
                 output_texts.append(response_str)
 
             output_lst[n_sample].extend(output_texts)

@@ -44,7 +44,9 @@ class Qwen2RotaryEmbedding(nn.Module):
         self.dim = dim
         self.max_position_embeddings = max_position_embeddings
         self.base = base
-        inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
+        inv_freq = 1.0 / (
+            self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+        )
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
         # Build here to make `torch.jit.trace` work.
@@ -56,7 +58,9 @@ class Qwen2RotaryEmbedding(nn.Module):
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
         self.max_seq_len_cached = seq_len
-        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
+        t = torch.arange(
+            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
+        )
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
@@ -91,7 +95,9 @@ class Qwen2LinearScalingRotaryEmbedding(Qwen2RotaryEmbedding):
 
     def _set_cos_sin_cache(self, seq_len, device, dtype):
         self.max_seq_len_cached = seq_len
-        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
+        t = torch.arange(
+            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
+        )
         t = t / self.scaling_factor
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
@@ -123,10 +129,14 @@ class Qwen2DynamicNTKScalingRotaryEmbedding(Qwen2RotaryEmbedding):
                 (self.scaling_factor * seq_len / self.max_position_embeddings)
                 - (self.scaling_factor - 1)
             ) ** (self.dim / (self.dim - 2))
-            inv_freq = 1.0 / (base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
+            inv_freq = 1.0 / (
+                base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim)
+            )
             self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
+        t = torch.arange(
+            self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype
+        )
 
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
@@ -243,7 +253,11 @@ class ParallelQwen2Attention(nn.Module):
         )
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
-        return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
+        return (
+            tensor.view(bsz, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+            .contiguous()
+        )
 
     def forward(
         self,
@@ -276,9 +290,9 @@ class ParallelQwen2Attention(nn.Module):
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(
-            self.head_dim
-        )
+        attn_weights = torch.matmul(
+            query_states, key_states.transpose(2, 3)
+        ) / math.sqrt(self.head_dim)
 
         if attn_weights.size() != (bsz, self.num_heads_per_tp, q_len, kv_seq_len):
             raise ValueError(
@@ -293,9 +307,9 @@ class ParallelQwen2Attention(nn.Module):
             attn_weights = attn_weights + attention_mask
 
         # upcast attention to fp32
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
-            query_states.dtype
-        )
+        attn_weights = nn.functional.softmax(
+            attn_weights, dim=-1, dtype=torch.float32
+        ).to(query_states.dtype)
         attn_output = torch.matmul(attn_weights, value_states)
 
         if attn_output.size() != (bsz, self.num_heads_per_tp, q_len, self.head_dim):
@@ -392,9 +406,15 @@ class ParallelQwen2AttentionRmPad(ParallelQwen2Attention):
         # Flash attention requires the input to have the shape
         # batch_size x seq_length x head_dime x hidden_dim
         # therefore we just need to keep the original shape
-        query_states = query_states.view(total_nnz, self.num_heads_per_tp, self.head_dim)
-        key_states = key_states.view(total_nnz, self.num_key_value_heads_per_tp, self.head_dim)
-        value_states = value_states.view(total_nnz, self.num_key_value_heads_per_tp, self.head_dim)
+        query_states = query_states.view(
+            total_nnz, self.num_heads_per_tp, self.head_dim
+        )
+        key_states = key_states.view(
+            total_nnz, self.num_key_value_heads_per_tp, self.head_dim
+        )
+        value_states = value_states.view(
+            total_nnz, self.num_key_value_heads_per_tp, self.head_dim
+        )
 
         cos, sin = self.rotary_emb(value_states, seq_len=sequence_length)
         cos, sin = (
@@ -447,7 +467,9 @@ class ParallelQwen2AttentionRmPad(ParallelQwen2Attention):
         # sequence parallel reduce_scatter is performed inside RowColumnParallel if enabled
         # Here we need to repad
         if self.megatron_config.sequence_parallel:
-            attn_output_unpad = F.pad(attn_output_unpad, pad=(0, 0, 0, 0, 0, sequence_parallel_pad))
+            attn_output_unpad = F.pad(
+                attn_output_unpad, pad=(0, 0, 0, 0, 0, sequence_parallel_pad)
+            )
 
         attn_output_unpad = self.o_proj(attn_output_unpad)[0]
         return attn_output_unpad

@@ -46,9 +46,9 @@ class BaseModelInitializer(ABC):
         if "rope_scaling" in self.hf_config:
             if self.hf_config.rope_scaling is not None:
                 # assert self.hf_config.rope_scaling["type"] == "linear", "only linear scaling is supported for now"
-                rope_scaling_args["seq_len_interpolation_factor"] = self.hf_config.rope_scaling[
-                    "factor"
-                ]
+                rope_scaling_args[
+                    "seq_len_interpolation_factor"
+                ] = self.hf_config.rope_scaling["factor"]
         return rope_scaling_args
 
     def initialize(
@@ -106,7 +106,9 @@ class DenseModel(BaseModelInitializer):
     """Initializer for dense models like Llama and Qwen2."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
         return get_gpt_decoder_block_spec(self.tfconfig, use_transformer_engine=True)
 
 
@@ -114,16 +116,18 @@ class Qwen2MoEModel(BaseModelInitializer):
     """Initializer for Qwen2 MoE models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
         transformer_layer_spec = get_gpt_decoder_block_spec(
             self.tfconfig, use_transformer_engine=True
         )
 
         # Patch layer spec for shared experts
         for i in range(len(transformer_layer_spec.layer_specs)):
-            transformer_layer_spec.layer_specs[i].submodules.mlp.submodules.shared_experts.params[
-                "gate"
-            ] = True
+            transformer_layer_spec.layer_specs[
+                i
+            ].submodules.mlp.submodules.shared_experts.params["gate"] = True
 
         return transformer_layer_spec
 
@@ -141,7 +145,9 @@ class MixtralModel(BaseModelInitializer):
     """Initializer for Mixtral models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
         transformer_layer_spec = get_gpt_decoder_block_spec(
             self.tfconfig, use_transformer_engine=True
         )
@@ -160,7 +166,9 @@ class Qwen3MoEModel(BaseModelInitializer):
     """Initializer for Qwen3 MoE models."""
 
     def get_transformer_layer_spec(self):
-        assert self.tfconfig.normalization == "RMSNorm", "only RMSNorm is supported for now"
+        assert (
+            self.tfconfig.normalization == "RMSNorm"
+        ), "only RMSNorm is supported for now"
         transformer_layer_spec = get_gpt_decoder_block_spec(
             self.tfconfig, use_transformer_engine=True
         )
@@ -191,8 +199,7 @@ class DeepseekV3Model(BaseModelInitializer):
         return rope_scaling_args
 
     def initialize(
-        self,
-        **kwargs,
+        self, **kwargs,
     ):
         freeze_moe_router = kwargs.get("freeze_moe_router", True)
         if freeze_moe_router:
@@ -262,8 +269,7 @@ class Qwen25VLModel(BaseModelInitializer):
             spatial_merge_size=hf_config.vision_config.spatial_merge_size,
         )
         vision_projection_layer_spec = MLPSubmodules(
-            linear_fc1=TEColumnParallelLinear,
-            linear_fc2=TERowParallelLinear,
+            linear_fc1=TEColumnParallelLinear, linear_fc2=TERowParallelLinear,
         )
         vision_transformer_layer_spec = get_vit_layer_with_transformer_engine_spec()
 

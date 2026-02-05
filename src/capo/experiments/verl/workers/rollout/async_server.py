@@ -56,14 +56,20 @@ class AsyncServerBase(ABC):
 
             # There's no way to gracefully restart uvicorn server if port is already in use,
             # so we exit the process directly and let AsyncLLMServerManager restart it.
-            print("FastAPI shutdown, maybe address already in use, exit process immediately.")
+            print(
+                "FastAPI shutdown, maybe address already in use, exit process immediately."
+            )
             os._exit(-1)
 
         app = fastapi.FastAPI(lifespan=lifespan)
-        app.router.add_api_route("/v1/chat/completions", self.chat_completion, methods=["POST"])
+        app.router.add_api_route(
+            "/v1/chat/completions", self.chat_completion, methods=["POST"]
+        )
 
         self.port = _get_free_port()
-        config = uvicorn.Config(app, host=["::", "0.0.0.0"], port=self.port, log_level="warning")
+        config = uvicorn.Config(
+            app, host=["::", "0.0.0.0"], port=self.port, log_level="warning"
+        )
         server = uvicorn.Server(config)
         await server.serve()
 
@@ -113,16 +119,16 @@ class AsyncLLMServerManager:
         self.rollout_tp_size = self.config.rollout.tensor_model_parallel_size
         self.rollout_dp_size = self.worker_group.world_size // self.rollout_tp_size
 
-        register_center = ray.get_actor(f"{self.worker_group.name_prefix}_register_center")
+        register_center = ray.get_actor(
+            f"{self.worker_group.name_prefix}_register_center"
+        )
         workers_info = ray.get(register_center.get_worker_info.remote())
         assert len(workers_info) == self.worker_group.world_size
 
         self.async_llm_servers = [None] * self.rollout_dp_size
         self.server_addresses = [None] * self.rollout_dp_size
 
-        server_class = async_server_class(
-            rollout_backend=self.config.rollout.name,
-        )
+        server_class = async_server_class(rollout_backend=self.config.rollout.name,)
 
         # Start all server instances, restart if address already in use.
         unready_dp_ranks = set(range(self.rollout_dp_size))
@@ -163,7 +169,9 @@ class AsyncLLMServerManager:
         self.chat_scheduler: ChatCompletionScheduler = None
         self.chat_scheduler_loop = None
         self.chat_scheduler_ready = threading.Event()
-        self.chat_scheduler_thread = threading.Thread(target=self._init_chat_scheduler, daemon=True)
+        self.chat_scheduler_thread = threading.Thread(
+            target=self._init_chat_scheduler, daemon=True
+        )
         self.chat_scheduler_thread.start()
         self.chat_scheduler_ready.wait()
 
@@ -172,8 +180,7 @@ class AsyncLLMServerManager:
         asyncio.set_event_loop(self.chat_scheduler_loop)
 
         self.chat_scheduler = ChatCompletionScheduler(
-            config=self.full_config,
-            server_addresses=self.server_addresses,
+            config=self.full_config, server_addresses=self.server_addresses,
         )
 
         self.chat_scheduler_ready.set()
@@ -188,9 +195,7 @@ class AsyncLLMServerManager:
         ray.get([server.sleep.remote() for server in self.async_llm_servers])
 
     def submit_chat_completions(
-        self,
-        messages: list[dict[str, str]],
-        sampling_params: dict[str, Any],
+        self, messages: list[dict[str, str]], sampling_params: dict[str, Any],
     ):
         """Submit a chat completion request to chat scheduler and wait until it is done.
         To submit multiple requests in parallel, please use `generate_sequences` instead.
@@ -200,9 +205,7 @@ class AsyncLLMServerManager:
         assert self.chat_scheduler is not None, "chat scheduler is not initialized."
         future = asyncio.run_coroutine_threadsafe(
             self.chat_scheduler._submit_chat_completions_semaphore(
-                messages=messages,
-                request_id=None,
-                sampling_params=sampling_params,
+                messages=messages, request_id=None, sampling_params=sampling_params,
             ),
             self.chat_scheduler_loop,
         )

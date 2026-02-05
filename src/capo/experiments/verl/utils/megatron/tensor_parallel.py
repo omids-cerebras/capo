@@ -122,12 +122,20 @@ class _VocabParallelEntropy(torch.autograd.Function):
         normalized_vocab_parallel_logits = vocab_parallel_logits - logits_max
         normalized_exp_logits = normalized_vocab_parallel_logits.exp_()
         normalized_sum_exp_logits = normalized_exp_logits.sum(dim=-1, keepdim=True)
-        dist.all_reduce(normalized_sum_exp_logits, group=mpu.get_tensor_model_parallel_group())
+        dist.all_reduce(
+            normalized_sum_exp_logits, group=mpu.get_tensor_model_parallel_group()
+        )
         softmax_logits = normalized_exp_logits.div_(normalized_sum_exp_logits)
         sum_softmax_times_logits = mul_reduce(softmax_logits, vocab_parallel_logits)
-        dist.all_reduce(sum_softmax_times_logits, group=mpu.get_tensor_model_parallel_group())
-        entropy = logits_max + normalized_sum_exp_logits.log() - sum_softmax_times_logits
-        ctx.save_for_backward(vocab_parallel_logits, softmax_logits, sum_softmax_times_logits)
+        dist.all_reduce(
+            sum_softmax_times_logits, group=mpu.get_tensor_model_parallel_group()
+        )
+        entropy = (
+            logits_max + normalized_sum_exp_logits.log() - sum_softmax_times_logits
+        )
+        ctx.save_for_backward(
+            vocab_parallel_logits, softmax_logits, sum_softmax_times_logits
+        )
         return entropy.squeeze(dim=-1)
 
     @staticmethod
@@ -198,5 +206,7 @@ def vocab_parallel_log_probs_from_logits_response_rmpad(
         batch=batch_size,
         seqlen=seqlen,
     )
-    output = full_output.squeeze(-1)[:, -response_length - 1 : -1]  # [batch_size, response_length]
+    output = full_output.squeeze(-1)[
+        :, -response_length - 1 : -1
+    ]  # [batch_size, response_length]
     return output

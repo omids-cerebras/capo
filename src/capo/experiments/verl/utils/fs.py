@@ -144,7 +144,9 @@ def copy_to_shm(src: str):
     """
     shm_model_root = "/dev/shm/verl-cache/"
     src_abs = os.path.abspath(os.path.normpath(src))
-    dest = os.path.join(shm_model_root, hashlib.md5(src_abs.encode("utf-8")).hexdigest())
+    dest = os.path.join(
+        shm_model_root, hashlib.md5(src_abs.encode("utf-8")).hexdigest()
+    )
     os.makedirs(dest, exist_ok=True)
     dest = os.path.join(dest, os.path.basename(src_abs))
     if os.path.exists(dest) and verify_copy(src, dest):
@@ -165,11 +167,15 @@ def _record_directory_structure(folder_path):
     with open(record_file, "w") as f:
         for root, dirs, files in os.walk(folder_path):
             for dir_name in dirs:
-                relative_dir = os.path.relpath(os.path.join(root, dir_name), folder_path)
+                relative_dir = os.path.relpath(
+                    os.path.join(root, dir_name), folder_path
+                )
                 f.write(f"dir:{relative_dir}\n")
             for file_name in files:
                 if file_name != ".directory_record.txt":
-                    relative_file = os.path.relpath(os.path.join(root, file_name), folder_path)
+                    relative_file = os.path.relpath(
+                        os.path.join(root, file_name), folder_path
+                    )
                     f.write(f"file:{relative_file}\n")
     return record_file
 
@@ -184,7 +190,9 @@ def _check_directory_structure(folder_path, record_file):
             existing_entries.add(f"dir:{relative_dir}")
         for file_name in files:
             if file_name != ".directory_record.txt":
-                relative_file = os.path.relpath(os.path.join(root, file_name), folder_path)
+                relative_file = os.path.relpath(
+                    os.path.join(root, file_name), folder_path
+                )
                 existing_entries.add(f"file:{relative_file}")
     with open(record_file) as f:
         recorded_entries = set(f.read().splitlines())
@@ -213,7 +221,9 @@ def copy_to_local(
         str: Local filesystem path to copied resource
     """
     # Save to a local path for persistence.
-    local_path = copy_local_path_from_hdfs(src, cache_dir, filelock, verbose, always_recopy)
+    local_path = copy_local_path_from_hdfs(
+        src, cache_dir, filelock, verbose, always_recopy
+    )
     # Load into shm to improve efficiency.
     if use_shm:
         return copy_to_shm(local_path)

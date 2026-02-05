@@ -33,7 +33,9 @@ class TokenizerGroup(TokenizerGroup):
         self.max_input_length = max_input_length
         self.tokenizer = tokenizer
         self.lora_tokenizers = (
-            LRUCache[PreTrainedTokenizer](capacity=max_num_seqs) if enable_lora else None
+            LRUCache[PreTrainedTokenizer](capacity=max_num_seqs)
+            if enable_lora
+            else None
         )
 
     # FIXME(sgm): for simplicity, we assign the special token here

@@ -100,7 +100,9 @@ class MegatronCheckpointManager(BaseCheckpointManager):
 
         self.weight_saver = get_weight_saver(self.arch)
 
-    def get_rng_state(self, use_dist_ckpt: bool = False, data_parallel_random_init: bool = False):
+    def get_rng_state(
+        self, use_dist_ckpt: bool = False, data_parallel_random_init: bool = False
+    ):
         """collect rng state across data parallel ranks"""
         rng_state = {
             "random_rng_state": random.getstate(),
@@ -191,12 +193,20 @@ class MegatronCheckpointManager(BaseCheckpointManager):
     def load_optimizer(self, ckpt_path):
         # TODO: Check Optimizer format and distributed optimizer
         optimizer_path = get_optimizer_checkpoint_path(ckpt_path)
-        log_with_rank(f"Loading optimizer from {optimizer_path}", rank=self.rank, logger=logger)
+        log_with_rank(
+            f"Loading optimizer from {optimizer_path}", rank=self.rank, logger=logger
+        )
         self.optimizer.load_parameter_state(optimizer_path)
 
-    def load_rng_states(self, ckpt_path, data_parallel_random_init=False, use_dist_ckpt=False):
-        rng_state_path = get_rng_states_checkpoint_path(ckpt_path, only_rank0_save=False)
-        log_with_rank(f"Loading rng states from {rng_state_path}", rank=self.rank, logger=logger)
+    def load_rng_states(
+        self, ckpt_path, data_parallel_random_init=False, use_dist_ckpt=False
+    ):
+        rng_state_path = get_rng_states_checkpoint_path(
+            ckpt_path, only_rank0_save=False
+        )
+        log_with_rank(
+            f"Loading rng states from {rng_state_path}", rank=self.rank, logger=logger
+        )
         rng_state = torch.load(rng_state_path, weights_only=False)
         # access rng_state for data parallel rank
         if not use_dist_ckpt:
@@ -212,9 +222,13 @@ class MegatronCheckpointManager(BaseCheckpointManager):
         # Check for empty states array
         if not rng_state["rng_tracker_states"]:
             raise KeyError
-        tensor_parallel.get_cuda_rng_tracker().set_states(rng_state["rng_tracker_states"])
+        tensor_parallel.get_cuda_rng_tracker().set_states(
+            rng_state["rng_tracker_states"]
+        )
 
-    def load_checkpoint(self, local_path: str, hdfs_path: str = None, del_local_after_load=False):
+    def load_checkpoint(
+        self, local_path: str, hdfs_path: str = None, del_local_after_load=False
+    ):
         if local_path is None:
             return
 
@@ -222,8 +236,8 @@ class MegatronCheckpointManager(BaseCheckpointManager):
             model_path = get_model_checkpoint_path(local_path)
             ckpt_name = self.get_checkpoint_name(model_path, return_base_dir=False)
             state_dicts = torch.load(os.path.join(ckpt_name), weights_only=False)
-            assert (
-                len(state_dicts) == len(self.model)
+            assert len(state_dicts) == len(
+                self.model
             ), f"state_dicts length: {len(state_dicts)} mismatch with model length: {len(self.model)}"
             for vpp_rank, (state_dict, model) in enumerate(
                 zip(state_dicts, self.model, strict=False)
@@ -250,7 +264,9 @@ class MegatronCheckpointManager(BaseCheckpointManager):
                         rank=self.rank,
                         logger=logger,
                     )
-                    state_dict = torch.load(optimizer_scheduler_path, weights_only=False)
+                    state_dict = torch.load(
+                        optimizer_scheduler_path, weights_only=False
+                    )
                     if self.lr_scheduler is not None:
                         self.lr_scheduler.load_state_dict(state_dict)
                 else:
@@ -307,15 +323,22 @@ class MegatronCheckpointManager(BaseCheckpointManager):
                 logger=logger,
             )
             model_ckpt_path = get_model_checkpoint_path(local_path)
-            hf_config_and_tokenizer_path = get_hf_config_and_tokenizer_checkpoint_path(local_path)
+            hf_config_and_tokenizer_path = get_hf_config_and_tokenizer_checkpoint_path(
+                local_path
+            )
             ckpt_name = self.get_checkpoint_name(model_ckpt_path, return_base_dir=False)
             torch.save(state_dicts, os.path.join(ckpt_name))
 
-            log_with_rank(f"Saved checkpoint to {model_ckpt_path}", rank=self.rank, logger=logger)
+            log_with_rank(
+                f"Saved checkpoint to {model_ckpt_path}", rank=self.rank, logger=logger
+            )
             if self.rank == 0:
                 self.processing_class.save_pretrained(hf_config_and_tokenizer_path)
                 self.hf_config.save_pretrained(hf_config_and_tokenizer_path)
-                if hasattr(self.hf_config, "name_or_path") and self.hf_config.name_or_path:
+                if (
+                    hasattr(self.hf_config, "name_or_path")
+                    and self.hf_config.name_or_path
+                ):
                     try:
                         generation_config = GenerationConfig.from_pretrained(
                             self.hf_config.name_or_path
@@ -391,7 +414,9 @@ class MegatronCheckpointManager(BaseCheckpointManager):
                     from verl.utils import hdfs_io
 
                     hdfs_io.makedirs(hdfs_path, exist_ok=True)
-                    hdfs_io.copy(src=hf_model_ckpt_path, dst=hdfs_path, dirs_exist_ok=True)
+                    hdfs_io.copy(
+                        src=hf_model_ckpt_path, dst=hdfs_path, dirs_exist_ok=True
+                    )
                     log_with_rank(
                         f"HDFS checkpoint uploaded to {hdfs_path}",
                         rank=self.rank,
@@ -415,10 +440,14 @@ class MegatronCheckpointManager(BaseCheckpointManager):
         if self.should_save_extra:
             torch.distributed.barrier()
 
-            rng_state_path = get_rng_states_checkpoint_path(local_path, only_rank0_save=False)
+            rng_state_path = get_rng_states_checkpoint_path(
+                local_path, only_rank0_save=False
+            )
             rng_state = self.get_rng_state()
             torch.save(rng_state, rng_state_path)
-            log_with_rank(f"Saved rng states to {rng_state_path}", rank=self.rank, logger=logger)
+            log_with_rank(
+                f"Saved rng states to {rng_state_path}", rank=self.rank, logger=logger
+            )
 
             if self.rank == 0:
                 optimizer_scheduler_path = get_optimizer_scheduler_checkpoint_path(

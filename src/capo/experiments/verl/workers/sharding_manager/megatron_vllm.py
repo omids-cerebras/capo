@@ -92,10 +92,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
     def __enter__(self):
         self.timing = {}
         with _timer("reshard", self.timing):
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
+            if vllm_version in ("0.5.4", "0.6.3",):
                 per_tensor_param = per_tensor_generator(
                     self.actor_module,
                     self.model_config,
@@ -104,10 +101,15 @@ class MegatronVLLMShardingManager(BaseShardingManager):
                     self.layer_name_mapping,
                     convert_qkv_gate_up_by_simple_split=False,
                 )
-                self.inference_engine.sync_model_weights(per_tensor_param, load_format="megatron")
+                self.inference_engine.sync_model_weights(
+                    per_tensor_param, load_format="megatron"
+                )
             else:
                 # > 0.7.2
-                if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
+                if (
+                    "tags"
+                    in inspect.signature(self.inference_engine.wake_up).parameters
+                ):
                     self.inference_engine.wake_up(tags=["weights"])
                 else:
                     self.inference_engine.wake_up()
@@ -118,7 +120,9 @@ class MegatronVLLMShardingManager(BaseShardingManager):
                     self.transformer_config,
                     self.layer_name_mapping,
                 )
-                model = self.inference_engine.llm_engine.model_executor.driver_worker.worker.model_runner.model
+                model = (
+                    self.inference_engine.llm_engine.model_executor.driver_worker.worker.model_runner.model
+                )
                 patch_vllm_moe_model_weight_loader(model)
                 loaded_params = model.load_weights(per_tensor_param)
                 info = f"vLLM load weights, loaded_params: {len(loaded_params)}"
@@ -130,10 +134,7 @@ class MegatronVLLMShardingManager(BaseShardingManager):
 
     @GPUMemoryLogger(role="megatron vllm sharding_manager", logger=logger)
     def __exit__(self, exc_type, exc_value, traceback):
-        if vllm_version in (
-            "0.5.4",
-            "0.6.3",
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",):
             self.inference_engine.offload_model_weights()
         else:
             self.inference_engine.sleep(level=1)

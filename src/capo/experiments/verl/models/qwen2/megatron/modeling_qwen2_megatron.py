@@ -45,7 +45,9 @@ TODO:
 
 
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
-def _make_causal_mask(input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device):
+def _make_causal_mask(
+    input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device
+):
     """
     Make causal mask used for bi-directional self-attention.
     """
@@ -69,7 +71,9 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: int | None = N
 
     inverted_mask = 1.0 - expanded_mask
 
-    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
+    return inverted_mask.masked_fill(
+        inverted_mask.to(torch.bool), torch.finfo(dtype).min
+    )
 
 
 class ParallelQwen2Model(nn.Module):
@@ -87,7 +91,9 @@ class ParallelQwen2Model(nn.Module):
         self.vocab_size = config.vocab_size
         embedding_kwargs = tp_utils.get_default_kwargs_for_parallel_embedding()
         if megatron_config is not None:
-            assert embedding_kwargs.get("config", False), "must have ModelParallelConfig"
+            assert embedding_kwargs.get(
+                "config", False
+            ), "must have ModelParallelConfig"
             tp_utils.update_kwargs_with_config(embedding_kwargs, megatron_config)
         self.embed_tokens = tensor_parallel.VocabParallelEmbedding(
             num_embeddings=config.vocab_size,
@@ -104,15 +110,15 @@ class ParallelQwen2Model(nn.Module):
         self.norm = ParallelQwen2RMSNorm(config, megatron_config)
 
     # Copied from transformers.models.bart.modeling_bart.BartDecoder._prepare_decoder_attention_mask
-    def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds):
+    def _prepare_decoder_attention_mask(
+        self, attention_mask, input_shape, inputs_embeds
+    ):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
         combined_attention_mask = None
         if input_shape[-1] > 1:
             combined_attention_mask = _make_causal_mask(
-                input_shape,
-                inputs_embeds.dtype,
-                device=inputs_embeds.device,
+                input_shape, inputs_embeds.dtype, device=inputs_embeds.device,
             )
 
         if attention_mask is not None:
@@ -156,9 +162,7 @@ class ParallelQwen2Model(nn.Module):
 
         for idx, decoder_layer in enumerate(self.layers):
             layer_outputs = decoder_layer(
-                hidden_states,
-                attention_mask=attention_mask,
-                position_ids=position_ids,
+                hidden_states, attention_mask=attention_mask, position_ids=position_ids,
             )
 
             hidden_states = layer_outputs
@@ -246,7 +250,9 @@ class ParallelQwen2ModelRmPad(nn.Module):
         embedding_kwargs = tp_utils.get_default_kwargs_for_parallel_embedding()
         self.megatron_config = megatron_config
         if megatron_config is not None:
-            assert embedding_kwargs.get("config", False), "must have ModelParallelConfig"
+            assert embedding_kwargs.get(
+                "config", False
+            ), "must have ModelParallelConfig"
             tp_utils.update_kwargs_with_config(embedding_kwargs, self.megatron_config)
         self.embed_tokens = tensor_parallel.VocabParallelEmbedding(
             num_embeddings=config.vocab_size,
@@ -287,7 +293,9 @@ class ParallelQwen2ModelRmPad(nn.Module):
         # (1, total_nnz, hidden_size) -> (total_nnz, 1, hidden_size) -> (total_nnz // sp, 1, hidden_size)
         inputs_embeds = inputs_embeds.transpose(0, 1)
         if self.megatron_config.sequence_parallel:
-            inputs_embeds = tensor_parallel.scatter_to_sequence_parallel_region(inputs_embeds)
+            inputs_embeds = tensor_parallel.scatter_to_sequence_parallel_region(
+                inputs_embeds
+            )
 
         hidden_states = inputs_embeds
         for idx, decoder_layer in enumerate(self.layers):
@@ -407,7 +415,9 @@ class ParallelQwen2ForValueRmPad(ParallelQwen2ForCausalLMRmPad):
         if self.megatron_config is not None:
             assert column_kwargs.get("config", False), "must have ModelParallelConfig"
             tp_utils.update_kwargs_with_config(column_kwargs, self.megatron_config)
-        self.lm_head = nn.Linear(in_features=config.hidden_size, out_features=1, bias=False)
+        self.lm_head = nn.Linear(
+            in_features=config.hidden_size, out_features=1, bias=False
+        )
         # lm_head is effectively the same as sequence parallel
         sp_utils.mark_parameter_as_sequence_parallel(self.lm_head.weight)
 
@@ -462,7 +472,9 @@ class ParallelQwen2ModelRmPadPP(nn.Module):
         self.megatron_config = megatron_config
         embedding_kwargs = tp_utils.get_default_kwargs_for_parallel_embedding()
         if megatron_config is not None:
-            assert embedding_kwargs.get("config", False), "must have ModelParallelConfig"
+            assert embedding_kwargs.get(
+                "config", False
+            ), "must have ModelParallelConfig"
             tp_utils.update_kwargs_with_config(embedding_kwargs, self.megatron_config)
         if pre_process:
             self.embed_tokens = tensor_parallel.VocabParallelEmbedding(
@@ -491,7 +503,9 @@ class ParallelQwen2ModelRmPadPP(nn.Module):
 
         self.layers = nn.ModuleList()
         for i in range(self.num_layer_this_model):
-            layer = ParallelQwen2DecoderLayerRmPad(config, megatron_config, layer_idx=i + offset)
+            layer = ParallelQwen2DecoderLayerRmPad(
+                config, megatron_config, layer_idx=i + offset
+            )
             self.layers.add_module(f"{i}", layer)
 
         if post_process:
@@ -537,7 +551,9 @@ class ParallelQwen2ModelRmPadPP(nn.Module):
             # (1, total_nnz, hidden_size) -> (total_nnz, 1, hidden_size) -> (total_nnz // sp, 1, hidden_size)
             inputs_embeds = inputs_embeds.transpose(0, 1)
             if self.megatron_config.sequence_parallel:
-                inputs_embeds = tensor_parallel.scatter_to_sequence_parallel_region(inputs_embeds)
+                inputs_embeds = tensor_parallel.scatter_to_sequence_parallel_region(
+                    inputs_embeds
+                )
 
             hidden_states = inputs_embeds
         else:
@@ -639,7 +655,11 @@ class ParallelQwen2ForCausalLMRmPadPP(nn.Module):
             self.shared_embedding_or_output_weight().zero_out_wgrad = True
             return
 
-        if parallel_state.is_pipeline_first_stage() and self.pre_process and not self.post_process:
+        if (
+            parallel_state.is_pipeline_first_stage()
+            and self.pre_process
+            and not self.post_process
+        ):
             self.shared_embedding_or_output_weight().shared_embedding = True
 
         if self.post_process and not self.pre_process:
@@ -650,10 +670,15 @@ class ParallelQwen2ForCausalLMRmPadPP(nn.Module):
             self.lm_head.weight.shared = True
             self.lm_head.weight.shared_embedding = True
 
-        if torch.distributed.is_initialized() and parallel_state.is_rank_in_embedding_group():
+        if (
+            torch.distributed.is_initialized()
+            and parallel_state.is_rank_in_embedding_group()
+        ):
             weight = self.shared_embedding_or_output_weight()
             weight.data = weight.data.cuda()
-            torch.distributed.all_reduce(weight.data, group=parallel_state.get_embedding_group())
+            torch.distributed.all_reduce(
+                weight.data, group=parallel_state.get_embedding_group()
+            )
 
     def shared_embedding_or_output_weight(self) -> torch.Tensor:
         if self.pre_process:
@@ -748,7 +773,9 @@ class ParallelQwen2ForValueRmPadPP(ParallelQwen2ForCausalLMRmPadPP):
         if self.megatron_config is not None:
             assert column_kwargs.get("config", False), "must have ModelParallelConfig"
             tp_utils.update_kwargs_with_config(column_kwargs, self.megatron_config)
-        self.lm_head = nn.Linear(in_features=config.hidden_size, out_features=1, bias=False)
+        self.lm_head = nn.Linear(
+            in_features=config.hidden_size, out_features=1, bias=False
+        )
         # lm_head is effectively the same as sequence parallel
         sp_utils.mark_parameter_as_sequence_parallel(self.lm_head.weight)
 

@@ -38,8 +38,7 @@ def get_megatron_optimizer(
 
 
 def get_megatron_optimizer_param_scheduler(
-    optimizer,
-    config,
+    optimizer, config,
 ):
     """
     Get the optimizer parameter scheduler for Megatron.
@@ -52,7 +51,9 @@ def get_megatron_optimizer_param_scheduler(
     if config.get("lr_warmup_steps_ratio", None) is not None and (
         config.get("lr_warmup_steps", None) is None or config.lr_warmup_steps <= 0
     ):
-        config.lr_warmup_steps = int(config.lr_warmup_steps_ratio * config.lr_decay_steps)
+        config.lr_warmup_steps = int(
+            config.lr_warmup_steps_ratio * config.lr_decay_steps
+        )
 
     opt_param_scheduler = OptimizerParamScheduler(
         optimizer,

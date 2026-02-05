@@ -118,7 +118,9 @@ class ActorRolloutRefWorker(Worker):
             rank = int(os.environ.get("RANK", 0))
             world_size = int(os.environ.get("WORLD_SIZE", 1))
             torch.distributed.init_process_group(
-                backend=("cpu:gloo,cuda:nccl" if is_cuda_available else "cpu:gloo,npu:hccl"),
+                backend=(
+                    "cpu:gloo,cuda:nccl" if is_cuda_available else "cpu:gloo,npu:hccl"
+                ),
                 rank=rank,
                 world_size=world_size,
             )
@@ -143,7 +145,9 @@ class ActorRolloutRefWorker(Worker):
                 mesh_dim_names=["dp", "sp"],
             )
 
-        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(self.ulysses_device_mesh)
+        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(
+            self.ulysses_device_mesh
+        )
         self._lora_rank = self.config.model.get("lora_rank", 0)
         self._is_lora = self._lora_rank > 0
 
@@ -167,13 +171,17 @@ class ActorRolloutRefWorker(Worker):
         self._is_offload_param = False
         self._is_offload_optimizer = False
         if self._is_actor:
-            self._is_offload_param = self.config.actor.fsdp_config.get("param_offload", False)
+            self._is_offload_param = self.config.actor.fsdp_config.get(
+                "param_offload", False
+            )
             self._is_offload_optimizer = self.config.actor.fsdp_config.get(
                 "optimizer_offload", False
             )
         elif self._is_ref:
             # TODO: it seems that manual offload is slowly than FSDP offload
-            self._is_offload_param = self.config.ref.fsdp_config.get("param_offload", False)
+            self._is_offload_param = self.config.ref.fsdp_config.get(
+                "param_offload", False
+            )
 
         # normalize config
         if self._is_actor:
@@ -206,7 +214,10 @@ class ActorRolloutRefWorker(Worker):
                 ), f"normalized ppo_mini_batch_size {self.config.actor.ppo_mini_batch_size} should be larger than ppo_micro_batch_size_per_gpu {self.config.actor.ppo_micro_batch_size_per_gpu}"
 
         # normalize rollout config
-        if self._is_rollout and self.config.rollout.log_prob_micro_batch_size is not None:
+        if (
+            self._is_rollout
+            and self.config.rollout.log_prob_micro_batch_size is not None
+        ):
             self.config.rollout.log_prob_micro_batch_size //= (
                 self.device_mesh.size() // self.ulysses_sequence_parallel_size
             )
@@ -287,7 +298,9 @@ class ActorRolloutRefWorker(Worker):
             "pad_token_id": self.tokenizer.pad_token_id,
         }
         override_config_kwargs.update(override_model_config)
-        update_model_config(actor_model_config, override_config_kwargs=override_config_kwargs)
+        update_model_config(
+            actor_model_config, override_config_kwargs=override_config_kwargs
+        )
         if self.rank == 0:
             print(f"Model config after override: {actor_model_config}")
 
@@ -349,7 +362,9 @@ class ActorRolloutRefWorker(Worker):
                     "task_type": TaskType.CAUSAL_LM,
                     "r": self.config.model.lora_rank,
                     "lora_alpha": self.config.model.lora_alpha,
-                    "target_modules": convert_to_regular_types(self.config.model.target_modules),
+                    "target_modules": convert_to_regular_types(
+                        self.config.model.target_modules
+                    ),
                     "bias": "none",
                 }
                 actor_module = get_peft_model(actor_module, LoraConfig(**lora_config))
@@ -363,7 +378,9 @@ class ActorRolloutRefWorker(Worker):
         # We wrap FSDP for rollout as well
         mixed_precision_config = fsdp_config.get("mixed_precision", None)
         if mixed_precision_config is not None:
-            param_dtype = PrecisionType.to_dtype(mixed_precision_config.get("param_dtype", "bf16"))
+            param_dtype = PrecisionType.to_dtype(
+                mixed_precision_config.get("param_dtype", "bf16")
+            )
             reduce_dtype = PrecisionType.to_dtype(
                 mixed_precision_config.get("reduce_dtype", "fp32")
             )
@@ -430,7 +447,9 @@ class ActorRolloutRefWorker(Worker):
                 self._is_offload_param = False
                 self._is_offload_optimizer = False
             else:
-                cpu_offload = None if role == "actor" else CPUOffloadPolicy(pin_memory=True)
+                cpu_offload = (
+                    None if role == "actor" else CPUOffloadPolicy(pin_memory=True)
+                )
 
             fsdp_kwargs = {
                 "mesh": fsdp_mesh,
@@ -476,7 +495,9 @@ class ActorRolloutRefWorker(Worker):
                 num_warmup_steps = int(num_warmup_steps_ratio * total_steps)
 
             if self.rank == 0:
-                print(f"Total steps: {total_steps}, num_warmup_steps: {num_warmup_steps}")
+                print(
+                    f"Total steps: {total_steps}, num_warmup_steps: {num_warmup_steps}"
+                )
 
             if warmup_style == "constant":
                 actor_lr_scheduler = get_constant_schedule_with_warmup(
@@ -491,7 +512,9 @@ class ActorRolloutRefWorker(Worker):
                     num_cycles=num_cycles,
                 )
             else:
-                raise NotImplementedError(f"Warmup style {warmup_style} is not supported")
+                raise NotImplementedError(
+                    f"Warmup style {warmup_style} is not supported"
+                )
 
             log_gpu_memory_usage(f"After {role} optimizer init", logger=logger)
         else:
@@ -522,7 +545,9 @@ class ActorRolloutRefWorker(Worker):
             from verl.workers.rollout import HFRollout
             from verl.workers.sharding_manager.base import BaseShardingManager
 
-            rollout = HFRollout(module=self.actor_module_fsdp, config=self.config.rollout)
+            rollout = HFRollout(
+                module=self.actor_module_fsdp, config=self.config.rollout
+            )
             rollout_sharding_manager = BaseShardingManager()
             # TODO: a sharding manager that do nothing?
 
@@ -530,7 +555,9 @@ class ActorRolloutRefWorker(Worker):
             from verl.workers.rollout.vllm_rollout import vllm_mode, vLLMRollout
             from verl.workers.sharding_manager.fsdp_vllm import FSDPVLLMShardingManager
 
-            log_gpu_memory_usage(f"Before building {rollout_name} rollout", logger=logger)
+            log_gpu_memory_usage(
+                f"Before building {rollout_name} rollout", logger=logger
+            )
             local_path = copy_to_local(
                 self.config.model.path, use_shm=self.config.model.get("use_shm", False)
             )
@@ -559,7 +586,9 @@ class ActorRolloutRefWorker(Worker):
                 from verl.workers.rollout.vllm_rollout import vLLMAsyncRollout
 
                 vllm_rollout_cls = (
-                    vLLMRollout if self.config.rollout.mode == "sync" else vLLMAsyncRollout
+                    vLLMRollout
+                    if self.config.rollout.mode == "sync"
+                    else vLLMAsyncRollout
                 )
                 rollout = vllm_rollout_cls(
                     model_path=local_path,
@@ -573,7 +602,9 @@ class ActorRolloutRefWorker(Worker):
             else:
                 raise NotImplementedError("vllm_mode must be 'customized' or 'spmd'")
 
-            log_gpu_memory_usage(f"After building {rollout_name} rollout", logger=logger)
+            log_gpu_memory_usage(
+                f"After building {rollout_name} rollout", logger=logger
+            )
             full_params = torch.distributed.get_world_size() == 1
             rollout_sharding_manager = FSDPVLLMShardingManager(
                 module=self.actor_module_fsdp,
@@ -608,7 +639,9 @@ class ActorRolloutRefWorker(Worker):
             )
 
             local_path = copy_to_local(self.config.model.path)
-            log_gpu_memory_usage(f"Before building {rollout_name} rollout", logger=logger)
+            log_gpu_memory_usage(
+                f"Before building {rollout_name} rollout", logger=logger
+            )
             rollout = SGLangRollout(
                 actor_module=local_path,
                 config=self.config.rollout,
@@ -616,7 +649,9 @@ class ActorRolloutRefWorker(Worker):
                 model_hf_config=self.actor_model_config,
                 trust_remote_code=trust_remote_code,
             )
-            log_gpu_memory_usage(f"After building {rollout_name} rollout", logger=logger)
+            log_gpu_memory_usage(
+                f"After building {rollout_name} rollout", logger=logger
+            )
 
             if torch.distributed.get_world_size() == 1:
                 self.config.rollout.load_format = "dummy_hf"
@@ -631,7 +666,9 @@ class ActorRolloutRefWorker(Worker):
             log_gpu_memory_usage("After building sharding manager", logger=logger)
 
         else:
-            raise NotImplementedError(f"Rollout name: {self.config.rollout.name} is not supported")
+            raise NotImplementedError(
+                f"Rollout name: {self.config.rollout.name} is not supported"
+            )
 
         return rollout, rollout_sharding_manager
 
@@ -680,7 +717,9 @@ class ActorRolloutRefWorker(Worker):
                 trust_remote_code=self.config.model.get("trust_remote_code", False),
                 use_liger=self.config.model.get("use_liger", False),
                 role="actor",
-                enable_activation_offload=self.config.model.get("enable_activation_offload", False),
+                enable_activation_offload=self.config.model.get(
+                    "enable_activation_offload", False
+                ),
             )
 
             # get the original unwrapped module
@@ -689,11 +728,15 @@ class ActorRolloutRefWorker(Worker):
 
             if self._is_offload_param:
                 offload_fsdp_model_to_cpu(self.actor_module_fsdp)
-                log_gpu_memory_usage("After offload actor model during init", logger=logger)
+                log_gpu_memory_usage(
+                    "After offload actor model during init", logger=logger
+                )
 
             if self._is_offload_optimizer:
                 offload_fsdp_optimizer(optimizer=self.actor_optimizer)
-                log_gpu_memory_usage("After offload actor optimizer during init", logger=logger)
+                log_gpu_memory_usage(
+                    "After offload actor optimizer during init", logger=logger
+                )
 
         if self._is_actor:
             OmegaConf.set_struct(self.config.actor, True)
@@ -738,7 +781,9 @@ class ActorRolloutRefWorker(Worker):
                 model=self.actor_module_fsdp,
                 optimizer=self.actor.actor_optimizer,
                 lr_scheduler=self.actor_lr_scheduler,
-                processing_class=(self.processor if self.processor is not None else self.tokenizer),
+                processing_class=(
+                    self.processor if self.processor is not None else self.tokenizer
+                ),
                 checkpoint_contents=self.config.actor.checkpoint,
             )
 
@@ -753,14 +798,18 @@ class ActorRolloutRefWorker(Worker):
                 model=self.actor_module_fsdp,
                 optimizer=None,
                 lr_scheduler=None,
-                processing_class=(self.processor if self.processor is not None else self.tokenizer),
+                processing_class=(
+                    self.processor if self.processor is not None else self.tokenizer
+                ),
                 checkpoint_contents=checkpoint_contents,
             )
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def update_actor(self, data: DataProto):
         # Support all hardwares
-        data = data.to("cpu")  # data will to device with each micro batch on actor.update_policy
+        data = data.to(
+            "cpu"
+        )  # data will to device with each micro batch on actor.update_policy
 
         assert self._is_actor
         if self._is_offload_param:
@@ -782,15 +831,20 @@ class ActorRolloutRefWorker(Worker):
                 global_num_tokens, delta_time
             )
             metrics["perf/mfu/actor"] = (
-                estimated_flops * self.config.actor.ppo_epochs / promised_flops / self.world_size
+                estimated_flops
+                * self.config.actor.ppo_epochs
+                / promised_flops
+                / self.world_size
             )
-            metrics["perf/max_memory_allocated_gb"] = get_torch_device().max_memory_allocated() / (
-                1024**3
+            metrics[
+                "perf/max_memory_allocated_gb"
+            ] = get_torch_device().max_memory_allocated() / (1024 ** 3)
+            metrics[
+                "perf/max_memory_reserved_gb"
+            ] = get_torch_device().max_memory_reserved() / (1024 ** 3)
+            metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (
+                1024 ** 3
             )
-            metrics["perf/max_memory_reserved_gb"] = get_torch_device().max_memory_reserved() / (
-                1024**3
-            )
-            metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (1024**3)
 
             lr = self.actor_lr_scheduler.get_last_lr()[0]
             metrics["actor/lr"] = lr
@@ -804,10 +858,14 @@ class ActorRolloutRefWorker(Worker):
 
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.actor_module_fsdp)
-            log_gpu_memory_usage("After offload actor model during update_actor", logger=logger)
+            log_gpu_memory_usage(
+                "After offload actor model during update_actor", logger=logger
+            )
         if self._is_offload_optimizer:
             offload_fsdp_optimizer(optimizer=self.actor_optimizer)
-            log_gpu_memory_usage("After offload actor optimizer during update_actor", logger=logger)
+            log_gpu_memory_usage(
+                "After offload actor optimizer during update_actor", logger=logger
+            )
 
         return output
 
@@ -833,7 +891,9 @@ class ActorRolloutRefWorker(Worker):
         prompts.meta_info.update(meta_info)
         timing_generate = {}
         with self.rollout_sharding_manager:
-            log_gpu_memory_usage("After entering rollout sharding manager", logger=logger)
+            log_gpu_memory_usage(
+                "After entering rollout sharding manager", logger=logger
+            )
 
             prompts = self.rollout_sharding_manager.preprocess_data(prompts)
             with _timer("generate_sequences", timing_generate):
@@ -866,18 +926,26 @@ class ActorRolloutRefWorker(Worker):
         from contextlib import nullcontext
 
         is_lora = data.meta_info.pop("is_lora", False)
-        adapter_ctx = self.actor.actor_module.disable_adapter() if is_lora else nullcontext()
+        adapter_ctx = (
+            self.actor.actor_module.disable_adapter() if is_lora else nullcontext()
+        )
         data = data.to(get_torch_device().current_device())
         # we should always recompute old_log_probs when it is HybridEngine
-        data.meta_info["micro_batch_size"] = self.config.rollout.log_prob_micro_batch_size_per_gpu
-        data.meta_info["max_token_len"] = self.config.rollout.log_prob_max_token_len_per_gpu
+        data.meta_info[
+            "micro_batch_size"
+        ] = self.config.rollout.log_prob_micro_batch_size_per_gpu
+        data.meta_info[
+            "max_token_len"
+        ] = self.config.rollout.log_prob_max_token_len_per_gpu
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         # perform recompute log_prob
         with self.ulysses_sharding_manager:
             data = self.ulysses_sharding_manager.preprocess_data(data)
             with adapter_ctx:
-                output, entropys = self.actor.compute_log_prob(data=data, calculate_entropy=True)
+                output, entropys = self.actor.compute_log_prob(
+                    data=data, calculate_entropy=True
+                )
             output = DataProto.from_dict(
                 tensors={"old_log_probs": output, "entropys": entropys},
                 meta_info={"temperature": self.config.rollout.temperature},
@@ -893,7 +961,9 @@ class ActorRolloutRefWorker(Worker):
 
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.actor_module_fsdp)
-            log_gpu_memory_usage("After offload actor model during compute_log_prob", logger=logger)
+            log_gpu_memory_usage(
+                "After offload actor model during compute_log_prob", logger=logger
+            )
 
         return output
 
@@ -904,7 +974,9 @@ class ActorRolloutRefWorker(Worker):
             data.meta_info["is_lora"] = True
             data = self.compute_log_prob(data)
             # this old_log_probs is in fact ref_log_prob
-            data = DataProto.from_dict(tensors={"ref_log_prob": data.batch["old_log_probs"]})
+            data = DataProto.from_dict(
+                tensors={"ref_log_prob": data.batch["old_log_probs"]}
+            )
             return data
         assert self._is_ref
         # else:
@@ -919,7 +991,9 @@ class ActorRolloutRefWorker(Worker):
         data.meta_info["use_dynamic_bsz"] = self.config.ref.log_prob_use_dynamic_bsz
         with self.ulysses_sharding_manager:
             data = self.ulysses_sharding_manager.preprocess_data(data)
-            output, _ = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
+            output, _ = self.ref_policy.compute_log_prob(
+                data=data, calculate_entropy=False
+            )
             output = DataProto.from_dict(tensors={"ref_log_prob": output})
             output = self.ulysses_sharding_manager.postprocess_data(output)
 
@@ -933,7 +1007,9 @@ class ActorRolloutRefWorker(Worker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
+    def save_checkpoint(
+        self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None
+    ):
         from verl.utils.logger import log_with_rank
 
         # only support save and load ckpt for actor
@@ -998,8 +1074,8 @@ class ActorRolloutRefWorker(Worker):
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=False):
-        assert (
-            self._is_actor or (not self._is_actor and self._is_rollout)
+        assert self._is_actor or (
+            not self._is_actor and self._is_rollout
         ), f"Checkpoint loading is only supported for Actor or standalone Rollout Workers, but got {self._is_actor} and {self._is_rollout}"
 
         if self._is_offload_param:
@@ -1024,7 +1100,9 @@ class CriticWorker(Worker):
         import torch.distributed
 
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group(backend="nccl" if is_cuda_available else "hccl")
+            torch.distributed.init_process_group(
+                backend="nccl" if is_cuda_available else "hccl"
+            )
         self.config = config
 
         # build device mesh for Ulysses Sequence Parallel
@@ -1032,10 +1110,14 @@ class CriticWorker(Worker):
         from torch.distributed.device_mesh import init_device_mesh
 
         fsdp_size = self.config.model.fsdp_config.fsdp_size
-        self.device_mesh = create_device_mesh(world_size=world_size, fsdp_size=fsdp_size)
+        self.device_mesh = create_device_mesh(
+            world_size=world_size, fsdp_size=fsdp_size
+        )
 
         self.ulysses_device_mesh = None
-        self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
+        self.ulysses_sequence_parallel_size = self.config.get(
+            "ulysses_sequence_parallel_size", 1
+        )
         dp = world_size // self.ulysses_sequence_parallel_size
         if self.ulysses_sequence_parallel_size > 1:
             self.ulysses_device_mesh = init_device_mesh(
@@ -1044,7 +1126,9 @@ class CriticWorker(Worker):
                 mesh_dim_names=["dp", "sp"],
             )
 
-        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(self.ulysses_device_mesh)
+        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(
+            self.ulysses_device_mesh
+        )
 
         # set FSDP offload params
         self._is_offload_param = self.config.model.fsdp_config.param_offload
@@ -1057,20 +1141,28 @@ class CriticWorker(Worker):
         )
         if self.config.ppo_micro_batch_size is not None:
             self.config.ppo_micro_batch_size //= (
-                torch.distributed.get_world_size() // self.ulysses_sequence_parallel_size
+                torch.distributed.get_world_size()
+                // self.ulysses_sequence_parallel_size
             )
             self.config.forward_micro_batch_size //= (
-                torch.distributed.get_world_size() // self.ulysses_sequence_parallel_size
+                torch.distributed.get_world_size()
+                // self.ulysses_sequence_parallel_size
             )
             self.config.ppo_micro_batch_size_per_gpu = self.config.ppo_micro_batch_size
-            self.config.forward_micro_batch_size_per_gpu = self.config.forward_micro_batch_size
+            self.config.forward_micro_batch_size_per_gpu = (
+                self.config.forward_micro_batch_size
+            )
 
         if self.config.ppo_micro_batch_size_per_gpu is not None:
             assert (
-                self.config.ppo_mini_batch_size % self.config.ppo_micro_batch_size_per_gpu == 0
+                self.config.ppo_mini_batch_size
+                % self.config.ppo_micro_batch_size_per_gpu
+                == 0
             ), f"normalized ppo_mini_batch_size {self.config.ppo_mini_batch_size} should be divisible by ppo_micro_batch_size_per_gpu {self.config.ppo_micro_batch_size_per_gpu}"
             assert (
-                self.config.ppo_mini_batch_size // self.config.ppo_micro_batch_size_per_gpu > 0
+                self.config.ppo_mini_batch_size
+                // self.config.ppo_micro_batch_size_per_gpu
+                > 0
             ), f"normalized ppo_mini_batch_size {self.config.ppo_mini_batch_size} should be larger than ppo_micro_batch_size_per_gpu {self.config.ppo_micro_batch_size_per_gpu}"
         self._is_lora = self.config.model.get("lora_rank", 0) > 0
 
@@ -1167,7 +1259,9 @@ class CriticWorker(Worker):
                 "task_type": TaskType.CAUSAL_LM,
                 "r": self.config.model.lora_rank,
                 "lora_alpha": self.config.model.lora_alpha,
-                "target_modules": convert_to_regular_types(self.config.model.target_modules),
+                "target_modules": convert_to_regular_types(
+                    self.config.model.target_modules
+                ),
                 "bias": "none",
             }
             critic_module = get_peft_model(critic_module, LoraConfig(**lora_config))
@@ -1180,7 +1274,9 @@ class CriticWorker(Worker):
         fsdp_config = self.config.model.fsdp_config
         mixed_precision_config = fsdp_config.get("mixed_precision", None)
         if mixed_precision_config is not None:
-            param_dtype = PrecisionType.to_dtype(mixed_precision_config.get("param_dtype", "bf16"))
+            param_dtype = PrecisionType.to_dtype(
+                mixed_precision_config.get("param_dtype", "bf16")
+            )
             reduce_dtype = PrecisionType.to_dtype(
                 mixed_precision_config.get("reduce_dtype", "fp32")
             )
@@ -1247,12 +1343,16 @@ class CriticWorker(Worker):
             }
             full_state = critic_module.state_dict()
             apply_fsdp2(critic_module, fsdp_kwargs, fsdp_config)
-            fsdp2_load_full_state_dict(critic_module, full_state, fsdp_mesh, offload_policy)
+            fsdp2_load_full_state_dict(
+                critic_module, full_state, fsdp_mesh, offload_policy
+            )
         else:
             raise NotImplementedError(f"Unknown strategy {config.strategy}")
 
         if config.model.get("enable_activation_offload", False):
-            enable_gradient_checkpointing = config.model.get("enable_gradient_checkpointing", False)
+            enable_gradient_checkpointing = config.model.get(
+                "enable_gradient_checkpointing", False
+            )
             enable_activation_offloading(
                 critic_module, config.strategy, enable_gradient_checkpointing
             )
@@ -1311,10 +1411,14 @@ class CriticWorker(Worker):
 
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.critic_module)
-            log_gpu_memory_usage("After offload critic model during init", logger=logger)
+            log_gpu_memory_usage(
+                "After offload critic model during init", logger=logger
+            )
         if self._is_offload_optimizer:
             offload_fsdp_optimizer(optimizer=self.critic_optimizer)
-            log_gpu_memory_usage("After offload critic optimizer during init", logger=logger)
+            log_gpu_memory_usage(
+                "After offload critic optimizer during init", logger=logger
+            )
 
         self.critic = DataParallelPPOCritic(
             config=self.config,
@@ -1327,7 +1431,9 @@ class CriticWorker(Worker):
             model=self.critic_module,
             optimizer=self.critic_optimizer,
             lr_scheduler=self.critic_lr_scheduler,
-            processing_class=(self.processor if self.processor is not None else self.tokenizer),
+            processing_class=(
+                self.processor if self.processor is not None else self.tokenizer
+            ),
             checkpoint_contents=self.config.checkpoint,
         )
 
@@ -1379,7 +1485,10 @@ class CriticWorker(Worker):
                 global_num_tokens, delta_time
             )
             metrics["perf/mfu/critic"] = (
-                estimated_flops * self.config.ppo_epochs / promised_flops / self.world_size
+                estimated_flops
+                * self.config.ppo_epochs
+                / promised_flops
+                / self.world_size
             )
 
             self.critic_lr_scheduler.step()
@@ -1398,7 +1507,9 @@ class CriticWorker(Worker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
+    def save_checkpoint(
+        self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None
+    ):
         import torch
 
         if self._is_offload_param:
@@ -1447,7 +1558,9 @@ class RewardModelWorker(Worker):
         import torch.distributed
 
         if not torch.distributed.is_initialized():
-            torch.distributed.init_process_group(backend="nccl" if is_cuda_available else "hccl")
+            torch.distributed.init_process_group(
+                backend="nccl" if is_cuda_available else "hccl"
+            )
         self.config = config
 
         # build device mesh for Ulysses Sequence Parallel
@@ -1455,10 +1568,14 @@ class RewardModelWorker(Worker):
         from torch.distributed.device_mesh import init_device_mesh
 
         fsdp_size = self.config.model.fsdp_config.fsdp_size
-        self.device_mesh = create_device_mesh(world_size=world_size, fsdp_size=fsdp_size)
+        self.device_mesh = create_device_mesh(
+            world_size=world_size, fsdp_size=fsdp_size
+        )
 
         self.ulysses_device_mesh = None
-        self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
+        self.ulysses_sequence_parallel_size = self.config.get(
+            "ulysses_sequence_parallel_size", 1
+        )
         dp = world_size // self.ulysses_sequence_parallel_size
         if self.ulysses_sequence_parallel_size > 1:
             self.ulysses_device_mesh = init_device_mesh(
@@ -1467,7 +1584,9 @@ class RewardModelWorker(Worker):
                 mesh_dim_names=["dp", "sp"],
             )
 
-        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(self.ulysses_device_mesh)
+        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(
+            self.ulysses_device_mesh
+        )
 
         self.use_remove_padding = self.config.model.get("use_remove_padding", False)
 
@@ -1502,7 +1621,9 @@ class RewardModelWorker(Worker):
             )
 
         trust_remote_code = config.model.get("trust_remote_code", False)
-        model_config = AutoConfig.from_pretrained(local_path, trust_remote_code=trust_remote_code)
+        model_config = AutoConfig.from_pretrained(
+            local_path, trust_remote_code=trust_remote_code
+        )
         model_config.num_labels = 1
 
         # note that we have to create model in fp32. Otherwise, the optimizer is in bf16, which is incorrect
@@ -1561,7 +1682,9 @@ class RewardModelWorker(Worker):
             }
             full_state = reward_module.state_dict()
             apply_fsdp2(reward_module, fsdp_kwargs, config.model.fsdp_config)
-            fsdp2_load_full_state_dict(reward_module, full_state, fsdp_mesh, cpu_offload)
+            fsdp2_load_full_state_dict(
+                reward_module, full_state, fsdp_mesh, cpu_offload
+            )
         else:
             raise NotImplementedError(f"Unknown strategy: {config.strategy}")
         return reward_module
@@ -1668,7 +1791,9 @@ class RewardModelWorker(Worker):
         position_ids = data.batch["position_ids"]
         response_length = data.batch["responses"].shape[-1]
         eos_mask_idx = torch.argmax(position_ids * attention_mask, dim=-1)  # (bsz,)
-        token_level_scores = torch.zeros_like(attention_mask, dtype=scores.dtype)  # (bsz, seqlen)
+        token_level_scores = torch.zeros_like(
+            attention_mask, dtype=scores.dtype
+        )  # (bsz, seqlen)
         token_level_scores[torch.arange(batch_size), eos_mask_idx] = scores
 
         # select the response part
@@ -1695,7 +1820,9 @@ class RewardModelWorker(Worker):
             # extract response
             response_ids = data.batch["responses"][i]
             response_length = response_ids.shape[-1]
-            valid_response_length = data.batch["attention_mask"][i][-response_length:].sum()
+            valid_response_length = data.batch["attention_mask"][i][
+                -response_length:
+            ].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
@@ -1777,13 +1904,16 @@ class RewardModelWorker(Worker):
             use_dynamic_bsz = self.config.use_dynamic_bsz
             if use_dynamic_bsz:
                 max_token_len = (
-                    self.config.forward_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
+                    self.config.forward_max_token_len_per_gpu
+                    * self.ulysses_sequence_parallel_size
                 )
                 micro_batches, indices = rearrange_micro_batches(
                     batch=rm_data.batch, max_token_len=max_token_len
                 )
             else:
-                micro_batches = rm_data.batch.split(self.config.micro_batch_size_per_gpu)
+                micro_batches = rm_data.batch.split(
+                    self.config.micro_batch_size_per_gpu
+                )
             output = []
             for micro_batch in micro_batches:
                 rm_score = self._forward_micro_batch(micro_batch)
@@ -1792,8 +1922,12 @@ class RewardModelWorker(Worker):
 
             if use_dynamic_bsz:
                 indices = list(itertools.chain.from_iterable(indices))
-                assert len(indices) == scores.size(0), f"{len(indices)} vs. {scores.size()}"
-                revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
+                assert len(indices) == scores.size(
+                    0
+                ), f"{len(indices)} vs. {scores.size()}"
+                revert_indices = torch.tensor(
+                    get_reverse_idx(indices), dtype=torch.long
+                )
                 scores = scores[revert_indices]
 
             token_level_scores = self._expand_to_token_level(data, scores)
@@ -1829,7 +1963,9 @@ class AsyncActorRolloutRefWorker(ActorRolloutRefWorker):
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def generate_sequences(self, prompts: DataProto):
-        raise NotImplementedError("AsyncActorRolloutRefWorker does not support generate_sequences")
+        raise NotImplementedError(
+            "AsyncActorRolloutRefWorker does not support generate_sequences"
+        )
 
     @register(dispatch_mode=Dispatch.DIRECT_ROLLOUT_METHOD)
     def execute_method(self, method: str | bytes, *args, **kwargs):

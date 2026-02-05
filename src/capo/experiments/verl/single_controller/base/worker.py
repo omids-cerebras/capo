@@ -94,8 +94,13 @@ class Worker(WorkerHelper):
         worker_group_prefix = os.environ.get("WG_PREFIX", None)
 
         # when decorator @ray.remote applies, __new__ will be called while we don't want to apply _configure_before_init
-        if None not in [rank, worker_group_prefix] and "ActorClass(" not in cls.__name__:
-            instance._configure_before_init(f"{worker_group_prefix}_register_center", int(rank))
+        if (
+            None not in [rank, worker_group_prefix]
+            and "ActorClass(" not in cls.__name__
+        ):
+            instance._configure_before_init(
+                f"{worker_group_prefix}_register_center", int(rank)
+            )
 
         return instance
 
@@ -254,7 +259,8 @@ class Worker(WorkerHelper):
         This function should only be called inside by WorkerGroup
         """
         store_env_dict = {
-            f"_{key.lower()}": store.get(f"_{key.lower()}", None) for key in type(self).env_keys()
+            f"_{key.lower()}": store.get(f"_{key.lower()}", None)
+            for key in type(self).env_keys()
         }
         self.__dict__.update(store_env_dict)  # this is hacky
         # print(f"__dict__: {self.__dict__}")
@@ -264,7 +270,9 @@ class Worker(WorkerHelper):
                 # print(f"set {key} to {val}")
                 os.environ[key] = str(val)
         os.environ["REDIS_STORE_SERVER_HOST"] = (
-            str(self._master_addr).replace("[", "").replace("]", "") if self._master_addr else ""
+            str(self._master_addr).replace("[", "").replace("]", "")
+            if self._master_addr
+            else ""
         )
 
     def get_master_addr_port(self):

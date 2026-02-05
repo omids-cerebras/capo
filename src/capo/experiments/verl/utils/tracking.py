@@ -93,7 +93,9 @@ class Tracking:
             # Project_name is actually experiment_name in MLFlow
             # If experiment does not exist, will create a new experiment
             experiment = mlflow.set_experiment(project_name)
-            mlflow.start_run(experiment_id=experiment.experiment_id, run_name=experiment_name)
+            mlflow.start_run(
+                experiment_id=experiment.experiment_id, run_name=experiment_name
+            )
             mlflow.log_params(_compute_mlflow_params_from_objects(config))
             self.logger["mlflow"] = _MlflowLoggingAdapter()
 
@@ -111,7 +113,9 @@ class Tracking:
                 )  # NOTE: previous login information will be overwritten
 
             if config is None:
-                config = {}  # make sure config is not None, otherwise **config will raise error
+                config = (
+                    {}
+                )  # make sure config is not None, otherwise **config will raise error
             swanlab.init(
                 project=project_name,
                 experiment_name=experiment_name,
@@ -151,7 +155,9 @@ class Tracking:
             self.logger["console"] = self.console_logger
 
         if "clearml" in default_backend:
-            self.logger["clearml"] = ClearMLLogger(project_name, experiment_name, config)
+            self.logger["clearml"] = ClearMLLogger(
+                project_name, experiment_name, config
+            )
 
     def log(self, data, step, backend=None):
         for default_backend, logger_instance in self.logger.items():
@@ -202,17 +208,11 @@ class ClearMLLogger:
 
             if isinstance(v, (int, float, np.floating, np.integer)):
                 logger.report_scalar(
-                    title=title,
-                    series=series,
-                    value=v,
-                    iteration=step,
+                    title=title, series=series, value=v, iteration=step,
                 )
             elif isinstance(v, pd.DataFrame):
                 logger.report_table(
-                    title=title,
-                    series=series,
-                    table_plot=v,
-                    iteration=step,
+                    title=title, series=series, table_plot=v, iteration=step,
                 )
             else:
                 logger.warning(
@@ -272,7 +272,9 @@ def _transform_params_to_json_serializable(x, convert_list_to_dict: bool):
         return {k: _transform(v) for k, v in x.items()}
     if isinstance(x, list):
         if convert_list_to_dict:
-            return {"list_len": len(x)} | {f"{i}": _transform(v) for i, v in enumerate(x)}
+            return {"list_len": len(x)} | {
+                f"{i}": _transform(v) for i, v in enumerate(x)
+            }
         else:
             return [_transform(v) for v in x]
     if isinstance(x, Path):
@@ -312,7 +314,10 @@ class ValidationGenerationsLogger:
 
         # Create column names for all samples
         columns = ["step"] + sum(
-            [[f"input_{i + 1}", f"output_{i + 1}", f"score_{i + 1}"] for i in range(len(samples))],
+            [
+                [f"input_{i + 1}", f"output_{i + 1}", f"score_{i + 1}"]
+                for i in range(len(samples))
+            ],
             [],
         )
 
@@ -378,7 +383,9 @@ class ValidationGenerationsLogger:
                     json.dump(row_data, file)
                 mlflow.log_artifact(validation_gen_step_file)
         except Exception as e:
-            print(f"WARNING: save validation generation file to mlflow failed with error {e}")
+            print(
+                f"WARNING: save validation generation file to mlflow failed with error {e}"
+            )
 
     def log_generations_to_clearml(self, samples, step):
         """Log validation generation to clearml as table"""
@@ -391,12 +398,7 @@ class ValidationGenerationsLogger:
             return
 
         table = [
-            {
-                "step": step,
-                "input": sample[0],
-                "output": sample[1],
-                "score": sample[2],
-            }
+            {"step": step, "input": sample[0], "output": sample[1], "score": sample[2],}
             for sample in samples
         ]
 

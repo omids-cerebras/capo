@@ -62,7 +62,9 @@ class Qwen2_5VLSelfAttention(SelfAttention):
 
         """
 
-        inference_context = deprecate_inference_params(inference_context, inference_params)
+        inference_context = deprecate_inference_params(
+            inference_context, inference_params
+        )
 
         if inference_context and inference_context.is_dynamic_batching():
             assert (
@@ -70,7 +72,11 @@ class Qwen2_5VLSelfAttention(SelfAttention):
             ), "Internal use only: install package `nvidia_chunked_flash_attn`."
 
         # hidden_states: [sq, b, h]
-        if self.config.flash_decode and not self.training and inference_context is not None:
+        if (
+            self.config.flash_decode
+            and not self.training
+            and inference_context is not None
+        ):
             rotary_pos_emb = None
         else:
             assert rotary_pos_cos is None and rotary_pos_sin is None
@@ -84,7 +90,9 @@ class Qwen2_5VLSelfAttention(SelfAttention):
         # =====================
         # Get the query, key and value tensors based on the type of attention -
         # self or cross attn.
-        query, key, value = self.get_query_key_value_tensors(hidden_states, key_value_states)
+        query, key, value = self.get_query_key_value_tensors(
+            hidden_states, key_value_states
+        )
 
         # ===================================================
         # Adjust key, value, and rotary_pos_emb for inference

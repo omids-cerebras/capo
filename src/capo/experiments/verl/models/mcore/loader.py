@@ -79,7 +79,9 @@ def load_state_dict_to_megatron_gptmodel(
     dp_rank = mpu.get_data_parallel_rank()
     pp_rank = mpu.get_pipeline_model_parallel_rank()
     cp_rank = mpu.get_context_parallel_rank()
-    src_rank = _megatron_calc_global_rank(tp_rank=0, dp_rank=0, pp_rank=0, cp_rank=cp_rank)
+    src_rank = _megatron_calc_global_rank(
+        tp_rank=0, dp_rank=0, pp_rank=0, cp_rank=cp_rank
+    )
     pp_size = mpu.get_pipeline_model_parallel_world_size()
     virtual_pp_size = mpu.get_virtual_pipeline_model_parallel_world_size() or 1
     mp_group = mpu.get_model_parallel_group()
@@ -189,7 +191,9 @@ def load_state_dict_to_megatron_gptmodel(
             if (i == tp_rank) and (tensor is not None):
                 tensor.data.copy_(sync_tensor)
 
-    def _broadcast_tp_shard_tensor(tensor, name, chunk_dim=0, mutate_func=None) -> torch.Tensor:
+    def _broadcast_tp_shard_tensor(
+        tensor, name, chunk_dim=0, mutate_func=None
+    ) -> torch.Tensor:
         """broadcast tensor in tp shards across mp_group"""
         nonlocal state_dict
         nonlocal mp_group
@@ -259,7 +263,9 @@ def load_state_dict_to_megatron_gptmodel(
                 gate_weight_tp = gate_weight[
                     i * intermediate_size_tp : (i + 1) * intermediate_size_tp
                 ]
-                up_weight_tp = up_weight[i * intermediate_size_tp : (i + 1) * intermediate_size_tp]
+                up_weight_tp = up_weight[
+                    i * intermediate_size_tp : (i + 1) * intermediate_size_tp
+                ]
                 new_gate_up_weight[
                     intermediate_size_tp * 2 * i : intermediate_size_tp * 2 * (i + 1)
                 ].copy_(torch.cat([gate_weight_tp, up_weight_tp], dim=0))
@@ -274,7 +280,9 @@ def load_state_dict_to_megatron_gptmodel(
         chunk_shape = obj_list[0]
         if chunk_shape is None:
             # all or none ranks in the mp_group should reach here
-            print_rank_0(f"tp_shard tensor:[{gate_name, up_name}] not in state_dict, skip loading")
+            print_rank_0(
+                f"tp_shard tensor:[{gate_name, up_name}] not in state_dict, skip loading"
+            )
             return
 
         if tensor is None:
@@ -299,7 +307,9 @@ def load_state_dict_to_megatron_gptmodel(
             if (i == tp_rank) and (tensor is not None):
                 tensor.data.copy_(sync_tensor)
 
-    def _broadcast_tp_shard_tensor_qkv(tensor, q_name, k_name, v_name, bias=False) -> torch.Tensor:
+    def _broadcast_tp_shard_tensor_qkv(
+        tensor, q_name, k_name, v_name, bias=False
+    ) -> torch.Tensor:
         """broadcast tensor in tp shards across mp_group"""
         nonlocal state_dict
         nonlocal mp_group
@@ -307,7 +317,9 @@ def load_state_dict_to_megatron_gptmodel(
         tp_size = mpu.get_tensor_model_parallel_world_size()
 
         if torch.distributed.get_rank() == src_rank:
-            assert q_name in state_dict and k_name in state_dict and v_name in state_dict
+            assert (
+                q_name in state_dict and k_name in state_dict and v_name in state_dict
+            )
             full_weight_q = state_dict[q_name]
             full_weight_k = state_dict[k_name]
             full_weight_v = state_dict[v_name]
@@ -318,7 +330,9 @@ def load_state_dict_to_megatron_gptmodel(
 
             if config.num_key_value_heads >= tp_size:
                 q_size_tp = hidden_size_per_head * config.num_attention_heads // tp_size
-                kv_size_tp = hidden_size_per_head * config.num_key_value_heads // tp_size
+                kv_size_tp = (
+                    hidden_size_per_head * config.num_key_value_heads // tp_size
+                )
                 total_size = q_size_tp + 2 * kv_size_tp
                 sizes = [total_size * tp_size]
                 if not bias:
@@ -330,11 +344,21 @@ def load_state_dict_to_megatron_gptmodel(
                     q_part = full_weight_q[i * q_size_tp : (i + 1) * q_size_tp]
                     k_part = full_weight_k[i * kv_size_tp : (i + 1) * kv_size_tp]
                     v_part = full_weight_v[i * kv_size_tp : (i + 1) * kv_size_tp]
-                    num_query_groups_per_partition = models[0].config.num_query_groups // tp_size
-                    new_weight_qkv_this_tp = new_weight_qkv[i * total_size : (i + 1) * total_size]
-                    q_part_per_head = torch.chunk(q_part, num_query_groups_per_partition, dim=0)
-                    k_part_per_head = torch.chunk(k_part, num_query_groups_per_partition, dim=0)
-                    v_part_per_head = torch.chunk(v_part, num_query_groups_per_partition, dim=0)
+                    num_query_groups_per_partition = (
+                        models[0].config.num_query_groups // tp_size
+                    )
+                    new_weight_qkv_this_tp = new_weight_qkv[
+                        i * total_size : (i + 1) * total_size
+                    ]
+                    q_part_per_head = torch.chunk(
+                        q_part, num_query_groups_per_partition, dim=0
+                    )
+                    k_part_per_head = torch.chunk(
+                        k_part, num_query_groups_per_partition, dim=0
+                    )
+                    v_part_per_head = torch.chunk(
+                        v_part, num_query_groups_per_partition, dim=0
+                    )
                     total_size_per_head = total_size // num_query_groups_per_partition
                     for j in range(num_query_groups_per_partition):
                         new_weight_qkv_this_tp[
@@ -362,14 +386,26 @@ def load_state_dict_to_megatron_gptmodel(
                 )
                 for i in range(tp_size):
                     q_part = full_weight_q[i * q_size_tp : (i + 1) * q_size_tp]
-                    start_idx = i * config.num_key_value_heads // tp_size * hidden_size_per_head
-                    end_idx = (i * config.num_key_value_heads // tp_size + 1) * hidden_size_per_head
+                    start_idx = (
+                        i * config.num_key_value_heads // tp_size * hidden_size_per_head
+                    )
+                    end_idx = (
+                        i * config.num_key_value_heads // tp_size + 1
+                    ) * hidden_size_per_head
                     k_part = full_weight_k[start_idx:end_idx]
                     v_part = full_weight_v[start_idx:end_idx]
-                    new_weight_qkv_this_tp = new_weight_qkv[i * total_size : (i + 1) * total_size]
-                    q_part_per_head = torch.chunk(q_part, config.num_attention_heads, dim=0)
-                    k_part_per_head = torch.chunk(k_part, config.num_attention_heads, dim=0)
-                    v_part_per_head = torch.chunk(v_part, config.num_attention_heads, dim=0)
+                    new_weight_qkv_this_tp = new_weight_qkv[
+                        i * total_size : (i + 1) * total_size
+                    ]
+                    q_part_per_head = torch.chunk(
+                        q_part, config.num_attention_heads, dim=0
+                    )
+                    k_part_per_head = torch.chunk(
+                        k_part, config.num_attention_heads, dim=0
+                    )
+                    v_part_per_head = torch.chunk(
+                        v_part, config.num_attention_heads, dim=0
+                    )
                     total_size_per_head = total_size // config.num_attention_heads
                     for j in range(config.num_attention_heads):
                         new_weight_qkv_this_tp[
@@ -430,7 +466,9 @@ def load_state_dict_to_megatron_gptmodel(
         embed_tokens_weight = None
         if pp_rank == 0:
             embed_tokens_weight = gpt_model_module.embedding.word_embeddings.weight
-        _broadcast_tp_shard_tensor_vocab(embed_tokens_weight, "model.embed_tokens.weight")
+        _broadcast_tp_shard_tensor_vocab(
+            embed_tokens_weight, "model.embed_tokens.weight"
+        )
 
         # Transformer layers
         # -------------------
@@ -472,14 +510,22 @@ def load_state_dict_to_megatron_gptmodel(
                 )
 
             _broadcast_tp_shard_tensor_qkv(
-                (sync_layer.self_attention.linear_qkv.weight if dst_pp_rank == pp_rank else None),
+                (
+                    sync_layer.self_attention.linear_qkv.weight
+                    if dst_pp_rank == pp_rank
+                    else None
+                ),
                 f"{layer_name}.self_attn.q_proj.weight",
                 f"{layer_name}.self_attn.k_proj.weight",
                 f"{layer_name}.self_attn.v_proj.weight",
             )
             if f"{layer_name}.self_attn.q_proj.bias" in state_dict:
                 _broadcast_tp_shard_tensor_qkv(
-                    (sync_layer.self_attention.linear_qkv.bias if dst_pp_rank == pp_rank else None),
+                    (
+                        sync_layer.self_attention.linear_qkv.bias
+                        if dst_pp_rank == pp_rank
+                        else None
+                    ),
                     f"{layer_name}.self_attn.q_proj.bias",
                     f"{layer_name}.self_attn.k_proj.bias",
                     f"{layer_name}.self_attn.v_proj.bias",
@@ -487,12 +533,20 @@ def load_state_dict_to_megatron_gptmodel(
                 )
 
             _broadcast_tp_shard_tensor(
-                (sync_layer.self_attention.linear_proj.weight if dst_pp_rank == pp_rank else None),
+                (
+                    sync_layer.self_attention.linear_proj.weight
+                    if dst_pp_rank == pp_rank
+                    else None
+                ),
                 f"{layer_name}.self_attn.o_proj.weight",
                 chunk_dim=1,
             )
             _broadcast_tensor(
-                (sync_layer.mlp.linear_fc1.layer_norm_weight if dst_pp_rank == pp_rank else None),
+                (
+                    sync_layer.mlp.linear_fc1.layer_norm_weight
+                    if dst_pp_rank == pp_rank
+                    else None
+                ),
                 f"{layer_name}.post_attention_layernorm.weight",
             )
 
@@ -523,7 +577,10 @@ def load_state_dict_to_megatron_gptmodel(
 
         if is_value_model:
             # if torch.distributed.get_rank() == src_rank:
-            if "lm_head.weight" in state_dict and state_dict["lm_head.weight"].shape[0] == 1:
+            if (
+                "lm_head.weight" in state_dict
+                and state_dict["lm_head.weight"].shape[0] == 1
+            ):
                 _broadcast_tensor(lm_head_weight, "lm_head.weight")
             elif (
                 "reward_head.weight" in state_dict
@@ -546,4 +603,6 @@ def load_state_dict_to_megatron_gptmodel(
         broadcast_params(wrapped_model)
     pass
     torch.cuda.empty_cache()
-    print_rank_0(f"loading megatron ckpt done, time elapsed {time.time() - start_time}s")
+    print_rank_0(
+        f"loading megatron ckpt done, time elapsed {time.time() - start_time}s"
+    )

@@ -249,7 +249,9 @@ class EngineArgs:
             help="token block size",
         )
         # TODO(woosuk): Support fine-grained seeds (e.g., seed per request).
-        parser.add_argument("--seed", type=int, default=EngineArgs.seed, help="random seed")
+        parser.add_argument(
+            "--seed", type=int, default=EngineArgs.seed, help="random seed"
+        )
         parser.add_argument(
             "--swap-space",
             type=int,
@@ -298,20 +300,20 @@ class EngineArgs:
         engine_args = cls(**{attr: getattr(args, attr) for attr in attrs})
         return engine_args
 
-    def create_engine_config(
-        self,
-    ) -> EngineConfig:
+    def create_engine_config(self,) -> EngineConfig:
         # bitsandbytes quantization needs a specific model loader
         # so we make sure the quant method and the load format are consistent
         if (
-            self.quantization == "bitsandbytes" or self.qlora_adapter_name_or_path is not None
+            self.quantization == "bitsandbytes"
+            or self.qlora_adapter_name_or_path is not None
         ) and self.load_format != "bitsandbytes":
             raise ValueError(
                 f"BitsAndBytes quantization and QLoRA adapter only support 'bitsandbytes' load format, but got {self.load_format}"
             )
 
         if (
-            self.load_format == "bitsandbytes" or self.qlora_adapter_name_or_path is not None
+            self.load_format == "bitsandbytes"
+            or self.qlora_adapter_name_or_path is not None
         ) and self.quantization != "bitsandbytes":
             raise ValueError(
                 f"BitsAndBytes load format and QLoRA adapter only support 'bitsandbytes' quantization, but got {self.quantization}"
@@ -374,7 +376,9 @@ class EngineArgs:
 
         # NOTE[VERL]: Use the world_size set by TORCHRUN
         world_size = int(os.getenv("WORLD_SIZE", "-1"))
-        assert world_size != -1, "The world_size is set to -1, not initialized by TORCHRUN"
+        assert (
+            world_size != -1
+        ), "The world_size is set to -1, not initialized by TORCHRUN"
         parallel_config.world_size = world_size
 
         max_model_len = model_config.max_model_len
@@ -457,19 +461,24 @@ class EngineArgs:
                 long_lora_scaling_factors=self.long_lora_scaling_factors,
                 lora_dtype=self.lora_dtype,
                 max_cpu_loras=(
-                    self.max_cpu_loras if self.max_cpu_loras and self.max_cpu_loras > 0 else None
+                    self.max_cpu_loras
+                    if self.max_cpu_loras and self.max_cpu_loras > 0
+                    else None
                 ),
             )
             if self.enable_lora
             else None
         )
 
-        if self.qlora_adapter_name_or_path is not None and self.qlora_adapter_name_or_path != "":
+        if (
+            self.qlora_adapter_name_or_path is not None
+            and self.qlora_adapter_name_or_path != ""
+        ):
             if self.model_loader_extra_config is None:
                 self.model_loader_extra_config = {}
-            self.model_loader_extra_config["qlora_adapter_name_or_path"] = (
-                self.qlora_adapter_name_or_path
-            )
+            self.model_loader_extra_config[
+                "qlora_adapter_name_or_path"
+            ] = self.qlora_adapter_name_or_path
 
         load_config = LoadConfig(
             load_format=self.load_format,
@@ -487,9 +496,13 @@ class EngineArgs:
             else None
         )
 
-        decoding_config = DecodingConfig(guided_decoding_backend=self.guided_decoding_backend)
+        decoding_config = DecodingConfig(
+            guided_decoding_backend=self.guided_decoding_backend
+        )
 
-        observability_config = ObservabilityConfig(otlp_traces_endpoint=self.otlp_traces_endpoint)
+        observability_config = ObservabilityConfig(
+            otlp_traces_endpoint=self.otlp_traces_endpoint
+        )
 
         if (
             model_config.get_sliding_window() is not None

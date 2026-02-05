@@ -42,7 +42,9 @@ if "ROCM_PATH" in os.environ:
     if match:
         vllm_package_version = match.group(1)
     else:
-        raise ValueError(f"Warning: Could not parse version format: {vllm_package_version}")
+        raise ValueError(
+            f"Warning: Could not parse version format: {vllm_package_version}"
+        )
 ###
 
 if Version(vllm_package_version) <= Version("0.6.3"):

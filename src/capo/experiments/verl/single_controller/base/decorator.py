@@ -104,7 +104,9 @@ def _split_args_kwargs_data_proto_with_auto_padding(chunks, *args, **kwargs):
             if data_proto_len is None:
                 data_proto_len = len(arg)
                 padding_size = (
-                    (chunks - (data_proto_len % chunks)) if (data_proto_len % chunks > 0) else 0
+                    (chunks - (data_proto_len % chunks))
+                    if (data_proto_len % chunks > 0)
+                    else 0
                 )
                 splitted_kwargs[_padding_size_key] = padding_size
             else:
@@ -348,7 +350,9 @@ def dispatch_megatron_pp_as_dp_data_proto(worker_group, *args, **kwargs):
     assert isinstance(worker_group, MegatronWorkerGroup)
 
     pp_dp_cp_size = worker_group.dp_size * worker_group.pp_size * worker_group.cp_size
-    splitted_args, splitted_kwargs = _split_args_kwargs_data_proto(pp_dp_cp_size, *args, **kwargs)
+    splitted_args, splitted_kwargs = _split_args_kwargs_data_proto(
+        pp_dp_cp_size, *args, **kwargs
+    )
     ret = dispatch_megatron_pp_as_dp(worker_group, *splitted_args, **splitted_kwargs)
     return ret
 
@@ -387,9 +391,7 @@ def dispatch_dp_compute_data_proto(worker_group, *args, **kwargs):
     assert isinstance(worker_group, WorkerGroup)
     # Note: enable auto padding for dp compute DatapProto
     splitted_args, splitted_kwargs = _split_args_kwargs_data_proto_with_auto_padding(
-        worker_group.world_size,
-        *args,
-        **kwargs,
+        worker_group.world_size, *args, **kwargs,
     )
     return splitted_args, splitted_kwargs
 
@@ -497,7 +499,9 @@ def update_dispatch_mode(dispatch_mode, dispatch_fn, collect_fn):
     Update the dispatch mode.
     """
     _check_dispatch_mode(dispatch_mode)
-    assert dispatch_mode in DISPATCH_MODE_FN_REGISTRY, f"dispatch_mode {dispatch_mode} not found"
+    assert (
+        dispatch_mode in DISPATCH_MODE_FN_REGISTRY
+    ), f"dispatch_mode {dispatch_mode} not found"
     DISPATCH_MODE_FN_REGISTRY[dispatch_mode] = {
         "dispatch_fn": dispatch_fn,
         "collect_fn": collect_fn,
@@ -529,7 +533,9 @@ def _check_dispatch_mode(dispatch_mode):
 
 
 def _check_execute_mode(execute_mode):
-    assert isinstance(execute_mode, Execute), f"execute_mode must be a Execute. Got {execute_mode}"
+    assert isinstance(
+        execute_mode, Execute
+    ), f"execute_mode must be a Execute. Got {execute_mode}"
 
 
 def _materialize_futures(*args, **kwargs):

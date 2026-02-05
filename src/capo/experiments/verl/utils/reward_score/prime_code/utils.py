@@ -27,7 +27,9 @@ def _temp_run(sample, generation, debug, result, metadata_list, timeout):
         sys.stdout = devnull
         sys.stderr = devnull
         try:
-            res, metadata = run_test(in_outs=sample, test=generation, debug=debug, timeout=timeout)
+            res, metadata = run_test(
+                in_outs=sample, test=generation, debug=debug, timeout=timeout
+            )
             result.append(res)
             metadata_list.append(metadata)
         except Exception:

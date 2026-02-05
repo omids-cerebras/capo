@@ -118,7 +118,9 @@ def get_kl_controller(kl_ctrl):
     if kl_ctrl.type == "fixed":
         return FixedKLController(kl_coef=kl_ctrl.kl_coef)
     elif kl_ctrl.type == "adaptive":
-        assert kl_ctrl.horizon > 0, f"horizon must be larger than 0. Got {kl_ctrl.horizon}"
+        assert (
+            kl_ctrl.horizon > 0
+        ), f"horizon must be larger than 0. Got {kl_ctrl.horizon}"
         return AdaptiveKLController(
             init_kl_coef=kl_ctrl.kl_coef,
             target_kl=kl_ctrl.target_kl,
@@ -230,7 +232,9 @@ def compute_grpo_outcome_advantage(
             if use_dr_grpo:
                 scores[i] = scores[i] - id2mean[index[i]]
             elif norm_adv_by_std_in_grpo:
-                scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+                scores[i] = (scores[i] - id2mean[index[i]]) / (
+                    id2std[index[i]] + epsilon
+                )
             else:
                 scores[i] = scores[i] - id2mean[index[i]]
 
@@ -244,14 +248,18 @@ def compute_grpo_outcome_advantage(
                 )
             length_reciprocal_mean = float(np.mean(length_reciprocal_list))
             for i in range(bsz):
-                scores[i] = scores[i] * (length_reciprocal_list[i] / length_reciprocal_mean)
+                scores[i] = scores[i] * (
+                    length_reciprocal_list[i] / length_reciprocal_mean
+                )
 
         scores = scores.unsqueeze(-1) * response_mask
 
     return scores, scores
 
 
-@register_adv_est(AdvantageEstimator.GRPO_PASSK)  # or simply: @register_adv_est("grpo_passk")
+@register_adv_est(
+    AdvantageEstimator.GRPO_PASSK
+)  # or simply: @register_adv_est("grpo_passk")
 def compute_grpo_passk_outcome_advantage(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
@@ -548,7 +556,10 @@ def compute_remax_outcome_advantage(
 
     with torch.no_grad():
         returns = (
-            (token_level_rewards * response_mask).flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+            (token_level_rewards * response_mask)
+            .flip(dims=[-1])
+            .cumsum(dim=-1)
+            .flip(dims=[-1])
         )
         advantages = returns - reward_baselines.unsqueeze(-1) * response_mask
 
@@ -662,7 +673,9 @@ def compute_policy_loss(
     clip_pg_losses1 = torch.maximum(
         pg_losses1, pg_losses2
     )  # max(-ratio * A, -clip(ratio, 1-cliprange, 1+cliprange) * A)
-    pg_clipfrac = verl_F.masked_mean(torch.gt(pg_losses2, pg_losses1).float(), response_mask)
+    pg_clipfrac = verl_F.masked_mean(
+        torch.gt(pg_losses2, pg_losses1).float(), response_mask
+    )
 
     pg_losses3 = -advantages * clip_ratio_c
     clip_pg_losses2 = torch.min(pg_losses3, clip_pg_losses1)
@@ -675,7 +688,9 @@ def compute_policy_loss(
     if use_dr_grpo or use_grpopp:
         pg_loss = verl_F.masked_mean_allavg(pg_losses, response_mask)
     else:
-        pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+        pg_loss = agg_loss(
+            loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode
+        )
 
     return pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower
 
@@ -732,14 +747,18 @@ def compute_value_loss(
         vf_clipfrac (float):
             Fraction of elements where the clipped loss was used.
     """
-    vpredclipped = verl_F.clip_by_value(vpreds, values - cliprange_value, values + cliprange_value)
+    vpredclipped = verl_F.clip_by_value(
+        vpreds, values - cliprange_value, values + cliprange_value
+    )
     vf_losses1 = (vpreds - returns) ** 2
     vf_losses2 = (vpredclipped - returns) ** 2
     clipped_vf_losses = torch.max(vf_losses1, vf_losses2)
     vf_loss = 0.5 * agg_loss(
         loss_mat=clipped_vf_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode
     )
-    vf_clipfrac = verl_F.masked_mean(torch.gt(vf_losses2, vf_losses1).float(), response_mask)
+    vf_clipfrac = verl_F.masked_mean(
+        torch.gt(vf_losses2, vf_losses1).float(), response_mask
+    )
     return vf_loss, vf_clipfrac
 
 
@@ -784,9 +803,7 @@ def kl_penalty(
 
 
 def compute_pf_ppo_reweight_data(
-    data,
-    reweight_method: str = "pow",
-    weight_pow: float = 2.0,
+    data, reweight_method: str = "pow", weight_pow: float = 2.0,
 ):
     """Reweight the data based on the token_level_scores.
 
@@ -808,7 +825,9 @@ def compute_pf_ppo_reweight_data(
         elif reweight_method == "max_min":
             max_score = torch.max(scores)
             min_score = torch.min(scores)
-            weights = torch.where((scores == max_score) | (scores == min_score), 1.0, 0.0)
+            weights = torch.where(
+                (scores == max_score) | (scores == min_score), 1.0, 0.0
+            )
         elif reweight_method == "max_random":
             max_score = torch.max(scores)
             weights = torch.where(scores == max_score, 0.4, 0.1)
@@ -823,7 +842,9 @@ def compute_pf_ppo_reweight_data(
     batch_size = scores.shape[0]
     sample_indices = torch.multinomial(weights, batch_size, replacement=True)
 
-    resampled_batch = {key: tensor[sample_indices] for key, tensor in data.batch.items()}
+    resampled_batch = {
+        key: tensor[sample_indices] for key, tensor in data.batch.items()
+    }
 
     sample_indices_np = sample_indices.numpy()
     resampled_non_tensor_batch = {}
@@ -903,7 +924,9 @@ try:
         *, token_level_rewards, response_mask, index=None, config=None, **kwargs
     ):
         eps = float(_capo_get(config, "capo.epsilon", kwargs.get("epsilon", 1e-8)))
-        max_iters = int(_capo_get(config, "capo.eb_lite.max_iters", kwargs.get("max_iters", 20)))
+        max_iters = int(
+            _capo_get(config, "capo.eb_lite.max_iters", kwargs.get("max_iters", 20))
+        )
         tol = float(_capo_get(config, "capo.eb_lite.tol", kwargs.get("tol", 1e-4)))
         return _capo_compute_capo_eb_lite_advantage(
             token_level_rewards=token_level_rewards,
@@ -921,20 +944,46 @@ try:
     ):
         eps = float(_capo_get(config, "capo.epsilon", kwargs.get("epsilon", 1e-8)))
         # EB-full params
-        beta_init = float(_capo_get(config, "capo.eb_full.beta_init", kwargs.get("beta_init", 1.0)))
-        rho_init = float(_capo_get(config, "capo.eb_full.rho_init", kwargs.get("rho_init", 0.0)))
-        eta_init = float(_capo_get(config, "capo.eb_full.eta_init", kwargs.get("eta_init", 1.0)))
+        beta_init = float(
+            _capo_get(config, "capo.eb_full.beta_init", kwargs.get("beta_init", 1.0))
+        )
+        rho_init = float(
+            _capo_get(config, "capo.eb_full.rho_init", kwargs.get("rho_init", 0.0))
+        )
+        eta_init = float(
+            _capo_get(config, "capo.eb_full.eta_init", kwargs.get("eta_init", 1.0))
+        )
         k_band = int(_capo_get(config, "capo.eb_full.k_band", kwargs.get("k_band", 64)))
-        beta_steps = int(_capo_get(config, "capo.eb_full.beta_steps", kwargs.get("beta_steps", 1)))
-        xi_steps = int(_capo_get(config, "capo.eb_full.xi_steps", kwargs.get("xi_steps", 1)))
-        beta_lr = float(_capo_get(config, "capo.eb_full.beta_lr", kwargs.get("beta_lr", 0.1)))
-        rho_lr = float(_capo_get(config, "capo.eb_full.rho_lr", kwargs.get("rho_lr", 0.1)))
-        eta_lr = float(_capo_get(config, "capo.eb_full.eta_lr", kwargs.get("eta_lr", 0.1)))
-        rho_max = float(_capo_get(config, "capo.eb_full.rho_max", kwargs.get("rho_max", 0.99)))
-        beta_min = float(_capo_get(config, "capo.eb_full.beta_min", kwargs.get("beta_min", 0.0)))
-        beta_max = float(_capo_get(config, "capo.eb_full.beta_max", kwargs.get("beta_max", 2.0)))
-        ema_beta = float(_capo_get(config, "capo.eb_full.ema_beta", kwargs.get("ema_beta", 1.0)))
-        ema_xi = float(_capo_get(config, "capo.eb_full.ema_xi", kwargs.get("ema_xi", 1.0)))
+        beta_steps = int(
+            _capo_get(config, "capo.eb_full.beta_steps", kwargs.get("beta_steps", 1))
+        )
+        xi_steps = int(
+            _capo_get(config, "capo.eb_full.xi_steps", kwargs.get("xi_steps", 1))
+        )
+        beta_lr = float(
+            _capo_get(config, "capo.eb_full.beta_lr", kwargs.get("beta_lr", 0.1))
+        )
+        rho_lr = float(
+            _capo_get(config, "capo.eb_full.rho_lr", kwargs.get("rho_lr", 0.1))
+        )
+        eta_lr = float(
+            _capo_get(config, "capo.eb_full.eta_lr", kwargs.get("eta_lr", 0.1))
+        )
+        rho_max = float(
+            _capo_get(config, "capo.eb_full.rho_max", kwargs.get("rho_max", 0.99))
+        )
+        beta_min = float(
+            _capo_get(config, "capo.eb_full.beta_min", kwargs.get("beta_min", 0.0))
+        )
+        beta_max = float(
+            _capo_get(config, "capo.eb_full.beta_max", kwargs.get("beta_max", 2.0))
+        )
+        ema_beta = float(
+            _capo_get(config, "capo.eb_full.ema_beta", kwargs.get("ema_beta", 1.0))
+        )
+        ema_xi = float(
+            _capo_get(config, "capo.eb_full.ema_xi", kwargs.get("ema_xi", 1.0))
+        )
         use_acf_moment = bool(
             _capo_get(
                 config,
@@ -943,13 +992,19 @@ try:
             )
         )
         dlog_pi_beta = float(
-            _capo_get(config, "capo.eb_full.dlog_pi_beta", kwargs.get("dlog_pi_beta", 0.0))
+            _capo_get(
+                config, "capo.eb_full.dlog_pi_beta", kwargs.get("dlog_pi_beta", 0.0)
+            )
         )
         dlog_pi_rho = float(
-            _capo_get(config, "capo.eb_full.dlog_pi_rho", kwargs.get("dlog_pi_rho", 0.0))
+            _capo_get(
+                config, "capo.eb_full.dlog_pi_rho", kwargs.get("dlog_pi_rho", 0.0)
+            )
         )
         dlog_pi_eta = float(
-            _capo_get(config, "capo.eb_full.dlog_pi_eta", kwargs.get("dlog_pi_eta", 0.0))
+            _capo_get(
+                config, "capo.eb_full.dlog_pi_eta", kwargs.get("dlog_pi_eta", 0.0)
+            )
         )
 
         return _capo_compute_capo_eb_full_advantage(

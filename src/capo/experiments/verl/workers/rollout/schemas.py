@@ -105,11 +105,17 @@ class AsyncRolloutRequest(BaseModel):
     @classmethod
     def initialize_request(cls, values):
         if not (messages := values.get("messages")):
-            raise ValueError("messages is required for AsyncRolloutRequest initialization")
+            raise ValueError(
+                "messages is required for AsyncRolloutRequest initialization"
+            )
         if not (max_prompt_len := values.get("max_prompt_len")):
-            raise ValueError("max_prompt_len is required for AsyncRolloutRequest initialization")
+            raise ValueError(
+                "max_prompt_len is required for AsyncRolloutRequest initialization"
+            )
         if not (tokenizer := values.pop("tokenizer", None)):
-            raise ValueError("tokenizer is required for AsyncRolloutRequest initialization")
+            raise ValueError(
+                "tokenizer is required for AsyncRolloutRequest initialization"
+            )
 
         values["messages"] = [Message.model_validate(msg) for msg in messages]
 
@@ -143,11 +149,17 @@ class AsyncRolloutRequest(BaseModel):
             values["input_ids"],
             values["attention_mask"],
         )
-        values["position_ids"] = values["prompt_position_ids"] = compute_position_id_with_mask(
+        values["position_ids"] = values[
+            "prompt_position_ids"
+        ] = compute_position_id_with_mask(
             torch.tensor(values["attention_mask"])
         ).tolist()
-        values["loss_mask"] = values["prompt_loss_mask"] = [0] * len(values["input_ids"])
-        values["generation_prompt_ids"] = values["input_ids"][len(tokens_without_prompt) :]
+        values["loss_mask"] = values["prompt_loss_mask"] = [0] * len(
+            values["input_ids"]
+        )
+        values["generation_prompt_ids"] = values["input_ids"][
+            len(tokens_without_prompt) :
+        ]
         values["base_conv_wo_gen_prompt_end_pos"] = len(
             tokenizer.apply_chat_template(
                 BASE_CHAT_HISTORY,
@@ -192,17 +204,22 @@ class AsyncRolloutRequest(BaseModel):
     def get_generation_prompt_ids(self, tokenizer: PreTrainedTokenizer) -> list[int]:
         generation_prompt_ids = (
             []
-            if self.input_ids[-len(self.generation_prompt_ids) :] == self.generation_prompt_ids
+            if self.input_ids[-len(self.generation_prompt_ids) :]
+            == self.generation_prompt_ids
             else self.generation_prompt_ids
         )
         if generation_prompt_ids:
-            self._update_input_ids(generation_prompt_ids, attention_mask=True, loss_mask=False)
+            self._update_input_ids(
+                generation_prompt_ids, attention_mask=True, loss_mask=False
+            )
 
         if self.use_inference_chat_template:
             return tokenizer.apply_chat_template(
                 [msg.model_dump() for msg in self.messages],
                 tools=(
-                    [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
+                    [tool.model_dump() for tool in self.tool_schemas]
+                    if self.tool_schemas
+                    else None
                 ),
                 add_generation_prompt=True,
                 tokenize=True,
@@ -216,11 +233,15 @@ class AsyncRolloutRequest(BaseModel):
         content: str,
         tool_calls: list[OpenAIFunctionToolCall] | None = None,
     ) -> None:
-        self.messages.append(Message(role="assistant", content=content, tool_calls=tool_calls))
+        self.messages.append(
+            Message(role="assistant", content=content, tool_calls=tool_calls)
+        )
         content = tokenizer.apply_chat_template(
             [*BASE_CHAT_HISTORY, self.messages[-1]],
             tools=(
-                [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
+                [tool.model_dump() for tool in self.tool_schemas]
+                if self.tool_schemas
+                else None
             ),
             add_generation_prompt=False,
             tokenize=False,
@@ -235,11 +256,15 @@ class AsyncRolloutRequest(BaseModel):
     ) -> None:
         if not contents:
             return
-        self.messages.extend([Message(role="tool", content=content) for content in contents])
+        self.messages.extend(
+            [Message(role="tool", content=content) for content in contents]
+        )
         content = tokenizer.apply_chat_template(
             [*BASE_CHAT_HISTORY, *self.messages[-len(contents) :]],
             tools=(
-                [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
+                [tool.model_dump() for tool in self.tool_schemas]
+                if self.tool_schemas
+                else None
             ),
             add_generation_prompt=False,
             tokenize=False,
@@ -269,7 +294,9 @@ class AsyncRolloutRequest(BaseModel):
             full_tokens = tokenizer.apply_chat_template(
                 [msg.model_dump() for msg in self.messages],
                 tools=(
-                    [tool.model_dump() for tool in self.tool_schemas] if self.tool_schemas else None
+                    [tool.model_dump() for tool in self.tool_schemas]
+                    if self.tool_schemas
+                    else None
                 ),
                 add_generation_prompt=False,
                 tokenize=True,
@@ -283,9 +310,14 @@ class AsyncRolloutRequest(BaseModel):
                 )
 
         # In case we failed to generate the assistant message and the generation prompt ids were already added to input_ids, remove them from the end of input_ids
-        if self.input_ids[-len(self.generation_prompt_ids) :] == self.generation_prompt_ids:
+        if (
+            self.input_ids[-len(self.generation_prompt_ids) :]
+            == self.generation_prompt_ids
+        ):
             self.input_ids = self.input_ids[: -len(self.generation_prompt_ids)]
-            self.attention_mask = self.attention_mask[: -len(self.generation_prompt_ids)]
+            self.attention_mask = self.attention_mask[
+                : -len(self.generation_prompt_ids)
+            ]
             self.position_ids = self.position_ids[: -len(self.generation_prompt_ids)]
             self.loss_mask = self.loss_mask[: -len(self.generation_prompt_ids)]
 
@@ -295,7 +327,9 @@ class AsyncRolloutRequest(BaseModel):
         elif finish_reason_type == FinishReasonTypeEnum.LENGTH:
             pass
         else:
-            raise ValueError(f"Unsupported finalize finish reason type: {finish_reason_type}")
+            raise ValueError(
+                f"Unsupported finalize finish reason type: {finish_reason_type}"
+            )
         self.truncate_output_ids(tokenizer)
         assert (
             len(self.input_ids)
@@ -310,10 +344,12 @@ class AsyncRolloutRequest(BaseModel):
         self.attention_mask = self.attention_mask[: self.max_model_len]
         self.position_ids = self.position_ids[: self.max_model_len]
         self.loss_mask = self.loss_mask[: self.max_model_len]
-        self.response_ids = self.input_ids[len(self.prompt_ids) :][: self.max_response_len]
-        self.response_attention_mask = self.attention_mask[len(self.prompt_attention_mask) :][
+        self.response_ids = self.input_ids[len(self.prompt_ids) :][
             : self.max_response_len
         ]
+        self.response_attention_mask = self.attention_mask[
+            len(self.prompt_attention_mask) :
+        ][: self.max_response_len]
         self.response_position_ids = self.position_ids[len(self.prompt_position_ids) :][
             : self.max_response_len
         ]

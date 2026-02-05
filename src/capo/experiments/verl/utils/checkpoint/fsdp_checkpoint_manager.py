@@ -85,7 +85,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             checkpoint_contents=checkpoint_contents,
         )
 
-    def load_checkpoint(self, local_path: str, hdfs_path: str = None, del_local_after_load=False):
+    def load_checkpoint(
+        self, local_path: str, hdfs_path: str = None, del_local_after_load=False
+    ):
         """
         Load an FSDP checkpoint for this rank.
 
@@ -118,7 +120,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             else None
         )
         optim_cfg = (
-            ShardedOptimStateDictConfig(offload_to_cpu=True if is_cuda_available else False)
+            ShardedOptimStateDictConfig(
+                offload_to_cpu=True if is_cuda_available else False
+            )
             if self.should_load_optimizer
             else None
         )
@@ -254,8 +258,12 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             ), "optimizer must be provided when checkpoint_contents.save includes ['optimizer']"
 
         # every rank will save its own model and optim shard
-        state_dict_cfg = ShardedStateDictConfig(offload_to_cpu=True if is_cuda_available else False)
-        optim_cfg = ShardedOptimStateDictConfig(offload_to_cpu=True if is_cuda_available else False)
+        state_dict_cfg = ShardedStateDictConfig(
+            offload_to_cpu=True if is_cuda_available else False
+        )
+        optim_cfg = ShardedOptimStateDictConfig(
+            offload_to_cpu=True if is_cuda_available else False
+        )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             with get_fsdp_state_ctx(
@@ -294,7 +302,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
 
                 if self.should_save_extra:
                     lr_scheduler_state_dict = (
-                        self.lr_scheduler.state_dict() if self.lr_scheduler is not None else None
+                        self.lr_scheduler.state_dict()
+                        if self.lr_scheduler is not None
+                        else None
                     )
                     extra_state_dict = {
                         "lr_scheduler": lr_scheduler_state_dict,
@@ -321,7 +331,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             ):
                 # Some model's name_or_path is empty if not initialized from pretrained,
                 # in this cases, we don't save generation config.
-                generation_config = GenerationConfig.from_pretrained(model_config.name_or_path)
+                generation_config = GenerationConfig.from_pretrained(
+                    model_config.name_or_path
+                )
                 generation_config.save_pretrained(local_path)
             else:
                 generation_config = None
@@ -344,7 +356,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
 
             # Only rank 0 will save hf model and,
             # offload to cpu to save LLMs which may be too large to fit in one GPU
-            state_dict_config = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
+            state_dict_config = FullStateDictConfig(
+                offload_to_cpu=True, rank0_only=True
+            )
             with get_fsdp_state_ctx(
                 self.model, StateDictType.FULL_STATE_DICT, state_dict_config, None
             ):

@@ -63,7 +63,9 @@ def get_model(
             # Set pre_process and post_process only after virtual rank is set.
             pre_process = mpu.is_pipeline_first_stage()
             post_process = mpu.is_pipeline_last_stage()
-            this_model = model_provider_func(pre_process=pre_process, post_process=post_process)
+            this_model = model_provider_func(
+                pre_process=pre_process, post_process=post_process
+            )
             this_model.model_type = model_type
             model.append(this_model)
     else:
@@ -90,7 +92,9 @@ def get_model(
                 add_decoder=add_decoder,
             )
         else:
-            model = model_provider_func(pre_process=pre_process, post_process=post_process)
+            model = model_provider_func(
+                pre_process=pre_process, post_process=post_process
+            )
         model.model_type = model_type
 
     if not isinstance(model, list):
@@ -102,7 +106,9 @@ def get_model(
     # are set for all params so the optimizer can use them.
     for model_module in model:
         for param in model_module.parameters():
-            tensor_parallel.set_defaults_if_not_set_tensor_model_parallel_attributes(param)
+            tensor_parallel.set_defaults_if_not_set_tensor_model_parallel_attributes(
+                param
+            )
 
     # Print number of parameters.
     if mpu.get_data_parallel_rank() == 0:
@@ -236,8 +242,7 @@ def init_megatron_optim_config(optim_config: dict) -> OptimizerConfig:
 
 
 def mcore_model_parallel_config(
-    sequence_parallel: bool,
-    params_dtype: torch.dtype,
+    sequence_parallel: bool, params_dtype: torch.dtype,
 ) -> ModelParallelConfig:
     # WARNING: Code should not reach this point. This function is deprecated and will be removed.
     # Please use hf_to_mcore_config_dense() from verl.models.mcore.config_converter instead.
@@ -279,11 +284,16 @@ def offload_megatron_model_to_cpu(models):
                 for buffer in buffers:
                     # offload parameters
                     if buffer.param_data.storage().size() > 0:
-                        buffer.param_data.cpu_data = buffer.param_data.data.cpu().pin_memory()
+                        buffer.param_data.cpu_data = (
+                            buffer.param_data.data.cpu().pin_memory()
+                        )
                         buffer.param_data_size = buffer.param_data.storage().size()
                         buffer.param_data.storage().resize_(0)
 
-                    assert buffer.param_data_size == buffer.param_data.cpu_data.storage().size()
+                    assert (
+                        buffer.param_data_size
+                        == buffer.param_data.cpu_data.storage().size()
+                    )
 
                     if buffer.grad_data.storage().size() > 0:
                         # if the grad_data size is already zero, we assume that it is already offloaded
@@ -317,7 +327,9 @@ def load_megatron_model_to_gpu(models, load_grad=True):
                     if buffer.param_data.storage().size() == 0:
                         buffer.param_data.storage().resize_(buffer.param_data_size)
                         # copy data from cpu to cuda
-                        buffer.param_data.copy_(buffer.param_data.cpu_data, non_blocking=True)
+                        buffer.param_data.copy_(
+                            buffer.param_data.cpu_data, non_blocking=True
+                        )
         else:
             # we need this for ref module
             device_id = torch.cuda.current_device()
@@ -442,9 +454,13 @@ def load_megatron_optimizer(optimizers):
         opt_state_dict_values = _opt.optimizer.state.values()
         for v in opt_state_dict_values:
             if "exp_avg" in v:
-                v["exp_avg"] = v["exp_avg"].to(torch.cuda.current_device(), non_blocking=True)
+                v["exp_avg"] = v["exp_avg"].to(
+                    torch.cuda.current_device(), non_blocking=True
+                )
             if "exp_avg_sq" in v:
-                v["exp_avg_sq"] = v["exp_avg_sq"].to(torch.cuda.current_device(), non_blocking=True)
+                v["exp_avg_sq"] = v["exp_avg_sq"].to(
+                    torch.cuda.current_device(), non_blocking=True
+                )
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -500,7 +516,9 @@ def get_optimizer_scheduler_checkpoint_path(checkpoint_path, only_rank0_save=Fal
     # save rng states cause interrupts
     os.makedirs(os.path.join(checkpoint_path, "optimizer_scheduler"), exist_ok=True)
     if only_rank0_save:
-        return os.path.join(checkpoint_path, "optimizer_scheduler", "optimizer_scheduler.pt")
+        return os.path.join(
+            checkpoint_path, "optimizer_scheduler", "optimizer_scheduler.pt"
+        )
     dp_rank = mpu.get_data_parallel_rank()
     pp_rank = mpu.get_pipeline_model_parallel_rank()
     tp_rank = mpu.get_tensor_model_parallel_rank()
@@ -603,7 +621,9 @@ def convert_megatron_model_to_transformers_model(
             new_params[f"model.layers.{layer_number}.self_attn.o_proj.weight"] = param
         elif component == "linear_qkv" and not isinstance(param, list):
             if param_type == "layer_norm_weight":
-                new_params[f"model.layers.{layer_number}.input_layernorm.weight"] = param
+                new_params[
+                    f"model.layers.{layer_number}.input_layernorm.weight"
+                ] = param
             else:
                 if convert_qkv_gate_up_by_trunk_concat:
                     convert_qkv_shard(
@@ -613,18 +633,26 @@ def convert_megatron_model_to_transformers_model(
                         f"model.layers.{layer_number}.self_attn.v_proj.{param_type}",
                     )
                 else:
-                    new_params[f"model.layers.{layer_number}.self_attn.qkv_proj.{param_type}"] = (
-                        param
-                    )
+                    new_params[
+                        f"model.layers.{layer_number}.self_attn.qkv_proj.{param_type}"
+                    ] = param
         elif component == "q_layernorm" or component == "k_layernorm":
             hf_component = component.replace("layer", "")
-            new_params[f"model.layers.{layer_number}.self_attn.{hf_component}.weight"] = param
+            new_params[
+                f"model.layers.{layer_number}.self_attn.{hf_component}.weight"
+            ] = param
         else:
             assert isinstance(param, list) and len(param) == 3
             assert param_type == "weight" or param_type == "bias"
-            new_params[f"model.layers.{layer_number}.self_attn.q_proj.{param_type}"] = param[0]
-            new_params[f"model.layers.{layer_number}.self_attn.k_proj.{param_type}"] = param[1]
-            new_params[f"model.layers.{layer_number}.self_attn.v_proj.{param_type}"] = param[2]
+            new_params[
+                f"model.layers.{layer_number}.self_attn.q_proj.{param_type}"
+            ] = param[0]
+            new_params[
+                f"model.layers.{layer_number}.self_attn.k_proj.{param_type}"
+            ] = param[1]
+            new_params[
+                f"model.layers.{layer_number}.self_attn.v_proj.{param_type}"
+            ] = param[2]
     elif "mlp" in name:
         splitted_name = name.split(".")
         layer_number = splitted_name[2]
@@ -632,7 +660,9 @@ def convert_megatron_model_to_transformers_model(
         param_type = splitted_name[5]
         if component == "linear_fc1" and not isinstance(param, list):
             if param_type == "layer_norm_weight":
-                new_params[f"model.layers.{layer_number}.post_attention_layernorm.weight"] = param
+                new_params[
+                    f"model.layers.{layer_number}.post_attention_layernorm.weight"
+                ] = param
             elif param_type == "weight":
                 if convert_qkv_gate_up_by_trunk_concat:
                     convert_gate_up_shard(
@@ -641,7 +671,9 @@ def convert_megatron_model_to_transformers_model(
                         f"model.layers.{layer_number}.mlp.up_proj.weight",
                     )
                 else:
-                    new_params[f"model.layers.{layer_number}.mlp.gate_up_proj.weight"] = param
+                    new_params[
+                        f"model.layers.{layer_number}.mlp.gate_up_proj.weight"
+                    ] = param
         elif component == "linear_fc1" and isinstance(param, list):
             assert len(param) == 2
             assert param_type == "weight" or param_type == "bias"
@@ -794,7 +826,9 @@ def default_tp_concat_fn(
         k = torch.cat(k_lst, dim=0)
         v = torch.cat(v_lst, dim=0)
         infer_params = (
-            torch.cat((q, k, v), dim=0) if not convert_qkv_gate_up_by_simple_split else [q, k, v]
+            torch.cat((q, k, v), dim=0)
+            if not convert_qkv_gate_up_by_simple_split
+            else [q, k, v]
         )
 
     elif (
@@ -812,7 +846,9 @@ def default_tp_concat_fn(
         gate = torch.cat(gate_lst, dim=0)
         up = torch.cat(up_lst, dim=0)
         infer_params = (
-            torch.cat((gate, up), dim=0) if not convert_qkv_gate_up_by_simple_split else [gate, up]
+            torch.cat((gate, up), dim=0)
+            if not convert_qkv_gate_up_by_simple_split
+            else [gate, up]
         )
 
     elif "mlp.experts.linear_fc2.weight" in name:  # moe
@@ -907,7 +943,9 @@ def per_tensor_generator(
                 cur_name, cur_tensor = next(gen_func)
             except StopIteration:
                 cur_name, cur_tensor = None, None
-            cur_name = normalize_model_name(name, cur_pp_rank, scan_vpp_idx, transformer_config)
+            cur_name = normalize_model_name(
+                name, cur_pp_rank, scan_vpp_idx, transformer_config
+            )
         else:
             cur_tensor, cur_name = None, None
 
@@ -929,7 +967,8 @@ def per_tensor_generator(
             name_prefix, local_expert_id = cur_name.split(".weight")
             local_expert_id = int(local_expert_id)
             global_expert_ids = [
-                num_experts_per_rank * ep_rank + local_expert_id for ep_rank in range(ep_size)
+                num_experts_per_rank * ep_rank + local_expert_id
+                for ep_rank in range(ep_size)
             ]
             global_expert_names = [
                 f"{name_prefix}.weight{expert_id}" for expert_id in global_expert_ids
@@ -969,7 +1008,8 @@ def per_tensor_generator(
                 infer_params = [broad_pp_tensor]
             else:
                 infer_params = [
-                    torch.empty_like(broad_pp_tensor) for _ in range(all_gather_group_size)
+                    torch.empty_like(broad_pp_tensor)
+                    for _ in range(all_gather_group_size)
                 ]
                 torch.distributed.all_gather(
                     infer_params,
@@ -990,7 +1030,9 @@ def per_tensor_generator(
 
         if not isinstance(infer_params, list):
             infer_params = [infer_params]
-        converted_names, converted_params = weight_converter.convert_param(cur_name, infer_params)
+        converted_names, converted_params = weight_converter.convert_param(
+            cur_name, infer_params
+        )
 
         yield from zip(converted_names, converted_params, strict=False)
 
@@ -1089,7 +1131,9 @@ def get_transformer_layer_offset(pipeline_rank, vp_rank, config: TransformerConf
                     )
             else:
                 if middle_pipeline_stages > 0:
-                    num_layers_per_pipeline_rank = middle_num_layers // middle_pipeline_stages
+                    num_layers_per_pipeline_rank = (
+                        middle_num_layers // middle_pipeline_stages
+                    )
                 else:
                     num_layers_per_pipeline_rank = 0
 
@@ -1116,7 +1160,9 @@ def get_transformer_layer_offset(pipeline_rank, vp_rank, config: TransformerConf
             if config.account_for_loss_in_pipeline_split:
                 num_layers += 1
 
-            num_layers_per_pipeline_rank = num_layers // config.pipeline_model_parallel_size
+            num_layers_per_pipeline_rank = (
+                num_layers // config.pipeline_model_parallel_size
+            )
 
             if mpu.get_virtual_pipeline_model_parallel_world_size() is not None:
                 vp_size = mpu.get_virtual_pipeline_model_parallel_world_size()

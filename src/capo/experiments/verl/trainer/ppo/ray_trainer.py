@@ -126,7 +126,11 @@ class ResourcePoolManager:
         """Check if the resource pool can be satisfied in this ray cluster."""
         node_available_resources = ray.state.available_resources_per_node()
         node_available_gpus = {
-            node: (node_info.get("GPU", 0) if "GPU" in node_info else node_info.get("NPU", 0))
+            node: (
+                node_info.get("GPU", 0)
+                if "GPU" in node_info
+                else node_info.get("NPU", 0)
+            )
             for node, node_info in node_available_resources.items()
         }
 
@@ -378,7 +382,9 @@ class RayPPOTrainer:
         assert self.hybrid_engine, "Currently, only support hybrid engine"
 
         if self.hybrid_engine:
-            assert Role.ActorRollout in role_worker_mapping, f"{role_worker_mapping.keys()=}"
+            assert (
+                Role.ActorRollout in role_worker_mapping
+            ), f"{role_worker_mapping.keys()=}"
 
         self.role_worker_mapping = role_worker_mapping
         self.resource_pool_manager = resource_pool_manager
@@ -394,7 +400,9 @@ class RayPPOTrainer:
         # define in-reward KL control
         # kl loss control currently not suppoorted
         if config.algorithm.use_kl_in_reward:
-            self.kl_ctrl_in_reward = core_algos.get_kl_controller(config.algorithm.kl_ctrl)
+            self.kl_ctrl_in_reward = core_algos.get_kl_controller(
+                config.algorithm.kl_ctrl
+            )
 
         if self.config.algorithm.adv_estimator == AdvantageEstimator.GAE:
             self.use_critic = True
@@ -432,14 +440,20 @@ class RayPPOTrainer:
                 == 0
             ), f"n_gpus ({n_gpus}) must be divisible by model_parallel_size ({model_parallel_size}) times context_parallel_size ({config.actor_rollout_ref.actor.megatron.context_parallel_size})"
             megatron_dp = n_gpus // (
-                model_parallel_size * config.actor_rollout_ref.actor.megatron.context_parallel_size
+                model_parallel_size
+                * config.actor_rollout_ref.actor.megatron.context_parallel_size
             )
-            minimal_bsz = megatron_dp * config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu
+            minimal_bsz = (
+                megatron_dp
+                * config.actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu
+            )
         else:
             minimal_bsz = n_gpus
 
         # 1. Check total batch size for data correctness
-        real_train_batch_size = config.data.train_batch_size * config.actor_rollout_ref.rollout.n
+        real_train_batch_size = (
+            config.data.train_batch_size * config.actor_rollout_ref.rollout.n
+        )
         assert (
             real_train_batch_size % minimal_bsz == 0
         ), f"real_train_batch_size ({real_train_batch_size}) must be divisible by minimal possible batch size ({minimal_bsz})"
@@ -516,16 +530,22 @@ class RayPPOTrainer:
         #    ppo_micro_batch_size * sequence_parallel_size >= n_gpus
         if not config.actor_rollout_ref.actor.use_dynamic_bsz:
             assert (
-                config.data.train_batch_size >= config.actor_rollout_ref.actor.ppo_mini_batch_size
+                config.data.train_batch_size
+                >= config.actor_rollout_ref.actor.ppo_mini_batch_size
             )
-            sp_size = config.actor_rollout_ref.actor.get("ulysses_sequence_parallel_size", 1)
+            sp_size = config.actor_rollout_ref.actor.get(
+                "ulysses_sequence_parallel_size", 1
+            )
             if config.actor_rollout_ref.actor.ppo_micro_batch_size is not None:
                 assert (
                     config.actor_rollout_ref.actor.ppo_mini_batch_size
                     % config.actor_rollout_ref.actor.ppo_micro_batch_size
                     == 0
                 )
-                assert config.actor_rollout_ref.actor.ppo_micro_batch_size * sp_size >= n_gpus
+                assert (
+                    config.actor_rollout_ref.actor.ppo_micro_batch_size * sp_size
+                    >= n_gpus
+                )
 
         assert config.actor_rollout_ref.actor.loss_agg_mode in [
             "token-mean",
@@ -534,7 +554,10 @@ class RayPPOTrainer:
             "seq-mean-token-sum-norm",
         ], f"Invalid loss_agg_mode: {config.actor_rollout_ref.actor.loss_agg_mode}"
 
-        if config.algorithm.use_kl_in_reward and config.actor_rollout_ref.actor.use_kl_loss:
+        if (
+            config.algorithm.use_kl_in_reward
+            and config.actor_rollout_ref.actor.use_kl_loss
+        ):
             print("NOTICE: You have both enabled in-reward kl and kl loss.")
 
         # critic
@@ -542,7 +565,11 @@ class RayPPOTrainer:
             assert config.data.train_batch_size >= config.critic.ppo_mini_batch_size
             sp_size = config.critic.get("ulysses_sequence_parallel_size", 1)
             if config.critic.ppo_micro_batch_size is not None:
-                assert config.critic.ppo_mini_batch_size % config.critic.ppo_micro_batch_size == 0
+                assert (
+                    config.critic.ppo_mini_batch_size
+                    % config.critic.ppo_micro_batch_size
+                    == 0
+                )
                 assert config.critic.ppo_micro_batch_size * sp_size >= n_gpus
 
         # Check if use_remove_padding is enabled when using sequence parallelism for fsdp
@@ -550,11 +577,15 @@ class RayPPOTrainer:
             config.actor_rollout_ref.actor.get("ulysses_sequence_parallel_size", 1) > 1
             or config.actor_rollout_ref.ref.get("ulysses_sequence_parallel_size", 1) > 1
         ):
-            assert config.actor_rollout_ref.model.use_remove_padding, "When using sequence parallelism for actor/ref policy, you must enable `use_remove_padding`."
+            assert (
+                config.actor_rollout_ref.model.use_remove_padding
+            ), "When using sequence parallelism for actor/ref policy, you must enable `use_remove_padding`."
 
         if self.use_critic and config.critic.strategy == "fsdp":
             if config.critic.get("ulysses_sequence_parallel_size", 1) > 1:
-                assert config.critic.model.use_remove_padding, "When using sequence parallelism for critic, you must enable `use_remove_padding`."
+                assert (
+                    config.critic.model.use_remove_padding
+                ), "When using sequence parallelism for critic, you must enable `use_remove_padding`."
 
         if config.data.get("val_batch_size", None) is not None:
             print(
@@ -612,7 +643,9 @@ class RayPPOTrainer:
 
         self.train_dataloader = StatefulDataLoader(
             dataset=self.train_dataset,
-            batch_size=self.config.data.get("gen_batch_size", self.config.data.train_batch_size),
+            batch_size=self.config.data.get(
+                "gen_batch_size", self.config.data.train_batch_size
+            ),
             num_workers=self.config.data.get("dataloader_num_workers", 8),
             drop_last=True,
             collate_fn=collate_fn,
@@ -639,7 +672,9 @@ class RayPPOTrainer:
             f"Size of train dataloader: {len(self.train_dataloader)}, Size of val dataloader: {len(self.val_dataloader)}"
         )
 
-        total_training_steps = len(self.train_dataloader) * self.config.trainer.total_epochs
+        total_training_steps = (
+            len(self.train_dataloader) * self.config.trainer.total_epochs
+        )
 
         if self.config.trainer.total_training_steps is not None:
             total_training_steps = self.config.trainer.total_training_steps
@@ -661,7 +696,9 @@ class RayPPOTrainer:
                 f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}"
             )
 
-    def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path):
+    def _dump_generations(
+        self, inputs, outputs, scores, reward_extra_infos_dict, dump_path
+    ):
         """Dump rollout/validation samples as JSONL."""
         os.makedirs(dump_path, exist_ok=True)
         filename = os.path.join(dump_path, f"{self.global_steps}.jsonl")
@@ -740,7 +777,8 @@ class RayPPOTrainer:
             input_ids = test_batch.batch["input_ids"]
             # TODO: Can we keep special tokens except for padding tokens?
             input_texts = [
-                self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids
+                self.tokenizer.decode(ids, skip_special_tokens=True)
+                for ids in input_ids
             ]
             sample_inputs.extend(input_texts)
 
@@ -782,13 +820,16 @@ class RayPPOTrainer:
                 self.async_rollout_manager.sleep()
 
             # unpad
-            test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+            test_output_gen_batch = unpad_dataproto(
+                test_output_gen_batch_padded, pad_size=pad_size
+            )
             print("validation generation end")
 
             # Store generated outputs
             output_ids = test_output_gen_batch.batch["responses"]
             output_texts = [
-                self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids
+                self.tokenizer.decode(ids, skip_special_tokens=True)
+                for ids in output_ids
             ]
             sample_outputs.extend(output_texts)
 
@@ -806,7 +847,9 @@ class RayPPOTrainer:
                     reward_extra_infos_dict[key].extend(lst)
 
             data_source_lst.append(
-                test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0])
+                test_batch.non_tensor_batch.get(
+                    "data_source", ["unknown"] * reward_tensor.shape[0]
+                )
             )
 
         self._maybe_log_val_generations(
@@ -838,11 +881,19 @@ class RayPPOTrainer:
         for data_source, var2metric2val in data_src2var2metric2val.items():
             core_var = "acc" if "acc" in var2metric2val else "reward"
             for var_name, metric2val in var2metric2val.items():
-                n_max = max([int(name.split("@")[-1].split("/")[0]) for name in metric2val.keys()])
+                n_max = max(
+                    [
+                        int(name.split("@")[-1].split("/")[0])
+                        for name in metric2val.keys()
+                    ]
+                )
                 for metric_name, metric_val in metric2val.items():
                     if (
                         (var_name == core_var)
-                        and any(metric_name.startswith(pfx) for pfx in ["mean", "maj", "best"])
+                        and any(
+                            metric_name.startswith(pfx)
+                            for pfx in ["mean", "maj", "best"]
+                        )
                         and (f"@{n_max}" in metric_name)
                     ):
                         metric_sec = "val-core"
@@ -868,13 +919,17 @@ class RayPPOTrainer:
 
         # create actor and rollout
         if self.hybrid_engine:
-            resource_pool = self.resource_pool_manager.get_resource_pool(Role.ActorRollout)
+            resource_pool = self.resource_pool_manager.get_resource_pool(
+                Role.ActorRollout
+            )
             actor_rollout_cls = RayClassWithInitArgs(
                 cls=self.role_worker_mapping[Role.ActorRollout],
                 config=self.config.actor_rollout_ref,
                 role="actor_rollout",
             )
-            self.resource_pool_to_cls[resource_pool]["actor_rollout"] = actor_rollout_cls
+            self.resource_pool_to_cls[resource_pool][
+                "actor_rollout"
+            ] = actor_rollout_cls
         else:
             raise NotImplementedError
 
@@ -899,7 +954,9 @@ class RayPPOTrainer:
         # create a reward model if reward_fn is None
         if self.use_rm:
             # we create a RM here
-            resource_pool = self.resource_pool_manager.get_resource_pool(Role.RewardModel)
+            resource_pool = self.resource_pool_manager.get_resource_pool(
+                Role.RewardModel
+            )
             rm_cls = RayClassWithInitArgs(
                 self.role_worker_mapping[Role.RewardModel],
                 config=self.config.reward_model,
@@ -913,10 +970,13 @@ class RayPPOTrainer:
         # See https://github.com/volcengine/verl/blob/master/examples/ray/tutorial.ipynb for more information.
         all_wg = {}
         wg_kwargs = {}  # Setting up kwargs for RayWorkerGroup
-        if OmegaConf.select(self.config.trainer, "ray_wait_register_center_timeout") is not None:
-            wg_kwargs["ray_wait_register_center_timeout"] = (
-                self.config.trainer.ray_wait_register_center_timeout
-            )
+        if (
+            OmegaConf.select(self.config.trainer, "ray_wait_register_center_timeout")
+            is not None
+        ):
+            wg_kwargs[
+                "ray_wait_register_center_timeout"
+            ] = self.config.trainer.ray_wait_register_center_timeout
 
         for resource_pool, class_dict in self.resource_pool_to_cls.items():
             worker_dict_cls = create_colocated_worker_cls(class_dict=class_dict)
@@ -952,8 +1012,7 @@ class RayPPOTrainer:
 
             self.async_rollout_mode = True
             self.async_rollout_manager = AsyncLLMServerManager(
-                config=self.config,
-                worker_group=self.actor_rollout_wg,
+                config=self.config, worker_group=self.actor_rollout_wg,
             )
 
     def _save_checkpoint(self):
@@ -1040,11 +1099,15 @@ class RayPPOTrainer:
         if self.config.trainer.default_hdfs_dir is not None:
             raise NotImplementedError("load from hdfs is not implemented yet")
         else:
-            checkpoint_folder = self.config.trainer.default_local_dir  # TODO: check path
+            checkpoint_folder = (
+                self.config.trainer.default_local_dir
+            )  # TODO: check path
             if not os.path.isabs(checkpoint_folder):
                 working_dir = os.getcwd()
                 checkpoint_folder = os.path.join(working_dir, checkpoint_folder)
-            global_step_folder = find_latest_ckpt_path(checkpoint_folder)  # None if no latest
+            global_step_folder = find_latest_ckpt_path(
+                checkpoint_folder
+            )  # None if no latest
 
         # find global_step_folder
         if self.config.trainer.resume_mode == "auto":
@@ -1088,7 +1151,9 @@ class RayPPOTrainer:
         # TODO: from remote not implemented yet
         dataloader_local_path = os.path.join(global_step_folder, "data.pt")
         if os.path.exists(dataloader_local_path):
-            dataloader_state_dict = torch.load(dataloader_local_path, weights_only=False)
+            dataloader_state_dict = torch.load(
+                dataloader_local_path, weights_only=False
+            )
             self.train_dataloader.load_state_dict(dataloader_state_dict)
         else:
             print(
@@ -1107,7 +1172,9 @@ class RayPPOTrainer:
             global_seqlen_lst, k_partitions=world_size, equal_size=True
         )
         # reorder based on index. The data will be automatically equally partitioned by dispatch function
-        global_idx = torch.tensor([j for partition in global_partition_lst for j in partition])
+        global_idx = torch.tensor(
+            [j for partition in global_partition_lst for j in partition]
+        )
         batch.reorder(global_idx)
         global_balance_stats = log_seqlen_unbalance(
             seqlen_list=global_seqlen_lst,
@@ -1179,7 +1246,9 @@ class RayPPOTrainer:
 
         # perform validation before training
         # currently, we only support validation using the reward_function.
-        if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
+        if self.val_reward_fn is not None and self.config.trainer.get(
+            "val_before_train", True
+        ):
             val_metrics = self._validate()
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
@@ -1226,7 +1295,9 @@ class RayPPOTrainer:
                     # generate a batch
                     with _timer("gen", timing_raw):
                         if not self.async_rollout_mode:
-                            gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
+                            gen_batch_output = self.actor_rollout_wg.generate_sequences(
+                                gen_batch
+                            )
                         else:
                             self.async_rollout_manager.wake_up()
                             gen_batch_output = self.async_rollout_manager.generate_sequences(
@@ -1299,13 +1370,17 @@ class RayPPOTrainer:
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                         entropys = old_log_prob.batch["entropys"]
                         response_masks = batch.batch["response_mask"]
-                        loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
+                        loss_agg_mode = (
+                            self.config.actor_rollout_ref.actor.loss_agg_mode
+                        )
                         entropy_agg = agg_loss(
                             loss_mat=entropys,
                             loss_mask=response_masks,
                             loss_agg_mode=loss_agg_mode,
                         )
-                        old_log_prob_metrics = {"actor/entropy": entropy_agg.detach().item()}
+                        old_log_prob_metrics = {
+                            "actor/entropy": entropy_agg.detach().item()
+                        }
                         metrics.update(old_log_prob_metrics)
                         old_log_prob.batch.pop("entropys")
                         batch = batch.union(old_log_prob)
@@ -1340,9 +1415,13 @@ class RayPPOTrainer:
                         # compute reference log_prob
                         with _timer("ref", timing_raw):
                             if not self.ref_in_actor:
-                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(
+                                    batch
+                                )
                             else:
-                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
+                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(
+                                    batch
+                                )
                             batch = batch.union(ref_log_prob)
 
                     # compute values
@@ -1355,12 +1434,17 @@ class RayPPOTrainer:
                         # we combine with rule-based rm
                         reward_extra_infos_dict: dict[str, list]
                         if self.config.reward_model.launch_reward_fn_async:
-                            reward_tensor, reward_extra_infos_dict = ray.get(future_reward)
+                            reward_tensor, reward_extra_infos_dict = ray.get(
+                                future_reward
+                            )
                         batch.batch["token_level_scores"] = reward_tensor
 
                         if reward_extra_infos_dict:
                             batch.non_tensor_batch.update(
-                                {k: np.array(v) for k, v in reward_extra_infos_dict.items()}
+                                {
+                                    k: np.array(v)
+                                    for k, v in reward_extra_infos_dict.items()
+                                }
                             )
 
                         # compute rewards. apply_kl_penalty if available
@@ -1372,7 +1456,9 @@ class RayPPOTrainer:
                             )
                             metrics.update(kl_metrics)
                         else:
-                            batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+                            batch.batch["token_level_rewards"] = batch.batch[
+                                "token_level_scores"
+                            ]
 
                         # compute advantages, executed on the driver process
 
@@ -1436,18 +1522,22 @@ class RayPPOTrainer:
                     if self.use_critic:
                         with _timer("update_critic", timing_raw):
                             critic_output = self.critic_wg.update_critic(batch)
-                        critic_output_metrics = reduce_metrics(critic_output.meta_info["metrics"])
+                        critic_output_metrics = reduce_metrics(
+                            critic_output.meta_info["metrics"]
+                        )
                         metrics.update(critic_output_metrics)
 
                     # implement critic warmup
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
-                            batch.meta_info["multi_turn"] = (
-                                self.config.actor_rollout_ref.rollout.multi_turn.enable
-                            )
+                            batch.meta_info[
+                                "multi_turn"
+                            ] = self.config.actor_rollout_ref.rollout.multi_turn.enable
                             actor_output = self.actor_rollout_wg.update_actor(batch)
-                        actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
+                        actor_output_metrics = reduce_metrics(
+                            actor_output.meta_info["metrics"]
+                        )
                         metrics.update(actor_output_metrics)
 
                     # Log rollout generations if enabled
@@ -1461,7 +1551,9 @@ class RayPPOTrainer:
                             outputs = self.tokenizer.batch_decode(
                                 batch.batch["responses"], skip_special_tokens=True
                             )
-                            scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            scores = (
+                                batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            )
                             self._dump_generations(
                                 inputs=inputs,
                                 outputs=outputs,
@@ -1474,7 +1566,10 @@ class RayPPOTrainer:
                     if (
                         self.val_reward_fn is not None
                         and self.config.trainer.test_freq > 0
-                        and (is_last_step or self.global_steps % self.config.trainer.test_freq == 0)
+                        and (
+                            is_last_step
+                            or self.global_steps % self.config.trainer.test_freq == 0
+                        )
                     ):
                         with _timer("testing", timing_raw):
                             val_metrics: dict = self._validate()
@@ -1483,7 +1578,8 @@ class RayPPOTrainer:
                         metrics.update(val_metrics)
 
                     if self.config.trainer.save_freq > 0 and (
-                        is_last_step or self.global_steps % self.config.trainer.save_freq == 0
+                        is_last_step
+                        or self.global_steps % self.config.trainer.save_freq == 0
                     ):
                         with _timer("save_checkpoint", timing_raw):
                             self._save_checkpoint()
@@ -1496,7 +1592,9 @@ class RayPPOTrainer:
                     }
                 )
                 # collect metrics
-                metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
+                metrics.update(
+                    compute_data_metrics(batch=batch, use_critic=self.use_critic)
+                )
 
                 # Optional: advantage-estimator specific diagnostics.
                 # Custom estimators (e.g. CAPO EB) may return a third payload
@@ -1505,11 +1603,15 @@ class RayPPOTrainer:
                     adv_metrics = batch.meta_info.get("adv_metrics")
                     if isinstance(adv_metrics, dict):
                         metrics.update(adv_metrics)
-                metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
+                metrics.update(
+                    compute_timing_metrics(batch=batch, timing_raw=timing_raw)
+                )
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
                 metrics.update(
-                    compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus)
+                    compute_throughout_metrics(
+                        batch=batch, timing_raw=timing_raw, n_gpus=n_gpus
+                    )
                 )
 
                 # TODO: make a canonical logger that supports various backend

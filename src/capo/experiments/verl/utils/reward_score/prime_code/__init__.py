@@ -56,7 +56,9 @@ def compute_score(completion, test_cases, continuous=False):
                     in_outs=test_case, generation=solution, timeout=10, debug=False
                 )
                 try:
-                    metadata = dict(enumerate(metadata))[0]  # metadata can be empty occasionally
+                    metadata = dict(enumerate(metadata))[
+                        0
+                    ]  # metadata can be empty occasionally
                 except Exception:
                     metadata = {}
                 metadata["test_case"] = {}

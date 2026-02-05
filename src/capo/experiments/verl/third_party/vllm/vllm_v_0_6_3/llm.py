@@ -85,7 +85,9 @@ class LLM(LLM):
     def __init__(
         self,
         model: nn.Module | dict,  # model itself or its parameter dict
-        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast | HybridEngineBaseTokenizer,
+        tokenizer: PreTrainedTokenizer
+        | PreTrainedTokenizerFast
+        | HybridEngineBaseTokenizer,
         model_hf_config: PretrainedConfig,
         tokenizer_mode: str = "auto",
         trust_remote_code: bool = False,
@@ -115,7 +117,9 @@ class LLM(LLM):
             "image_input_type",
         )
         if any(k in kwargs for k in removed_vision_keys):
-            raise TypeError("There is no need to pass vision-related arguments anymore.")
+            raise TypeError(
+                "There is no need to pass vision-related arguments anymore."
+            )
         engine_args = EngineArgs(
             model_hf_config=model_hf_config,
             # tokenizer=tokenizer,
@@ -162,12 +166,13 @@ class LLM(LLM):
         return self.llm_engine.tokenizer
 
     def set_tokenizer(
-        self,
-        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+        self, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     ) -> None:
         self.llm_engine.tokenizer = tokenizer
 
-    def _run_engine(self, *, use_tqdm: bool) -> list[RequestOutput | EmbeddingRequestOutput]:
+    def _run_engine(
+        self, *, use_tqdm: bool
+    ) -> list[RequestOutput | EmbeddingRequestOutput]:
         outputs = super()._run_engine(use_tqdm=use_tqdm)
         return self._post_process_outputs(outputs)
 
@@ -194,7 +199,9 @@ class LLM(LLM):
                 logprobs_dicts = output.logprobs
                 if logprobs_dicts is not None:
                     logprob = []
-                    for logprobs_dict, id in zip(logprobs_dicts, output.token_ids, strict=False):
+                    for logprobs_dict, id in zip(
+                        logprobs_dicts, output.token_ids, strict=False
+                    ):
                         logprob.append(logprobs_dict[id].logprob)
                     logprobs.append(torch.tensor(logprob))
 
@@ -207,11 +214,15 @@ class LLM(LLM):
             output_token_ids, batch_first=True, padding_value=pad_token_id
         )
         if len(logprobs) > 0:
-            logprobs = pad_sequence(logprobs, batch_first=True, padding_value=pad_token_id)
+            logprobs = pad_sequence(
+                logprobs, batch_first=True, padding_value=pad_token_id
+            )
         return output_token_ids, logprobs
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.llm_engine.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.llm_engine.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
     def offload_model_weights(self) -> None:
         self.llm_engine.offload_model_weights()

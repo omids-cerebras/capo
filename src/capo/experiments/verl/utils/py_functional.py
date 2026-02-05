@@ -53,7 +53,9 @@ def _mp_target_wrapper(
             mp_queue.put(
                 (
                     False,
-                    RuntimeError(f"Original exception type {type(e).__name__} not pickleable: {e}"),
+                    RuntimeError(
+                        f"Original exception type {type(e).__name__} not pickleable: {e}"
+                    ),
                 )
             )
 
@@ -135,7 +137,9 @@ def timeout_limit(seconds: float, use_signals: bool = False):
                     )
 
                 try:
-                    success, result_or_exc = q.get(timeout=0.1)  # Small timeout for queue read
+                    success, result_or_exc = q.get(
+                        timeout=0.1
+                    )  # Small timeout for queue read
                     if success:
                         return result_or_exc
                     else:

@@ -193,8 +193,14 @@ def merge_megatron_ckpt_llama(
         chunk_tensors = [None] * tp_size
 
         for i in range(tp_size):
-            cur_src_rank = _megatron_calc_global_rank(tp_rank=i, dp_rank=0, pp_rank=src_pp_rank)
-            sync_tensor = tensor if torch.distributed.get_rank() == cur_src_rank else buffer_tensor
+            cur_src_rank = _megatron_calc_global_rank(
+                tp_rank=i, dp_rank=0, pp_rank=src_pp_rank
+            )
+            sync_tensor = (
+                tensor
+                if torch.distributed.get_rank() == cur_src_rank
+                else buffer_tensor
+            )
             dist.broadcast(sync_tensor, src=cur_src_rank, group=mp_group)
 
             if torch.distributed.get_rank() == 0:
@@ -206,7 +212,9 @@ def merge_megatron_ckpt_llama(
                 full_tensor = mutate_func(full_tensor)
             state_dict[name] = full_tensor
 
-    def _broadcast_tp_shard_tensor_gate_up(tensor, gate_name, up_name, src_pp_rank) -> torch.Tensor:
+    def _broadcast_tp_shard_tensor_gate_up(
+        tensor, gate_name, up_name, src_pp_rank
+    ) -> torch.Tensor:
         """broadcast tensor in tp shards across mp_group"""
         nonlocal state_dict
         nonlocal mp_group
@@ -220,7 +228,9 @@ def merge_megatron_ckpt_llama(
         chunk_shape = obj_list[0]
         if chunk_shape is None:
             # all or none ranks in the mp_group should reach here
-            print_rank_0(f"tp_shard tensor:[{gate_name, up_name}] not exist, skip collecting")
+            print_rank_0(
+                f"tp_shard tensor:[{gate_name, up_name}] not exist, skip collecting"
+            )
             return
 
         buffer_tensor = torch.empty(
@@ -233,8 +243,14 @@ def merge_megatron_ckpt_llama(
         chunk_tensors = [None] * tp_size
 
         for i in range(tp_size):
-            cur_src_rank = _megatron_calc_global_rank(tp_rank=i, dp_rank=0, pp_rank=src_pp_rank)
-            sync_tensor = tensor if torch.distributed.get_rank() == cur_src_rank else buffer_tensor
+            cur_src_rank = _megatron_calc_global_rank(
+                tp_rank=i, dp_rank=0, pp_rank=src_pp_rank
+            )
+            sync_tensor = (
+                tensor
+                if torch.distributed.get_rank() == cur_src_rank
+                else buffer_tensor
+            )
             dist.broadcast(sync_tensor, src=cur_src_rank, group=mp_group)
 
             if torch.distributed.get_rank() == 0:
@@ -284,8 +300,14 @@ def merge_megatron_ckpt_llama(
         chunk_tensors = [None] * tp_size
 
         for i in range(tp_size):
-            cur_src_rank = _megatron_calc_global_rank(tp_rank=i, dp_rank=0, pp_rank=src_pp_rank)
-            sync_tensor = tensor if torch.distributed.get_rank() == cur_src_rank else buffer_tensor
+            cur_src_rank = _megatron_calc_global_rank(
+                tp_rank=i, dp_rank=0, pp_rank=src_pp_rank
+            )
+            sync_tensor = (
+                tensor
+                if torch.distributed.get_rank() == cur_src_rank
+                else buffer_tensor
+            )
             dist.broadcast(sync_tensor, src=cur_src_rank, group=mp_group)
 
             if torch.distributed.get_rank() == 0:
@@ -300,7 +322,9 @@ def merge_megatron_ckpt_llama(
 
             if config.num_key_value_heads >= tp_size:
                 q_size_tp = config.hidden_size // tp_size
-                kv_size_tp = hidden_size_per_head * config.num_key_value_heads // tp_size
+                kv_size_tp = (
+                    hidden_size_per_head * config.num_key_value_heads // tp_size
+                )
                 total_size = q_size_tp + 2 * kv_size_tp
                 for i in range(tp_size):
                     qkv_part = full_tensor[i * total_size : (i + 1) * total_size]
@@ -409,7 +433,9 @@ def merge_megatron_ckpt_llama(
 
         if is_value_model:
             if pp_rank == pp_size - 1:
-                print(f"gpt_model_module.lm_head.weight: {gpt_model_module.lm_head.weight.shape}")
+                print(
+                    f"gpt_model_module.lm_head.weight: {gpt_model_module.lm_head.weight.shape}"
+                )
             _broadcast_tensor(
                 gpt_model_module.lm_head.weight if pp_rank == pp_size - 1 else None,
                 "lm_head.weight",

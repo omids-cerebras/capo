@@ -96,7 +96,9 @@ def karmarkar_karp(seqlen_list: list[int], k_partitions: int, equal_size: bool):
     sorted_seqlen_list = sorted([(seqlen, i) for i, seqlen in enumerate(seqlen_list)])
     states_pq = []
     if equal_size:
-        assert len(seqlen_list) % k_partitions == 0, f"{len(seqlen_list)} % {k_partitions} != 0"
+        assert (
+            len(seqlen_list) % k_partitions == 0
+        ), f"{len(seqlen_list)} % {k_partitions} != 0"
         for offset in range(0, len(sorted_seqlen_list), k_partitions):
             items = []
             for i in range(k_partitions):
@@ -144,7 +146,9 @@ def greedy_partition(seqlen_list: list[int], k_partitions: int, equal_size: bool
     return partitions
 
 
-def get_seqlen_balanced_partitions(seqlen_list: list[int], k_partitions: int, equal_size: bool):
+def get_seqlen_balanced_partitions(
+    seqlen_list: list[int], k_partitions: int, equal_size: bool
+):
     """
     Calculates partitions of indices from seqlen_list such that the sum of sequence lengths
     in each partition is balanced. Uses the Karmarkar-Karp differencing method.
@@ -279,7 +283,9 @@ def rearrange_micro_batches(
     seq_len_effective: torch.Tensor = batch["attention_mask"].sum(dim=1)
     total_seqlen = seq_len_effective.sum().item()
     # NOTE: num_microbatches <= batch_size, so take the min of this two.
-    num_micro_batches = min(len(seq_len_effective), ceildiv(total_seqlen, max_token_len))
+    num_micro_batches = min(
+        len(seq_len_effective), ceildiv(total_seqlen, max_token_len)
+    )
     if min_num_micro_batch is not None:
         # used to support pp
         num_micro_batches = max(min_num_micro_batch, num_micro_batches)

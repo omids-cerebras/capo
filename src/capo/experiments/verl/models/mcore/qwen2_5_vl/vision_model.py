@@ -62,7 +62,9 @@ class PatchEmbed(nn.Module):
             self.patch_size,
             self.patch_size,
         )
-        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(-1, self.embed_dim)
+        hidden_states = self.proj(hidden_states.to(dtype=target_dtype)).view(
+            -1, self.embed_dim
+        )
         return hidden_states
 
 
@@ -74,7 +76,9 @@ class VisionRotaryEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     def forward(self, seqlen: int) -> torch.Tensor:
-        seq = torch.arange(seqlen, device=self.inv_freq.device, dtype=self.inv_freq.dtype)
+        seq = torch.arange(
+            seqlen, device=self.inv_freq.device, dtype=self.inv_freq.dtype
+        )
         freqs = torch.outer(seq, self.inv_freq)
         return freqs.float()
 
@@ -203,7 +207,9 @@ class Qwen2_5VisionModel(VisionModule):
         window_index: list = []
         cu_window_seqlens: list = [0]
         window_index_id = 0
-        vit_merger_window_size = self.window_size // self.spatial_merge_size // self.patch_size
+        vit_merger_window_size = (
+            self.window_size // self.spatial_merge_size // self.patch_size
+        )
 
         for grid_t, grid_h, grid_w in grid_thw:
             llm_grid_h, llm_grid_w = (
@@ -235,7 +241,9 @@ class Qwen2_5VisionModel(VisionModule):
             index_padded = index_padded.reshape(-1)
             index_new = index_padded[index_padded != -100]
             window_index.append(index_new + window_index_id)
-            cu_seqlens_tmp = seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+            cu_seqlens_tmp = (
+                seqlens.cumsum(0) * self.spatial_merge_unit + cu_window_seqlens[-1]
+            )
             cu_window_seqlens.extend(cu_seqlens_tmp.tolist())
             window_index_id += (grid_t * llm_grid_h * llm_grid_w).item()
         window_index = torch.cat(window_index, dim=0)
@@ -268,9 +276,7 @@ class Qwen2_5VisionModel(VisionModule):
         vision_data = self.patch_embed(vision_data)
         window_index, cu_window_seqlens = self.get_window_index(grid_thw)
         cu_window_seqlens = torch.tensor(
-            cu_window_seqlens,
-            device=vision_data.device,
-            dtype=torch.int32,
+            cu_window_seqlens, device=vision_data.device, dtype=torch.int32,
         )
         cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
 
@@ -304,13 +310,13 @@ class Qwen2_5VisionModel(VisionModule):
         return hidden_states[reverse_indices, :]
 
     def build_packed_seq_params(
-        self,
-        grid_thw: torch.Tensor | None,
-        cu_seqlens: torch.Tensor | None = None,
+        self, grid_thw: torch.Tensor | None, cu_seqlens: torch.Tensor | None = None,
     ) -> PackedSeqParams:
         # NOTE: each frame is a sequence (rather than each grid)
         if grid_thw is not None:
-            seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0])
+            seqlens = torch.repeat_interleave(
+                grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+            )
             cu_seqlens = seqlens.cumsum(dim=0)
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0).int()
         else:

@@ -107,9 +107,12 @@ class Qwen2_5VisionTransformerBlock(TransformerBlock):
                     recompute_skip_num_layers += 1
                 if (
                     layer_idx >= recompute_skip_num_layers
-                    and layer_idx < self.config.recompute_num_layers + recompute_skip_num_layers
+                    and layer_idx
+                    < self.config.recompute_num_layers + recompute_skip_num_layers
                 ):
-                    hidden_states, context = checkpoint_handler(custom(layer_idx, layer_idx + 1))
+                    hidden_states, context = checkpoint_handler(
+                        custom(layer_idx, layer_idx + 1)
+                    )
                 else:
                     hidden_states, context = custom(layer_idx, layer_idx + 1)(
                         hidden_states,
@@ -170,7 +173,9 @@ class Qwen2_5VisionTransformerBlock(TransformerBlock):
             [s, b, h], and optionally the updated context tensor if cross-attention is used.
         """
 
-        inference_context = deprecate_inference_params(inference_context, inference_params)
+        inference_context = deprecate_inference_params(
+            inference_context, inference_params
+        )
 
         # Delete the obsolete reference to the initial input tensor if necessary
         if isinstance(hidden_states, WrappedTensor):
@@ -199,7 +204,9 @@ class Qwen2_5VisionTransformerBlock(TransformerBlock):
         #   likely redundant, since p2p_communication.py (likely originator)
         #   already creates viewless tensors. That said, make_viewless_tensor()
         #   is called here to be future-proof and corner-case-proof.
-        hidden_states = make_viewless_tensor(inp=hidden_states, requires_grad=True, keep_graph=True)
+        hidden_states = make_viewless_tensor(
+            inp=hidden_states, requires_grad=True, keep_graph=True
+        )
 
         if self.config.sequence_parallel:
             rng_context = tensor_parallel.get_cuda_rng_tracker().fork()
@@ -211,9 +218,15 @@ class Qwen2_5VisionTransformerBlock(TransformerBlock):
         # if we are using other fp8 recipes, then the context manager enter&exit are free
         # we can wrap fp8_context within the for loop over layers, so that we can fine-grained
         # control which layer will be fp8 or bf16
-        use_outer_fp8_context = self.config.fp8 and self.config.fp8_recipe == Fp8Recipe.delayed
-        use_inner_fp8_context = self.config.fp8 and self.config.fp8_recipe != Fp8Recipe.delayed
-        outer_fp8_context = get_fp8_context(self.config) if use_outer_fp8_context else nullcontext()
+        use_outer_fp8_context = (
+            self.config.fp8 and self.config.fp8_recipe == Fp8Recipe.delayed
+        )
+        use_inner_fp8_context = (
+            self.config.fp8 and self.config.fp8_recipe != Fp8Recipe.delayed
+        )
+        outer_fp8_context = (
+            get_fp8_context(self.config) if use_outer_fp8_context else nullcontext()
+        )
 
         with rng_context, outer_fp8_context:
             # Forward pass.
@@ -260,7 +273,9 @@ class Qwen2_5VisionTransformerBlock(TransformerBlock):
                         and self.config.cpu_offloading
                         and self.group_prefetch_offload_commit_async is not None
                     ):
-                        hidden_states = self.group_prefetch_offload_commit_async(hidden_states)
+                        hidden_states = self.group_prefetch_offload_commit_async(
+                            hidden_states
+                        )
 
         # Final layer norm.
         if self.final_layernorm is not None:

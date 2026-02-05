@@ -37,11 +37,11 @@ class NaiveRewardManager:
             reward_fn_key: The key used to access the data source in the non-tensor batch data. Defaults to "data_source".
         """
         self.tokenizer = tokenizer  # Store the tokenizer for decoding token IDs
-        self.num_examine = (
-            num_examine  # the number of batches of decoded responses to print to the console
-        )
+        self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or default_compute_score
-        self.reward_fn_key = reward_fn_key  # Store the key for accessing the data source
+        self.reward_fn_key = (
+            reward_fn_key  # Store the key for accessing the data source
+        )
 
     def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
@@ -65,16 +65,24 @@ class NaiveRewardManager:
 
             prompt_length = prompt_ids.shape[-1]
 
-            valid_prompt_length = data_item.batch["attention_mask"][:prompt_length].sum()
+            valid_prompt_length = data_item.batch["attention_mask"][
+                :prompt_length
+            ].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch["responses"]
-            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
+            valid_response_length = data_item.batch["attention_mask"][
+                prompt_length:
+            ].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
-            prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
-            response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+            prompt_str = self.tokenizer.decode(
+                valid_prompt_ids, skip_special_tokens=True
+            )
+            response_str = self.tokenizer.decode(
+                valid_response_ids, skip_special_tokens=True
+            )
 
             ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
             data_source = data_item.non_tensor_batch[self.reward_fn_key]

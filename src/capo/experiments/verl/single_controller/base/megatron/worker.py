@@ -26,7 +26,9 @@ class MegatronWorker(Worker):
         dp_size = mpu.get_data_parallel_world_size()
         pp_size = mpu.get_pipeline_model_parallel_world_size()
         cp_size = mpu.get_context_parallel_world_size()
-        info = DistGlobalInfo(tp_size=tp_size, dp_size=dp_size, pp_size=pp_size, cp_size=cp_size)
+        info = DistGlobalInfo(
+            tp_size=tp_size, dp_size=dp_size, pp_size=pp_size, cp_size=cp_size
+        )
         return info
 
     def get_megatron_rank_info(self):
@@ -36,7 +38,9 @@ class MegatronWorker(Worker):
         dp_rank = mpu.get_data_parallel_rank()
         pp_rank = mpu.get_pipeline_model_parallel_rank()
         cp_rank = mpu.get_context_parallel_rank()
-        info = DistRankInfo(tp_rank=tp_rank, dp_rank=dp_rank, pp_rank=pp_rank, cp_rank=cp_rank)
+        info = DistRankInfo(
+            tp_rank=tp_rank, dp_rank=dp_rank, pp_rank=pp_rank, cp_rank=cp_rank
+        )
         return info
 
     def _init_hf_config_and_tf_config(
@@ -57,7 +61,9 @@ class MegatronWorker(Worker):
         # Step 1: initialize the tokenizer
         self.local_path = copy_to_local(model_path)
         if tokenizer_or_path is None:
-            self.tokenizer = hf_tokenizer(self.local_path, trust_remote_code=trust_remote_code)
+            self.tokenizer = hf_tokenizer(
+                self.local_path, trust_remote_code=trust_remote_code
+            )
         elif isinstance(tokenizer_or_path, str):
             self.tokenizer = hf_tokenizer(
                 copy_to_local(tokenizer_or_path), trust_remote_code=trust_remote_code
@@ -66,7 +72,9 @@ class MegatronWorker(Worker):
             self.tokenizer = tokenizer_or_path
 
         # Step 2: get the hf
-        hf_config = AutoConfig.from_pretrained(self.local_path, trust_remote_code=trust_remote_code)
+        hf_config = AutoConfig.from_pretrained(
+            self.local_path, trust_remote_code=trust_remote_code
+        )
 
         # Step 3: override the hf config
         override_config_kwargs = {
@@ -75,7 +83,9 @@ class MegatronWorker(Worker):
             "pad_token_id": self.tokenizer.pad_token_id,
         }
         override_config_kwargs.update(override_model_config.get("model_config", {}))
-        self.share_embeddings_and_output_weights = getattr(hf_config, "tie_word_embeddings", False)
+        self.share_embeddings_and_output_weights = getattr(
+            hf_config, "tie_word_embeddings", False
+        )
         update_model_config(hf_config, override_config_kwargs=override_config_kwargs)
         self.architectures = getattr(hf_config, "architectures", None)
         if self.rank == 0:

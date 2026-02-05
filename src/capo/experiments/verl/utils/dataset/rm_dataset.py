@@ -101,7 +101,9 @@ class RMDataset(Dataset):
             input_ids = torch.cat(
                 (
                     input_ids,
-                    torch.zeros(size=(self.max_length - curr_length,), dtype=input_ids.dtype),
+                    torch.zeros(
+                        size=(self.max_length - curr_length,), dtype=input_ids.dtype
+                    ),
                 ),
                 dim=-1,
             )
@@ -127,10 +129,12 @@ class RMDataset(Dataset):
         rejected_response = self.rejected_responses[item]
 
         prompt_ids = self.tokenizer(prompt, return_tensors="pt")["input_ids"][0]
-        chosen_response_ids = self.tokenizer(chosen_response, return_tensors="pt")["input_ids"][0]
-        rejected_response_ids = self.tokenizer(rejected_response, return_tensors="pt")["input_ids"][
-            0
-        ]
+        chosen_response_ids = self.tokenizer(chosen_response, return_tensors="pt")[
+            "input_ids"
+        ][0]
+        rejected_response_ids = self.tokenizer(rejected_response, return_tensors="pt")[
+            "input_ids"
+        ][0]
 
         if self.add_eos:
             chosen_response_ids = torch.cat(
@@ -156,7 +160,9 @@ class RMDataset(Dataset):
         )
 
         input_ids = torch.stack((chosen_input_ids, rejected_input_ids), dim=0)
-        attention_mask = torch.stack((chosen_attention_mask, rejected_attention_mask), dim=0)
+        attention_mask = torch.stack(
+            (chosen_attention_mask, rejected_attention_mask), dim=0
+        )
 
         return {
             "input_ids": input_ids,

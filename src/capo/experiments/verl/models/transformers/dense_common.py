@@ -47,7 +47,9 @@ def forward_base_model(
     ```"""
 
     output_attentions = (
-        output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions
+        if output_attentions is not None
+        else self.config.output_attentions
     )
     output_hidden_states = (
         output_hidden_states
@@ -185,11 +187,7 @@ def forward_with_triton_backend(
         )
 
     log_probs, entropy = linear_cross_entropy(
-        hidden_states,
-        self.lm_head.weight,
-        rolled_labels,
-        temperature,
-        "none",
+        hidden_states, self.lm_head.weight, rolled_labels, temperature, "none",
     )
 
     return CausalLMOutputForPPO(

@@ -81,7 +81,9 @@ def combined_int_check(val):
 def clean_traceback(error_traceback):
     file_start = error_traceback.find('File "<string>"')
     # print(file_start)
-    error_traceback = "Traceback (most recent call last):\n  " + error_traceback[file_start:]
+    error_traceback = (
+        "Traceback (most recent call last):\n  " + error_traceback[file_start:]
+    )
     return error_traceback
 
 
@@ -150,7 +152,11 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                 if isinstance(last_block, ast.If):
                     condition = last_block.test
                     if ast.unparse(condition).strip() == "__name__ == '__main__'":
-                        test = ast.unparse(astree.body[:-1]) + "\n" + ast.unparse(last_block.body)
+                        test = (
+                            ast.unparse(astree.body[:-1])
+                            + "\n"
+                            + ast.unparse(last_block.body)
+                        )
             except Exception:
                 pass
 
@@ -282,14 +288,20 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                         output = list(output)
 
                     tmp_result = output == in_outs["outputs"][index]
-                    if isinstance(in_outs["outputs"][index], list) and in_outs["outputs"][index]:
-                        tmp_result = tmp_result or (output == in_outs["outputs"][index][0])
+                    if (
+                        isinstance(in_outs["outputs"][index], list)
+                        and in_outs["outputs"][index]
+                    ):
+                        tmp_result = tmp_result or (
+                            output == in_outs["outputs"][index][0]
+                        )
 
                     # ground truth sequences are not tuples
                     try:
                         if isinstance(output[0], tuple):
                             tmp_result = tmp_result or (
-                                [list(x) for x in output] == in_outs["outputs"][index][0]
+                                [list(x) for x in output]
+                                == in_outs["outputs"][index][0]
                             )
                     except Exception:
                         pass
@@ -312,7 +324,9 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                     error_traceback = traceback.format_exc()
                     faulthandler.disable()
                     if debug:
-                        print(f"Standard input runtime error or time limit exceeded error = {e}")
+                        print(
+                            f"Standard input runtime error or time limit exceeded error = {e}"
+                        )
                     results.append(-1)
                     return (
                         results,
@@ -376,7 +390,9 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                     continue
 
                 if passed and debug:
-                    print(f"==> output = {output}, test outputs = {in_outs['outputs'][index]}")
+                    print(
+                        f"==> output = {output}, test outputs = {in_outs['outputs'][index]}"
+                    )
 
                 if custom_compare_(output, in_outs["outputs"][index]):
                     tmp_result = True
@@ -414,7 +430,9 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                         ]
                 else:
                     in_outs["outputs"][index] = in_outs["outputs"][index].split("\n")
-                    in_outs["outputs"][index] = list(filter(len, in_outs["outputs"][index]))
+                    in_outs["outputs"][index] = list(
+                        filter(len, in_outs["outputs"][index])
+                    )
                     in_outs["outputs"][index] = list(
                         map(lambda x: x.strip(), in_outs["outputs"][index])
                     )
@@ -465,7 +483,9 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                 try:
                     all_ints = all(
                         combined_int_check(e1) and combined_int_check(e2)
-                        for e1, e2 in zip(output, in_outs["outputs"][index], strict=False)
+                        for e1, e2 in zip(
+                            output, in_outs["outputs"][index], strict=False
+                        )
                     )
                     if not all_ints:
                         if debug:
@@ -493,7 +513,9 @@ def run_test(in_outs, test=None, debug=False, timeout=15):
                     if isinstance(output[0], list):
                         all_ints = all(
                             combined_int_check(e1) and combined_int_check(e2)
-                            for e1, e2 in zip(output[0], in_outs["outputs"][index], strict=False)
+                            for e1, e2 in zip(
+                                output[0], in_outs["outputs"][index], strict=False
+                            )
                         )
                         if not all_ints:
                             output_float = [float(e) for e in output[0]]
@@ -644,10 +666,16 @@ def reliability_guard(maximum_memory_bytes=None):
     if maximum_memory_bytes is not None:
         import resource
 
-        resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
-        resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
+        resource.setrlimit(
+            resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes)
+        )
+        resource.setrlimit(
+            resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes)
+        )
         if platform.uname().system != "Darwin":
-            resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
+            resource.setrlimit(
+                resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes)
+            )
 
     faulthandler.disable()
 

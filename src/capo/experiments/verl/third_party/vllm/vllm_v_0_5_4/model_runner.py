@@ -104,7 +104,7 @@ class ModelRunner(ModelRunner):
         self.model_memory_usage = m.consumed_memory
         logger.info(
             "Loading model weights took %.4f GB",
-            self.model_memory_usage / float(2**30),
+            self.model_memory_usage / float(2 ** 30),
         )
 
         if self.lora_config:
@@ -132,7 +132,9 @@ class ModelRunner(ModelRunner):
                 self.device,
                 self.prompt_adapter_config,
             )
-            self.model = self.prompt_adapter_manager.create_prompt_adapter_manager(self.model)
+            self.model = self.prompt_adapter_manager.create_prompt_adapter_manager(
+                self.model
+            )
 
         if self.kv_cache_dtype == "fp8" and is_hip():
             # Currently only ROCm accepts kv-cache scaling factors
@@ -145,7 +147,9 @@ class ModelRunner(ModelRunner):
                         FutureWarning,
                         stacklevel=2,
                     )
-                    self.model.load_kv_cache_scales(self.model_config.quantization_param_path)
+                    self.model.load_kv_cache_scales(
+                        self.model_config.quantization_param_path
+                    )
                     logger.info(
                         "Loaded KV cache scaling factors from %s",
                         self.model_config.quantization_param_path,

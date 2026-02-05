@@ -18,9 +18,7 @@ import capo.verl_integration.reward_fn as rf
 
 # Import directly from reward_fn to avoid pulling in VERL dependency
 # through the verl_integration __init__.py
-from capo.verl_integration.reward_fn import (
-    GenPRMClient,
-)
+from capo.verl_integration.reward_fn import GenPRMClient
 
 
 class DummyGenPRMClient(GenPRMClient):

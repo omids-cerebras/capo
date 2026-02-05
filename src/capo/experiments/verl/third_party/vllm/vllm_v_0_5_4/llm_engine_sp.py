@@ -245,7 +245,9 @@ class LLMEngine(LLMEngine):
                 self.stat_loggers = stat_loggers
             else:
                 self.stat_loggers = {
-                    "logging": LoggingStatLogger(local_interval=_LOCAL_LOGGING_INTERVAL_SEC),
+                    "logging": LoggingStatLogger(
+                        local_interval=_LOCAL_LOGGING_INTERVAL_SEC
+                    ),
                     "prometheus": PrometheusStatLogger(
                         local_interval=_LOCAL_LOGGING_INTERVAL_SEC,
                         labels=dict(model_name=model_config.served_model_name),
@@ -269,8 +271,7 @@ class LLMEngine(LLMEngine):
             self.seq_counter,
             self.get_tokenizer_for_seq,
             stop_checker=StopChecker(
-                self.scheduler_config.max_model_len,
-                self.get_tokenizer_for_seq,
+                self.scheduler_config.max_model_len, self.get_tokenizer_for_seq,
             ),
         )
 
@@ -343,7 +344,9 @@ class LLMEngine(LLMEngine):
         return engine
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.model_executor.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.model_executor.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
     def offload_model_weights(self) -> None:
         self.model_executor.offload_model_weights()

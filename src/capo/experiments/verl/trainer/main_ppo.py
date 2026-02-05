@@ -83,7 +83,9 @@ class TaskRunner:
         trust_remote_code = config.data.get("trust_remote_code", False)
         tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
         # Used for multimodal LLM, could be None
-        processor = hf_processor(local_path, trust_remote_code=trust_remote_code, use_fast=True)
+        processor = hf_processor(
+            local_path, trust_remote_code=trust_remote_code, use_fast=True
+        )
 
         # Version validation for vllm.
         if config.actor_rollout_ref.rollout.name in ["vllm"]:
@@ -91,7 +93,9 @@ class TaskRunner:
 
             if config.actor_rollout_ref.model.get("lora_rank", 0) > 0:
                 if not is_version_ge(pkg="vllm", minver="0.7.3"):
-                    raise NotImplementedError("PPO LoRA is not supported before vllm 0.7.3")
+                    raise NotImplementedError(
+                        "PPO LoRA is not supported before vllm 0.7.3"
+                    )
 
         # Define worker classes based on the actor strategy.
         if config.actor_rollout_ref.actor.strategy in ["fsdp", "fsdp2"]:
@@ -165,7 +169,10 @@ class TaskRunner:
             mapping[Role.RewardModel] = global_pool_id
 
         # Add a reference policy worker if KL loss or KL reward is used.
-        if config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
+        if (
+            config.algorithm.use_kl_in_reward
+            or config.actor_rollout_ref.actor.use_kl_loss
+        ):
             role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
             mapping[Role.RefPolicy] = global_pool_id
 
@@ -192,7 +199,9 @@ class TaskRunner:
         train_dataset = create_rl_dataset(
             config.data.train_files, config.data, tokenizer, processor
         )
-        val_dataset = create_rl_dataset(config.data.val_files, config.data, tokenizer, processor)
+        val_dataset = create_rl_dataset(
+            config.data.val_files, config.data, tokenizer, processor
+        )
         train_sampler = create_rl_sampler(config.data, train_dataset)
 
         # Initialize the PPO trainer.
@@ -234,11 +243,16 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor):
 
     # Check if a custom dataset class is specified in the data configuration
     # and if the path to the custom class is provided
-    if "custom_cls" in data_config and data_config.custom_cls.get("path", None) is not None:
+    if (
+        "custom_cls" in data_config
+        and data_config.custom_cls.get("path", None) is not None
+    ):
         from verl.utils.import_utils import load_extern_type
 
         # Dynamically load the custom dataset class
-        dataset_cls = load_extern_type(data_config.custom_cls.path, data_config.custom_cls.name)
+        dataset_cls = load_extern_type(
+            data_config.custom_cls.path, data_config.custom_cls.name
+        )
         # Verify that the custom dataset class inherits from torch.utils.data.Dataset
         if not issubclass(dataset_cls, Dataset):
             raise TypeError(
@@ -278,7 +292,9 @@ def create_rl_sampler(data_config, dataset):
     if data_config.shuffle:
         train_dataloader_generator = torch.Generator()
         train_dataloader_generator.manual_seed(data_config.get("seed", 1))
-        sampler = RandomSampler(data_source=dataset, generator=train_dataloader_generator)
+        sampler = RandomSampler(
+            data_source=dataset, generator=train_dataloader_generator
+        )
     else:
         # If shuffling is disabled, use a sequential sampler to iterate through the dataset in order.
         sampler = SequentialSampler(data_source=dataset)

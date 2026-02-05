@@ -61,12 +61,16 @@ def _pre_process_inputs(pad_token_id, prompt_token_ids: torch.Tensor) -> list[in
     # remove the left padding in the prompt token_id
     # pad_token_id = self.llm_engine.tokenizer.pad_token_id if self.llm_engine.tokenizer.pad_token_id
     # is not None else self.llm_engine.tokenizer.eos_token_id
-    non_pad_index = torch.nonzero(prompt_token_ids != pad_token_id, as_tuple=False)[0][0]
+    non_pad_index = torch.nonzero(prompt_token_ids != pad_token_id, as_tuple=False)[0][
+        0
+    ]
     token_ids = prompt_token_ids[non_pad_index:].tolist()
     return token_ids
 
 
-def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.Tensor | list[Any]:
+def _repeat_interleave(
+    value: torch.Tensor | np.ndarray, repeats: int
+) -> torch.Tensor | list[Any]:
     if isinstance(value, torch.Tensor):
         return value.repeat_interleave(repeats, dim=0)
     else:
@@ -74,7 +78,9 @@ def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.
 
 
 class vLLMRollout(BaseRollout):
-    def __init__(self, model_path: str, config: DictConfig, tokenizer, model_hf_config, **kwargs):
+    def __init__(
+        self, model_path: str, config: DictConfig, tokenizer, model_hf_config, **kwargs
+    ):
         """A vLLM rollout. It requires the module is supported by the vllm.
 
         Args:
@@ -102,10 +108,7 @@ class vLLMRollout(BaseRollout):
 
             os.environ["CUDA_TIMER_STREAM_KAFKA_ENABLE"] = "0"
             os.environ["MEGATRON_IMPORT_TIMERS"] = "0"
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
+            if vllm_version in ("0.5.4", "0.6.3",):
                 train_tp = kwargs.get("train_tp")
                 num_tp_per_train_tp = train_tp // tensor_parallel_size
                 vllm_ps.initialize_parallel_state(
@@ -113,7 +116,9 @@ class vLLMRollout(BaseRollout):
                     num_tp_per_train_tp=num_tp_per_train_tp,
                 )
             else:
-                vllm_ps.initialize_model_parallel(tensor_model_parallel_size=tensor_parallel_size)
+                vllm_ps.initialize_model_parallel(
+                    tensor_model_parallel_size=tensor_parallel_size
+                )
 
         rope_scaling_config = getattr(model_hf_config, "rope_scaling", None)
         if not rope_scaling_config:
@@ -123,11 +128,15 @@ class vLLMRollout(BaseRollout):
             elif hasattr(model_hf_config, "llm_config") and hasattr(
                 model_hf_config.llm_config, "max_position_embeddings"
             ):
-                max_position_embeddings = model_hf_config.llm_config.max_position_embeddings
+                max_position_embeddings = (
+                    model_hf_config.llm_config.max_position_embeddings
+                )
             elif hasattr(model_hf_config, "text_config") and hasattr(
                 model_hf_config.text_config, "max_position_embeddings"
             ):
-                max_position_embeddings = model_hf_config.text_config.max_position_embeddings
+                max_position_embeddings = (
+                    model_hf_config.text_config.max_position_embeddings
+                )
             if max_position_embeddings is None:
                 raise ValueError("max_position_embeddings not found in model_hf_config")
 
@@ -135,16 +144,23 @@ class vLLMRollout(BaseRollout):
                 max_position_embeddings >= config.prompt_length + config.response_length
             ), "model context length should be greater than total sequence length"
 
-        max_model_len = int(config.max_model_len or config.prompt_length + config.response_length)
+        max_model_len = int(
+            config.max_model_len or config.prompt_length + config.response_length
+        )
 
-        if max_num_batched_tokens < max_model_len and self.config.enable_chunked_prefill:
+        if (
+            max_num_batched_tokens < max_model_len
+            and self.config.enable_chunked_prefill
+        ):
             raise ValueError(
                 "Enable chunked prefill, max_num_batched_tokens is smaller than max_model_len, \
                              please increase max_num_batched_tokens or disable chunked prefill"
             )
 
         trust_remote_code = kwargs.get("trust_remote_code", False)
-        load_format = "dummy" if config.load_format.startswith("dummy") else config.load_format
+        load_format = (
+            "dummy" if config.load_format.startswith("dummy") else config.load_format
+        )
 
         lora_kwargs = kwargs.pop("lora_kwargs", {})
         self.lora_kwargs = lora_kwargs
@@ -158,7 +174,9 @@ class vLLMRollout(BaseRollout):
         # - `None` means not setting it, so we pop it, and leave it to vLLM default value
         #    (which can vary across different vLLM versions);
         # - Otherwise it's the desired value we want to explicitly set.
-        engine_kwargs = {key: val for key, val in engine_kwargs.items() if val is not None}
+        engine_kwargs = {
+            key: val for key, val in engine_kwargs.items() if val is not None
+        }
         if config.get("limit_images", None):  # support for multi-image data
             engine_kwargs["limit_mm_per_prompt"] = {"image": config.get("limit_images")}
 
@@ -228,14 +246,7 @@ class vLLMRollout(BaseRollout):
     @torch.no_grad()
     def generate_sequences(self, prompts: DataProto, **kwargs) -> DataProto:
         # rebuild vllm cache engine
-        if (
-            vllm_version
-            in (
-                "0.5.4",
-                "0.6.3",
-            )
-            and self.config.free_cache_engine
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",) and self.config.free_cache_engine:
             self.inference_engine.init_cache_engine()
 
         idx = prompts.batch["input_ids"]  # (bs, prompt_length)
@@ -251,7 +262,10 @@ class vLLMRollout(BaseRollout):
         non_tensor_batch = prompts.non_tensor_batch
         if "raw_prompt_ids" not in non_tensor_batch:
             non_tensor_batch["raw_prompt_ids"] = np.array(
-                [_pre_process_inputs(self.pad_token_id, idx[i]) for i in range(batch_size)],
+                [
+                    _pre_process_inputs(self.pad_token_id, idx[i])
+                    for i in range(batch_size)
+                ],
                 dtype=object,
             )
 
@@ -353,7 +367,9 @@ class vLLMRollout(BaseRollout):
 
             if self.sampling_params.n > 1 and do_sample:
                 idx = _repeat_interleave(idx, self.sampling_params.n)
-                attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
+                attention_mask = _repeat_interleave(
+                    attention_mask, self.sampling_params.n
+                )
                 position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
                 batch_size = batch_size * self.sampling_params.n
                 # NOTE(linjunrong): for multi-turn https://github.com/volcengine/verl/pull/1037
@@ -365,10 +381,14 @@ class vLLMRollout(BaseRollout):
             seq = torch.cat([idx, response], dim=-1)
 
         response_length = response.size(1)
-        delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
+        delta_position_id = torch.arange(
+            1, response_length + 1, device=position_ids.device
+        )
         delta_position_id = delta_position_id.unsqueeze(0).expand(batch_size, -1)
         if position_ids.dim() == 3:  # qwen2vl mrope
-            delta_position_id = delta_position_id.view(batch_size, 1, -1).expand(batch_size, 3, -1)
+            delta_position_id = delta_position_id.view(batch_size, 1, -1).expand(
+                batch_size, 3, -1
+            )
 
         # TODO(sgm): fix position_ids on right_pad
         # prompt: left pad + response: right pad
@@ -395,14 +415,7 @@ class vLLMRollout(BaseRollout):
         )
 
         # free vllm cache engine
-        if (
-            vllm_version
-            in (
-                "0.5.4",
-                "0.6.3",
-            )
-            and self.config.free_cache_engine
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",) and self.config.free_cache_engine:
             self.inference_engine.free_cache_engine()
 
         return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)

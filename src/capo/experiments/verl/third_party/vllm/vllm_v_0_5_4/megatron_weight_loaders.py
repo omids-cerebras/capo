@@ -26,7 +26,9 @@ from vllm.model_executor.models import ModelRegistry
 
 
 # NOTE(shengguangming): replace the origin weight loader function in the class
-def parallel_weight_loader(self, param: torch.Tensor, loaded_weight: torch.Tensor) -> None:
+def parallel_weight_loader(
+    self, param: torch.Tensor, loaded_weight: torch.Tensor
+) -> None:
     """Parallel Linear weight loader."""
     assert (
         param.size() == loaded_weight.size()
@@ -76,7 +78,9 @@ def gpt2_weight_loader(actor_weights: dict, vllm_model: nn.Module) -> nn.Module:
         weight_loader(param, loaded_weight)
 
 
-def llama_megatron_weight_loader(actor_weights: dict, vllm_model: nn.Module) -> nn.Module:
+def llama_megatron_weight_loader(
+    actor_weights: dict, vllm_model: nn.Module
+) -> nn.Module:
     # NOTE(shengguangming): the megatron llama may have this prefix
     params_dict = dict(vllm_model.named_parameters())
     for name, loaded_weight in actor_weights.items():
@@ -95,7 +99,10 @@ def _replace_name(megatron_name, name_mapping):
         if "layers" in megatron_name:  # deal with decoder layers
             megatron_name = megatron_name.replace("decoder", "model")
             megatron_name_list = megatron_name.split(".")
-            if "layer_norm_weight" in megatron_name_list or "layer_norm_bias" in megatron_name_list:
+            if (
+                "layer_norm_weight" in megatron_name_list
+                or "layer_norm_bias" in megatron_name_list
+            ):
                 param_name_list = megatron_name_list[:3]
                 param_name_list.append(v_name)
                 param_name = ".".join(param_name_list)
@@ -111,7 +118,9 @@ def _replace_name(megatron_name, name_mapping):
             return param_name
 
 
-def llama_megatron_core_te_weight_loader(actor_weights: dict, vllm_model: nn.Module) -> nn.Module:
+def llama_megatron_core_te_weight_loader(
+    actor_weights: dict, vllm_model: nn.Module
+) -> nn.Module:
     params_mapping = [
         # (megatron core gpt model name, vllm model name)
         ("embedding.word_embeddings", "model.embed_tokens"),
@@ -142,16 +151,15 @@ def llama_megatron_core_te_weight_loader(actor_weights: dict, vllm_model: nn.Mod
             weight_loader(param, loaded_weight)
 
 
-def llama_megatron_core_weight_loader(actor_weights: dict, vllm_model: nn.Module) -> nn.Module:
+def llama_megatron_core_weight_loader(
+    actor_weights: dict, vllm_model: nn.Module
+) -> nn.Module:
     params_mapping = [
         # (megatron core gpt model name, vllm model name)
         ("embedding.word_embeddings", "model.embed_tokens"),
         ("self_attention.linear_qkv", "self_attn.qkv_proj"),
         ("self_attention.linear_proj", "self_attn.o_proj"),
-        (
-            "input_layernorm",
-            "input_layernorm",
-        ),
+        ("input_layernorm", "input_layernorm",),
         ("pre_mlp_layernorm", "post_attention_layernorm"),
         ("mlp.linear_fc1", "mlp.gate_up_proj"),
         ("mlp.linear_fc2", "mlp.down_proj"),
@@ -172,7 +180,9 @@ def llama_megatron_core_weight_loader(actor_weights: dict, vllm_model: nn.Module
             weight_loader(param, loaded_weight)
 
 
-def mistral_megatron_weight_loader(actor_weights: Iterable, vllm_model: nn.Module) -> nn.Module:
+def mistral_megatron_weight_loader(
+    actor_weights: Iterable, vllm_model: nn.Module
+) -> nn.Module:
     # TODO: need to implement a general way to deal with prefix
     params_dict = dict(vllm_model.named_parameters())
     for name, loaded_weight in actor_weights.items():

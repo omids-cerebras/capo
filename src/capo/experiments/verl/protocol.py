@@ -167,7 +167,9 @@ def fold_batch_dim(data: "DataProto", new_batch_size):
     for key, val in non_tensor.items():
         non_tensor[key] = np.reshape(val, newshape=(new_batch_size, -1, *val.shape[1:]))
 
-    return type(data)(batch=tensor, non_tensor_batch=non_tensor, meta_info=data.meta_info)
+    return type(data)(
+        batch=tensor, non_tensor_batch=non_tensor, meta_info=data.meta_info
+    )
 
 
 def unfold_batch_dim(data: "DataProto", batch_dims=2):
@@ -184,9 +186,13 @@ def unfold_batch_dim(data: "DataProto", batch_dims=2):
     non_tensor_new = {}
 
     for key, val in non_tensor.items():
-        non_tensor_new[key] = np.reshape(val, newshape=(batch_size, *val.shape[batch_dims:]))
+        non_tensor_new[key] = np.reshape(
+            val, newshape=(batch_size, *val.shape[batch_dims:])
+        )
 
-    return type(data)(batch=tensor, non_tensor_batch=non_tensor_new, meta_info=data.meta_info)
+    return type(data)(
+        batch=tensor, non_tensor_batch=non_tensor_new, meta_info=data.meta_info
+    )
 
 
 def collate_fn(x: list["DataProtoItem"]):
@@ -263,7 +269,9 @@ class DataProto:
         # Case 3: Single integer - return DataProtoItem for backward compatibility
         elif isinstance(item, (int, np.integer)):
             tensor_data = self.batch[item] if self.batch is not None else None
-            non_tensor_data = {key: val[item] for key, val in self.non_tensor_batch.items()}
+            non_tensor_data = {
+                key: val[item] for key, val in self.non_tensor_batch.items()
+            }
             return DataProtoItem(
                 batch=tensor_data,
                 non_tensor_batch=non_tensor_data,
@@ -321,8 +329,8 @@ class DataProto:
         for key, numpy_array in self.non_tensor_batch.items():
             size_of_numpy_array += numpy_array.nbytes
 
-        size_of_numpy_array /= 1024**3
-        size_of_tensordict /= 1024**3
+        size_of_numpy_array /= 1024 ** 3
+        size_of_tensordict /= 1024 ** 3
 
         message = f"Size of tensordict: {size_of_tensordict} GB, size of non_tensor_batch: {size_of_numpy_array} GB"
 
@@ -432,7 +440,9 @@ class DataProto:
             if not isinstance(val, np.ndarray):
                 non_tensors[key] = np.array(val, dtype=object)
 
-        tensor_dict = TensorDict(source=tensors, batch_size=batch_size) if tensors else None
+        tensor_dict = (
+            TensorDict(source=tensors, batch_size=batch_size) if tensors else None
+        )
         if auto_padding:
             meta_info[DataProtoConfig.auto_padding_key] = True
         return cls(batch=tensor_dict, non_tensor_batch=non_tensors, meta_info=meta_info)
@@ -594,7 +604,9 @@ class DataProto:
             meta_info=self.meta_info,
         )
 
-    def pop(self, batch_keys=None, non_tensor_batch_keys=None, meta_info_keys=None) -> "DataProto":
+    def pop(
+        self, batch_keys=None, non_tensor_batch_keys=None, meta_info_keys=None
+    ) -> "DataProto":
         """Pop a subset of the DataProto via `batch_keys` and `meta_info_keys`
 
         Args:
@@ -625,7 +637,9 @@ class DataProto:
         for key in meta_info_keys:
             assert key in self.meta_info.keys()
             meta_info[key] = self.meta_info.pop(key)
-        return DataProto.from_dict(tensors=tensors, non_tensors=non_tensors, meta_info=meta_info)
+        return DataProto.from_dict(
+            tensors=tensors, non_tensors=non_tensors, meta_info=meta_info
+        )
 
     def rename(self, old_keys=None, new_keys=None) -> "DataProto":
         """
@@ -639,7 +653,9 @@ class DataProto:
                 elif isinstance(keys, list):
                     pass
                 else:
-                    raise TypeError(f"keys must be a list or a string, but got {type(keys)}")
+                    raise TypeError(
+                        f"keys must be a list or a string, but got {type(keys)}"
+                    )
             return keys
 
         old_keys = validate_input(old_keys)
@@ -669,7 +685,9 @@ class DataProto:
             DataProto: the DataProto after union
         """
         self.batch = union_tensor_dict(self.batch, other.batch)
-        self.non_tensor_batch = union_numpy_dict(self.non_tensor_batch, other.non_tensor_batch)
+        self.non_tensor_batch = union_numpy_dict(
+            self.non_tensor_batch, other.non_tensor_batch
+        )
         self.meta_info = union_two_dict(self.meta_info, other.meta_info)
         return self
 
@@ -722,7 +740,9 @@ class DataProto:
         Returns:
             bool: True if padding is enabled, False otherwise.
         """
-        dataproto_specific_padding = self.meta_info.get(DataProtoConfig.auto_padding_key, False)
+        dataproto_specific_padding = self.meta_info.get(
+            DataProtoConfig.auto_padding_key, False
+        )
         return dataproto_specific_padding or DataProtoConfig.auto_padding
 
     def padding(self, padding_size, padding_candidate=""):
@@ -734,7 +754,9 @@ class DataProto:
         """
         if padding_size == 0:
             return
-        padding_candidate = self.select_idxs([0 if padding_candidate == "first" else len(self) - 1])
+        padding_candidate = self.select_idxs(
+            [0 if padding_candidate == "first" else len(self) - 1]
+        )
         padding_part = padding_candidate.repeat(padding_size)
         padded_dp = DataProto.concat([self, padding_part])
         self.batch = padded_dp.batch
@@ -820,7 +842,9 @@ class DataProto:
         """
         indices_np = indices.detach().numpy()
         self.batch = self.batch[indices]
-        self.non_tensor_batch = {key: val[indices_np] for key, val in self.non_tensor_batch.items()}
+        self.non_tensor_batch = {
+            key: val[indices_np] for key, val in self.non_tensor_batch.items()
+        }
 
     def repeat(self, repeat_times=2, interleave=True):
         """
@@ -886,7 +910,9 @@ class DataProto:
                     shape[1] = self.batch[key].shape[1] // n_split
                     unfolded_batch[key] = self.batch[key].reshape(*shape)
                 else:
-                    unfolded_batch[key] = torch.repeat_interleave(self.batch[key], n_split, dim=0)
+                    unfolded_batch[key] = torch.repeat_interleave(
+                        self.batch[key], n_split, dim=0
+                    )
             # locate the `unfolded_batch` as a TensorDict on the same device as the original batch
             unfolded_batch = TensorDict(
                 source=unfolded_batch,
@@ -1028,5 +1054,6 @@ def all_gather_data_proto(data: DataProto, process_group):
         all_non_tensor_batch, data.non_tensor_batch, group=process_group
     )
     data.non_tensor_batch = {
-        k: np.concatenate([d[k] for d in all_non_tensor_batch]) for k in data.non_tensor_batch
+        k: np.concatenate([d[k] for d in all_non_tensor_batch])
+        for k in data.non_tensor_batch
     }

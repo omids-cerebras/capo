@@ -145,7 +145,9 @@ class VLLMHijack:
                 else:
                     lora_path = get_adapter_absolute_path(lora_request.lora_path)
 
-                    peft_helper = PEFTHelper.from_local_dir(lora_path, self.max_position_embeddings)
+                    peft_helper = PEFTHelper.from_local_dir(
+                        lora_path, self.max_position_embeddings
+                    )
 
                 # Validates the LoRA configuration against requirements before
                 # loading weights, throwing an exception if validation fails.
@@ -155,7 +157,10 @@ class VLLMHijack:
                 # to ensure correct loading of lora weights.
                 model = self._adapter_manager.model
                 hf_to_vllm_mapper = None
-                if hasattr(model, "hf_to_vllm_mapper") and model.hf_to_vllm_mapper is not None:
+                if (
+                    hasattr(model, "hf_to_vllm_mapper")
+                    and model.hf_to_vllm_mapper is not None
+                ):
                     hf_to_vllm_mapper = model.hf_to_vllm_mapper
 
                 if isinstance(lora_request, TensorLoRARequest):

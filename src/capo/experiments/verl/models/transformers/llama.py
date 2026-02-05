@@ -65,13 +65,15 @@ def llama_flash_attn_forward(
     # Flash attention requires the input to have the shape
     # batch_size x seq_length x head_dim x hidden_dim
     # therefore we just need to keep the original shape
-    query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-    key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(
-        1, 2
-    )
-    value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(
-        1, 2
-    )
+    query_states = query_states.view(
+        bsz, q_len, self.num_heads, self.head_dim
+    ).transpose(1, 2)
+    key_states = key_states.view(
+        bsz, q_len, self.num_key_value_heads, self.head_dim
+    ).transpose(1, 2)
+    value_states = value_states.view(
+        bsz, q_len, self.num_key_value_heads, self.head_dim
+    ).transpose(1, 2)
 
     # trade off: repeat first and then all to all
     # key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -187,9 +189,15 @@ def llama_attn_forward(
 
     bsz, q_len, _ = hidden_states.shape
 
-    query_states = self.q_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
-    key_states = self.k_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
-    value_states = self.v_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    query_states = (
+        self.q_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    )
+    key_states = (
+        self.k_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    )
+    value_states = (
+        self.v_proj(hidden_states).view(bsz, q_len, -1, self.head_dim).transpose(1, 2)
+    )
 
     ########## AlltoAll for Ulysses ##########
     ulysses_sp_size = get_ulysses_sequence_parallel_world_size()
@@ -215,12 +223,16 @@ def llama_attn_forward(
 
     attention_interface: Callable = eager_attention_forward
     if self.config._attn_implementation != "eager":
-        if self.config._attn_implementation == "sdpa" and kwargs.get("output_attentions", False):
+        if self.config._attn_implementation == "sdpa" and kwargs.get(
+            "output_attentions", False
+        ):
             logger.warning_once(
                 '`torch.nn.functional.scaled_dot_product_attention` does not support `output_attentions=True`. Falling back to eager attention. This warning can be removed using the argument `attn_implementation="eager"` when loading the model.'
             )
         else:
-            attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
+            attention_interface = ALL_ATTENTION_FUNCTIONS[
+                self.config._attn_implementation
+            ]
 
     attn_output, attn_weights = attention_interface(
         self,

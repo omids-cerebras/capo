@@ -96,7 +96,9 @@ class DataParallelPPOActor(BasePPOActor):
 
         self.compute_entropy_from_logits = (
             torch.compile(entropy_from_logits, dynamic=True)
-            if self.config.get("use_torch_compile", True)  #  use torch compile by default
+            if self.config.get(
+                "use_torch_compile", True
+            )  #  use torch compile by default
             else entropy_from_logits
         )
         self.device_name = get_device_name()
@@ -124,7 +126,9 @@ class DataParallelPPOActor(BasePPOActor):
             position_ids = micro_batch["position_ids"]
             entropy = None
             if position_ids.dim() == 3:  # qwen2vl mrope
-                position_ids = position_ids.transpose(0, 1)  # (bsz, 3, seqlen) -> (3, bsz, seqlen)
+                position_ids = position_ids.transpose(
+                    0, 1
+                )  # (bsz, 3, seqlen) -> (3, bsz, seqlen)
 
             if self.use_remove_padding:
                 input_ids_rmpad, indices, *_ = unpad_input(
@@ -230,10 +234,7 @@ class DataParallelPPOActor(BasePPOActor):
                 if self.use_ulysses_sp:
                     # gather and unpad for the ulysses sp
                     log_probs = gather_outpus_and_unpad(
-                        log_probs,
-                        gather_dim=0,
-                        unpad_dim=0,
-                        padding_size=pad_size,
+                        log_probs, gather_dim=0, unpad_dim=0, padding_size=pad_size,
                     )
                     if calculate_entropy:
                         entropy_rmpad = gather_outpus_and_unpad(
@@ -281,7 +282,9 @@ class DataParallelPPOActor(BasePPOActor):
 
                 if self.use_fused_kernels:
                     log_probs = output.log_probs[:, -response_length - 1 : -1]
-                    entropy = output.entropy[:, -response_length - 1 : -1]  # (bsz, response_length)
+                    entropy = output.entropy[
+                        :, -response_length - 1 : -1
+                    ]  # (bsz, response_length)
 
                 else:
                     logits = output.logits
@@ -292,7 +295,9 @@ class DataParallelPPOActor(BasePPOActor):
                     ]  # (bsz, response_length, vocab_size)
                     log_probs = logprobs_from_logits(logits, micro_batch["responses"])
                     if calculate_entropy:
-                        entropy = verl_F.entropy_from_logits(logits)  # (bsz, response_length)
+                        entropy = verl_F.entropy_from_logits(
+                            logits
+                        )  # (bsz, response_length)
 
             return entropy, log_probs
 
@@ -300,7 +305,9 @@ class DataParallelPPOActor(BasePPOActor):
         assert self.config.grad_clip is not None
 
         if isinstance(self.actor_module, FSDP):
-            grad_norm = self.actor_module.clip_grad_norm_(max_norm=self.config.grad_clip)
+            grad_norm = self.actor_module.clip_grad_norm_(
+                max_norm=self.config.grad_clip
+            )
         elif isinstance(self.actor_module, FSDPModule):
             grad_norm = fsdp2_clip_grad_norm_(
                 self.actor_module.parameters(), max_norm=self.config.grad_clip
@@ -312,14 +319,18 @@ class DataParallelPPOActor(BasePPOActor):
 
         # if grad_norm is not finite, skip the update
         if not torch.isfinite(grad_norm):
-            print(f"WARN: rank {torch.distributed.get_rank()} grad_norm is not finite: {grad_norm}")
+            print(
+                f"WARN: rank {torch.distributed.get_rank()} grad_norm is not finite: {grad_norm}"
+            )
             self.actor_optimizer.zero_grad()
         else:
             self.actor_optimizer.step()
         return grad_norm
 
     @GPUMemoryLogger(role="dp actor", logger=logger)
-    def compute_log_prob(self, data: DataProto, calculate_entropy=False) -> torch.Tensor:
+    def compute_log_prob(
+        self, data: DataProto, calculate_entropy=False
+    ) -> torch.Tensor:
         """Compute the log probability of the responses given input_ids, attention_mask and position_ids
 
         Args:
@@ -358,7 +369,9 @@ class DataParallelPPOActor(BasePPOActor):
             )
         elif use_dynamic_bsz:
             # split using dynamic bsz
-            max_token_len = data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
+            max_token_len = (
+                data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
+            )
             micro_batches, indices = rearrange_micro_batches(
                 batch=batch, max_token_len=max_token_len
             )
@@ -386,7 +399,9 @@ class DataParallelPPOActor(BasePPOActor):
             entropys = torch.concat(entropy_lst, dim=0)
         if use_dynamic_bsz:
             indices = list(itertools.chain.from_iterable(indices))
-            assert len(indices) == log_probs.size(0), f"{len(indices)} vs. {log_probs.size()}"
+            assert len(indices) == log_probs.size(
+                0
+            ), f"{len(indices)} vs. {log_probs.size()}"
             revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
             log_probs = log_probs[revert_indices]
             if calculate_entropy:
@@ -426,9 +441,13 @@ class DataParallelPPOActor(BasePPOActor):
         # Split to make minibatch iterator for updating the actor
         # See PPO paper for details. https://arxiv.org/abs/1707.06347
         if has_multi_modal_inputs:
-            num_mini_batches = data.batch.batch_size[0] // self.config.ppo_mini_batch_size
+            num_mini_batches = (
+                data.batch.batch_size[0] // self.config.ppo_mini_batch_size
+            )
             non_tensor_select_keys = ["multi_modal_inputs"]
-            dataloader = data.select(select_keys, non_tensor_select_keys).chunk(num_mini_batches)
+            dataloader = data.select(select_keys, non_tensor_select_keys).chunk(
+                num_mini_batches
+            )
         else:
             dataloader = batch.split(self.config.ppo_mini_batch_size)
 
@@ -439,27 +458,33 @@ class DataParallelPPOActor(BasePPOActor):
                 mini_batch = data
                 if has_multi_modal_inputs:
                     self.gradient_accumulation = (
-                        self.config.ppo_mini_batch_size // self.config.ppo_micro_batch_size_per_gpu
+                        self.config.ppo_mini_batch_size
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
                     num_micro_batches = (
-                        mini_batch.batch.batch_size[0] // self.config.ppo_micro_batch_size_per_gpu
+                        mini_batch.batch.batch_size[0]
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
-                    micro_batches = data.select(select_keys, non_tensor_select_keys).chunk(
-                        num_micro_batches
-                    )
+                    micro_batches = data.select(
+                        select_keys, non_tensor_select_keys
+                    ).chunk(num_micro_batches)
                 elif self.config.use_dynamic_bsz:
                     max_token_len = (
-                        self.config.ppo_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
+                        self.config.ppo_max_token_len_per_gpu
+                        * self.ulysses_sequence_parallel_size
                     )
                     micro_batches, _ = rearrange_micro_batches(
                         batch=mini_batch, max_token_len=max_token_len
                     )
                 else:
                     self.gradient_accumulation = (
-                        self.config.ppo_mini_batch_size // self.config.ppo_micro_batch_size_per_gpu
+                        self.config.ppo_mini_batch_size
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
                     # split batch into micro_batches
-                    micro_batches = mini_batch.split(self.config.ppo_micro_batch_size_per_gpu)
+                    micro_batches = mini_batch.split(
+                        self.config.ppo_micro_batch_size_per_gpu
+                    )
 
                 self.actor_optimizer.zero_grad()
 
@@ -562,7 +587,9 @@ class DataParallelPPOActor(BasePPOActor):
 
                     if self.config.use_dynamic_bsz:
                         # relative to the dynamic bsz
-                        loss = policy_loss * (len(data) / self.config.ppo_mini_batch_size)
+                        loss = policy_loss * (
+                            len(data) / self.config.ppo_mini_batch_size
+                        )
                     else:
                         loss = policy_loss / self.gradient_accumulation
                     loss.backward()

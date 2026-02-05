@@ -96,7 +96,9 @@ class RLHFDataset(Dataset):
         self.processor = processor
         self.config = config
 
-        self.cache_dir = os.path.expanduser(config.get("cache_dir", "~/.cache/verl/rlhf"))
+        self.cache_dir = os.path.expanduser(
+            config.get("cache_dir", "~/.cache/verl/rlhf")
+        )
         self.prompt_key = config.get("prompt_key", "prompt")
         self.image_key = config.get("image_key", "images")
         self.video_key = config.get("video_key", "videos")
@@ -122,7 +124,9 @@ class RLHFDataset(Dataset):
     def _download(self, use_origin_parquet=False):
         from verl.utils.fs import copy_to_local
 
-        data_files = self.data_files if not use_origin_parquet else self.original_data_files
+        data_files = (
+            self.data_files if not use_origin_parquet else self.original_data_files
+        )
         for i, parquet_file in enumerate(data_files):
             self.data_files[i] = copy_to_local(
                 src=parquet_file, cache_dir=self.cache_dir, use_shm=self.use_shm
@@ -132,7 +136,9 @@ class RLHFDataset(Dataset):
         dataframes = []
         for parquet_file in self.data_files:
             # read parquet files and cache
-            dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
+            dataframe = datasets.load_dataset("parquet", data_files=parquet_file)[
+                "train"
+            ]
             dataframes.append(dataframe)
         self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
 
@@ -145,7 +151,9 @@ class RLHFDataset(Dataset):
             if self.apply_chat_template:
                 self.dataframe = self.dataframe.filter(
                     lambda doc: len(
-                        tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True)
+                        tokenizer.apply_chat_template(
+                            doc[prompt_key], add_generation_prompt=True
+                        )
                     )
                     <= self.max_prompt_length,
                     num_proc=self.num_workers,
@@ -214,12 +222,16 @@ class RLHFDataset(Dataset):
 
             images = None
             if self.image_key in row_dict:
-                images = [process_image(image) for image in row_dict.pop(self.image_key)]
+                images = [
+                    process_image(image) for image in row_dict.pop(self.image_key)
+                ]
                 multi_modal_data["image"] = images
 
             videos = None
             if self.video_key in row_dict:
-                videos = [process_video(video) for video in row_dict.pop(self.video_key)]
+                videos = [
+                    process_video(video) for video in row_dict.pop(self.video_key)
+                ]
                 multi_modal_data["video"] = [video.numpy() for video in videos]
 
             model_inputs = self.processor(
@@ -246,8 +258,12 @@ class RLHFDataset(Dataset):
                 )
             else:
                 # some special tokens might be added here
-                raw_prompt = self.tokenizer.decode(self.tokenizer(messages)["input_ids"])
-            model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
+                raw_prompt = self.tokenizer.decode(
+                    self.tokenizer(messages)["input_ids"]
+                )
+            model_inputs = self.tokenizer(
+                raw_prompt, return_tensors="pt", add_special_tokens=False
+            )
             input_ids = model_inputs.pop("input_ids")
             attention_mask = model_inputs.pop("attention_mask")
 
@@ -262,7 +278,8 @@ class RLHFDataset(Dataset):
 
         if (
             self.processor is not None
-            and self.processor.image_processor.__class__.__name__ == "Qwen2VLImageProcessor"
+            and self.processor.image_processor.__class__.__name__
+            == "Qwen2VLImageProcessor"
         ):
             from verl.models.transformers.qwen2_vl import get_rope_index
 
@@ -293,7 +310,9 @@ class RLHFDataset(Dataset):
             elif self.truncation == "middle":
                 left_half = self.max_prompt_length // 2
                 right_half = self.max_prompt_length - left_half
-                raw_prompt_ids = raw_prompt_ids[:left_half] + raw_prompt_ids[-right_half:]
+                raw_prompt_ids = (
+                    raw_prompt_ids[:left_half] + raw_prompt_ids[-right_half:]
+                )
             elif self.truncation == "error":
                 raise RuntimeError(
                     f"Prompt length {len(raw_prompt_ids)} is longer than {self.max_prompt_length}."

@@ -85,7 +85,9 @@ class Qwen2_5VLModel(MegatronModule):
         super().__init__(config=language_transformer_config)
 
         # patch self_attention to use qwen2_5_vl attention
-        vision_transformer_layer_spec.submodules.self_attention.module = Qwen2_5VLSelfAttention
+        vision_transformer_layer_spec.submodules.self_attention.module = (
+            Qwen2_5VLSelfAttention
+        )
         for layer_spec in language_transformer_layer_spec.layer_specs:
             layer_spec.submodules.self_attention.module = Qwen2_5VLSelfAttention
 
@@ -106,7 +108,8 @@ class Qwen2_5VLModel(MegatronModule):
         self.video_token_id = video_token_id
 
         self.square_merge_size = (
-            vision_projection_config.ffn_hidden_size // vision_transformer_config.hidden_size
+            vision_projection_config.ffn_hidden_size
+            // vision_transformer_config.hidden_size
         )
 
         # This attribute is needed to check if an all-reduce is required
@@ -155,7 +158,9 @@ class Qwen2_5VLModel(MegatronModule):
         # gives us non-lists or None
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
-        assert len(input_tensor) == 1, "input_tensor should only be length 1 for Qwen2VL"
+        assert (
+            len(input_tensor) == 1
+        ), "input_tensor should only be length 1 for Qwen2VL"
 
         if self.pre_process:
             self.encoder_hidden_state = input_tensor[0]
@@ -264,8 +269,7 @@ class Qwen2_5VLModel(MegatronModule):
             # If running inference, we can skip image token computation if they were computed already earlier for this sample.
             if use_inference_kv_cache:
                 language_embeddings: torch.Tensor = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
                 # NOTE: why not cat here? is it the combined embeddings useless?
                 combined_embeddings = language_embeddings
@@ -285,12 +289,13 @@ class Qwen2_5VLModel(MegatronModule):
                     )
 
                 combined_embeddings = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
 
                 if image_embeds is not None or video_embeds is not None:
-                    combined_embeddings = combined_embeddings.transpose(0, 1).contiguous()
+                    combined_embeddings = combined_embeddings.transpose(
+                        0, 1
+                    ).contiguous()
                     if image_embeds is not None:
                         image_mask = (input_ids == self.image_token_id).contiguous()
                         if image_mask.sum() > 0:
@@ -307,12 +312,13 @@ class Qwen2_5VLModel(MegatronModule):
                                 dtype=combined_embeddings.dtype,
                                 device=combined_embeddings.device,
                             )
-                    combined_embeddings = combined_embeddings.transpose(0, 1).contiguous()
+                    combined_embeddings = combined_embeddings.transpose(
+                        0, 1
+                    ).contiguous()
 
             else:
                 combined_embeddings = self.language_model.embedding(
-                    input_ids=input_ids,
-                    position_ids=None,  # NOTE: disable
+                    input_ids=input_ids, position_ids=None,  # NOTE: disable
                 )  # [text_seq_len, b, h_language]
             if self.config.sequence_parallel:
                 combined_embeddings = tensor_parallel.scatter_to_sequence_parallel_region(

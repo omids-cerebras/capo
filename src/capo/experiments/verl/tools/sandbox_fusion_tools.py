@@ -71,7 +71,9 @@ class ExecutionWorker:
     def _init_rate_limit(self, rate_limit):
         # TODO validation for rate_limit
         # A Singleton Rate Limitor
-        return TokenBucketWorker.options(name="rate-limiter", get_if_exists=True).remote(rate_limit)
+        return TokenBucketWorker.options(
+            name="rate-limiter", get_if_exists=True
+        ).remote(rate_limit)
 
     def ping(self):
         return True
@@ -97,7 +99,9 @@ def init_execution_pool(
         return (
             ray.remote(ExecutionWorker)
             .options(max_concurrency=num_workers)
-            .remote(enable_global_rate_limit=enable_global_rate_limit, rate_limit=rate_limit)
+            .remote(
+                enable_global_rate_limit=enable_global_rate_limit, rate_limit=rate_limit
+            )
         )
     else:
         raise NotImplementedError("Process mode is not implemented yet")
@@ -158,10 +162,7 @@ class SandboxFusionTool(BaseTool):
         return self.tool_schema
 
     async def create(
-        self,
-        instance_id: str | None = None,
-        ground_truth: str | None = None,
-        **kwargs,
+        self, instance_id: str | None = None, ground_truth: str | None = None, **kwargs,
     ) -> str:
         if instance_id is None:
             instance_id = str(uuid4())
@@ -194,7 +195,9 @@ class SandboxFusionTool(BaseTool):
         # we should always expect this since we don't have correct answer
         if metadata["run_status"] == "Finished":
             actual_output = metadata["stdout"] if metadata["stdout"] is not None else ""
-            logger.debug(f"actual_output from sandbox fusion: {actual_output},{instance_id}")
+            logger.debug(
+                f"actual_output from sandbox fusion: {actual_output},{instance_id}"
+            )
             return actual_output
         else:
             return "no stdout here"

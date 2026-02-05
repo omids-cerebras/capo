@@ -34,7 +34,9 @@ class TokenizerGroup:
         self.max_input_length = max_input_length
         self.tokenizer = tokenizer
         self.lora_tokenizers = (
-            LRUCache[PreTrainedTokenizer](capacity=max_num_seqs) if enable_lora else None
+            LRUCache[PreTrainedTokenizer](capacity=max_num_seqs)
+            if enable_lora
+            else None
         )
 
     def ping(self) -> bool:
@@ -63,7 +65,9 @@ class TokenizerGroup:
         tokenizer = await self.get_lora_tokenizer_async(lora_request)
         return tokenizer.encode(prompt)
 
-    def get_lora_tokenizer(self, lora_request: LoRARequest | None) -> "PreTrainedTokenizer":
+    def get_lora_tokenizer(
+        self, lora_request: LoRARequest | None
+    ) -> "PreTrainedTokenizer":
         if not lora_request or not self.enable_lora:
             return self.tokenizer
         if lora_request.lora_int_id not in self.lora_tokenizers:

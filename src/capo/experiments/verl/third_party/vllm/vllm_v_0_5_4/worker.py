@@ -160,7 +160,9 @@ class Worker(Worker):
             os.environ["TORCH_NCCL_AVOID_RECORD_STREAMS"] = "1"
 
             # NOTE(sgm): Modify for verl, Env vars will be set by TORCHRUN.
-            self.rank = self.rank if self.rank is not None else int(os.getenv("RANK", "-1"))
+            self.rank = (
+                self.rank if self.rank is not None else int(os.getenv("RANK", "-1"))
+            )
             local_rank = int(os.getenv("LOCAL_RANK", "0"))
             self.device = torch.device(f"cuda:{local_rank}")
             if self.rank < 0:
@@ -169,7 +171,9 @@ class Worker(Worker):
 
             # Use the world_size set by TORCHRUN
             world_size = int(os.getenv("WORLD_SIZE", "-1"))
-            assert world_size != -1, "The world_size is set to -1, not initialized by TORCHRUN"
+            assert (
+                world_size != -1
+            ), "The world_size is set to -1, not initialized by TORCHRUN"
             self.parallel_config.world_size = world_size
 
             _check_if_gpu_supports_dtype(self.model_config.dtype)
@@ -225,7 +229,8 @@ class Worker(Worker):
 
         # NOTE(sgm) [VERL] use the remaining memory
         num_gpu_blocks = int(
-            (free_gpu_memory * self.cache_config.gpu_memory_utilization) // cache_block_size
+            (free_gpu_memory * self.cache_config.gpu_memory_utilization)
+            // cache_block_size
         )
         # num_gpu_blocks = int((total_gpu_memory * self.cache_config.gpu_memory_utilization - peak_memory) // cache_block_size)
 
@@ -278,7 +283,9 @@ class Worker(Worker):
         assert (
             execute_model_req is not None
         ), "_execute_model_spmd() requires each worker to take in an ExecuteModelRequest"
-        worker_input: WorkerInput = self.prepare_worker_input(execute_model_req=execute_model_req)
+        worker_input: WorkerInput = self.prepare_worker_input(
+            execute_model_req=execute_model_req
+        )
         model_input: ModelRunnerInputBase = self.model_runner.prepare_model_input(
             execute_model_req.seq_group_metadata_list
         )
@@ -293,7 +300,11 @@ class Worker(Worker):
 
         return self.model_runner.execute_model(
             model_input,
-            (self.kv_cache[worker_input.virtual_engine] if self.kv_cache is not None else None),
+            (
+                self.kv_cache[worker_input.virtual_engine]
+                if self.kv_cache is not None
+                else None
+            ),
             intermediate_tensors,
         )
 

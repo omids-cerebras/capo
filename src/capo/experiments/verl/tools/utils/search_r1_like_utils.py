@@ -69,10 +69,7 @@ def call_search_api(
                 f"{log_prefix}Attempt {attempt + 1}/{MAX_RETRIES}: Calling search API at {retrieval_service_url}"
             )
             response = requests.post(
-                retrieval_service_url,
-                headers=headers,
-                json=payload,
-                timeout=timeout,
+                retrieval_service_url, headers=headers, json=payload, timeout=timeout,
             )
 
             # Check for Gateway Timeout (504) and other server errors for retrying
@@ -89,7 +86,9 @@ def call_search_api(
             response.raise_for_status()
 
             # If successful (status code 2xx)
-            logger.info(f"{log_prefix}Search API call successful on attempt {attempt + 1}")
+            logger.info(
+                f"{log_prefix}Search API call successful on attempt {attempt + 1}"
+            )
             return response.json(), None
 
         except requests.exceptions.ConnectionError as e:
@@ -202,7 +201,9 @@ def perform_single_search_batch(
         "formatted_result": None,
     }
 
-    result_text = json.dumps({"result": "Search request failed or timed out after retries."})
+    result_text = json.dumps(
+        {"result": "Search request failed or timed out after retries."}
+    )
 
     if error_msg:
         metadata["status"] = "api_error"
@@ -221,14 +222,18 @@ def perform_single_search_batch(
                 for retrieval in raw_results:
                     formatted = _passages2string(retrieval)
                     pretty_results.append(formatted)
-                    total_results += len(retrieval) if isinstance(retrieval, list) else 1
+                    total_results += (
+                        len(retrieval) if isinstance(retrieval, list) else 1
+                    )
 
                 final_result = "\n---\n".join(pretty_results)
                 result_text = json.dumps({"result": final_result})
                 metadata["status"] = "success"
                 metadata["total_results"] = total_results
                 metadata["formatted_result"] = final_result
-                logger.info(f"Batch search: Successful, got {total_results} total results")
+                logger.info(
+                    f"Batch search: Successful, got {total_results} total results"
+                )
             else:
                 result_text = json.dumps({"result": "No search results found."})
                 metadata["status"] = "no_results"

@@ -43,7 +43,9 @@ def get_custom_reward_fn(config):
 
     function_name = reward_fn_config.get("name")
     if not hasattr(module, function_name):
-        raise AttributeError(f"Reward function '{function_name}' not found in '{file_path}'.")
+        raise AttributeError(
+            f"Reward function '{function_name}' not found in '{file_path}'."
+        )
 
     print(f"using customized reward function '{function_name}' from '{file_path}'")
     raw_fn = getattr(module, function_name)
@@ -110,7 +112,9 @@ def load_reward_manager(config, tokenizer, num_examine, **reward_kwargs):
     import inspect
 
     sig = inspect.signature(reward_manager_cls.__init__)
-    accepts_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+    accepts_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
     if accepts_var_kw:
         filtered_kwargs = {k: v for k, v in reward_kwargs.items() if v is not None}
     else:

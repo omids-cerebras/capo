@@ -60,14 +60,18 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 
 
 class DataParallelPPOCritic(BasePPOCritic):
-    def __init__(self, config, critic_module: nn.Module, critic_optimizer: optim.Optimizer):
+    def __init__(
+        self, config, critic_module: nn.Module, critic_optimizer: optim.Optimizer
+    ):
         super().__init__(config=config)
         self.critic_module = critic_module
         self.critic_optimizer = critic_optimizer
         self.use_remove_padding = self.config.model.get("use_remove_padding", False)
         print(f"Critic use_remove_padding={self.use_remove_padding}")
 
-        self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
+        self.ulysses_sequence_parallel_size = self.config.get(
+            "ulysses_sequence_parallel_size", 1
+        )
         self.device_name = get_device_name()
 
     def _forward_micro_batch(self, micro_batch):
@@ -202,7 +206,9 @@ class DataParallelPPOCritic(BasePPOCritic):
             )
         elif use_dynamic_bsz:
             # split using dynamic bsz
-            max_token_len = data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
+            max_token_len = (
+                data.meta_info["max_token_len"] * self.ulysses_sequence_parallel_size
+            )
             micro_batches, indices = rearrange_micro_batches(
                 batch=batch, max_token_len=max_token_len
             )
@@ -252,9 +258,13 @@ class DataParallelPPOCritic(BasePPOCritic):
         # Split to make minibatch iterator for updating the actor
         # See PPO paper for details. https://arxiv.org/abs/1707.06347
         if has_multi_modal_inputs:
-            num_mini_batches = data.batch.batch_size[0] // self.config.ppo_mini_batch_size
+            num_mini_batches = (
+                data.batch.batch_size[0] // self.config.ppo_mini_batch_size
+            )
             non_tensor_select_keys = ["multi_modal_inputs"]
-            dataloader = data.select(select_keys, non_tensor_select_keys).chunk(num_mini_batches)
+            dataloader = data.select(select_keys, non_tensor_select_keys).chunk(
+                num_mini_batches
+            )
         else:
             dataloader = batch.split(self.config.ppo_mini_batch_size)
 
@@ -264,25 +274,31 @@ class DataParallelPPOCritic(BasePPOCritic):
                 mini_batch = data
                 if has_multi_modal_inputs:
                     num_micro_batches = (
-                        mini_batch.batch.batch_size[0] // self.config.ppo_micro_batch_size_per_gpu
+                        mini_batch.batch.batch_size[0]
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
-                    micro_batches = data.select(select_keys, non_tensor_select_keys).chunk(
-                        num_micro_batches
-                    )
+                    micro_batches = data.select(
+                        select_keys, non_tensor_select_keys
+                    ).chunk(num_micro_batches)
                     self.gradient_accumulation = (
-                        self.config.ppo_mini_batch_size // self.config.ppo_micro_batch_size_per_gpu
+                        self.config.ppo_mini_batch_size
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
                 elif self.config.use_dynamic_bsz:
                     max_token_len = (
-                        self.config.ppo_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
+                        self.config.ppo_max_token_len_per_gpu
+                        * self.ulysses_sequence_parallel_size
                     )
                     micro_batches, _ = rearrange_micro_batches(
                         batch=mini_batch, max_token_len=max_token_len
                     )
                 else:
-                    micro_batches = mini_batch.split(self.config.ppo_micro_batch_size_per_gpu)
+                    micro_batches = mini_batch.split(
+                        self.config.ppo_micro_batch_size_per_gpu
+                    )
                     self.gradient_accumulation = (
-                        self.config.ppo_mini_batch_size // self.config.ppo_micro_batch_size_per_gpu
+                        self.config.ppo_mini_batch_size
+                        // self.config.ppo_micro_batch_size_per_gpu
                     )
 
                 self.critic_optimizer.zero_grad()
@@ -329,7 +345,9 @@ class DataParallelPPOCritic(BasePPOCritic):
                     data = {
                         "critic/vf_loss": vf_loss.detach().item(),
                         "critic/vf_clipfrac": vf_clipfrac.detach().item(),
-                        "critic/vpred_mean": masked_mean(vpreds, response_mask).detach().item(),
+                        "critic/vpred_mean": masked_mean(vpreds, response_mask)
+                        .detach()
+                        .item(),
                     }
 
                     append_to_dict(metrics, data)

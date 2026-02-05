@@ -46,10 +46,13 @@ class CompletionCallback(ABC):
         # Initialize tools from config file
         self.max_turns = config.actor_rollout_ref.rollout.multi_turn.max_turns
         tool_config_path = config.actor_rollout_ref.rollout.multi_turn.tool_config_path
-        tool_list = initialize_tools_from_config(tool_config_path) if tool_config_path else []
+        tool_list = (
+            initialize_tools_from_config(tool_config_path) if tool_config_path else []
+        )
         self.tools = {tool.name: tool for tool in tool_list}
         self._tool_schemas = [
-            tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True) for tool in tool_list
+            tool.tool_schema.model_dump(exclude_unset=True, exclude_none=True)
+            for tool in tool_list
         ]
         print(f"Initialized tools: {self.tools}", flush=True)
 
@@ -113,7 +116,9 @@ class ToolCompletionCallback(CompletionCallback):
         completions: ChatCompletion,
         info: dict[str, Any],
     ):
-        message = completions.choices[0].message.model_dump(exclude_unset=True, exclude_none=True)
+        message = completions.choices[0].message.model_dump(
+            exclude_unset=True, exclude_none=True
+        )
         if "content" not in message:
             message["content"] = ""
         messages.append(message)
@@ -211,7 +216,9 @@ class ToolCompletionCallback(CompletionCallback):
         ]
 
         # responses: [response]
-        responses = [sequence[len(prompts[i // n]) :] for i, sequence in enumerate(sequences)]
+        responses = [
+            sequence[len(prompts[i // n]) :] for i, sequence in enumerate(sequences)
+        ]
 
         prompts = self.tokenizer(
             prompts, return_tensors="pt", padding="longest", padding_side="left"
@@ -221,7 +228,9 @@ class ToolCompletionCallback(CompletionCallback):
         )
         if n > 1:
             prompts["input_ids"] = prompts["input_ids"].repeat_interleave(n, dim=0)
-            prompts["attention_mask"] = prompts["attention_mask"].repeat_interleave(n, dim=0)
+            prompts["attention_mask"] = prompts["attention_mask"].repeat_interleave(
+                n, dim=0
+            )
 
         # response_mask: response mask with tools calling masked out
         response_mask = self._mask_out_tools_calling_tokens(
@@ -232,7 +241,9 @@ class ToolCompletionCallback(CompletionCallback):
         )
 
         input_ids = torch.cat([prompts["input_ids"], responses["input_ids"]], dim=1)
-        attention_mask = torch.cat([prompts["attention_mask"], responses["attention_mask"]], dim=1)
+        attention_mask = torch.cat(
+            [prompts["attention_mask"], responses["attention_mask"]], dim=1
+        )
         position_ids = (attention_mask.cumsum(dim=1) - 1) * attention_mask
 
         batch = TensorDict(
@@ -272,7 +283,9 @@ class ToolCompletionCallback(CompletionCallback):
         """
         batch_size = input_ids.size(0)
         assert len(raw_prompts) == batch_size, f"{len(raw_prompts)} != {batch_size}"
-        assert len(batch_conversations) == batch_size, f"{len(batch_conversations)} != {batch_size}"
+        assert (
+            len(batch_conversations) == batch_size
+        ), f"{len(batch_conversations)} != {batch_size}"
 
         # Deduplicate adjacent tool calls, since they're merged into one turn.
         # [user, assistant, tool, tool, assistant] -> [user, assistant, tool, assistant]
@@ -291,10 +304,15 @@ class ToolCompletionCallback(CompletionCallback):
             responses = batch_conversations[i][len(raw_prompts[i]) :]
             assert len(responses) > 0, f"responses is empty: {responses}"
 
-            roles = deduplicate_adjacent_tool_calls([response["role"] for response in responses])
+            roles = deduplicate_adjacent_tool_calls(
+                [response["role"] for response in responses]
+            )
             # Each turn should be: [BOS]...[EOS]
             eos_indices = (
-                input_ids[i].eq(self.tokenizer.eos_token_id).nonzero().squeeze(1)[: len(roles)]
+                input_ids[i]
+                .eq(self.tokenizer.eos_token_id)
+                .nonzero()
+                .squeeze(1)[: len(roles)]
             )
             for j in range(len(roles)):
                 if roles[j] == "tool":
@@ -334,7 +352,9 @@ class ChatCompletionScheduler:
             self.completion_callback = ToolCompletionCallback(config, self)
             logger.warning("completion_callback is None, use ToolCompletionCallback")
         else:
-            module_path, class_name = self.config.multi_turn.completion_callback.rsplit(".", 1)
+            module_path, class_name = self.config.multi_turn.completion_callback.rsplit(
+                ".", 1
+            )
             module = importlib.import_module(module_path)
             self.completion_callback = getattr(module, class_name)(config, self)
 
@@ -358,10 +378,7 @@ class ChatCompletionScheduler:
         task.add_done_callback(self.background_tasks.discard)
 
     async def _submit_chat_completions_and_callback(
-        self,
-        messages: list[dict[str, str]],
-        request_id: str,
-        info: dict[str, Any],
+        self, messages: list[dict[str, str]], request_id: str, info: dict[str, Any],
     ):
         """Submit chat completion request, wait request finish and do callback."""
         if request_id:
@@ -472,7 +489,9 @@ class ChatCompletionScheduler:
             )
 
         await asyncio.gather(*tasks)
-        output_batch = self.completion_callback.postprocess(batch, batch_conversations, n=n)
+        output_batch = self.completion_callback.postprocess(
+            batch, batch_conversations, n=n
+        )
         output_batch.meta_info["timing"] = {"generate_sequences": time.time() - t_start}
         print("[ChatCompletionScheduler] generate_sequences done")
         return output_batch
@@ -491,7 +510,9 @@ class ChatCompletionScheduler:
             "__sampling_params__": sampling_params,
         }
 
-        self.submit_chat_completions(messages=messages, request_id=request_id, info=info)
+        self.submit_chat_completions(
+            messages=messages, request_id=request_id, info=info
+        )
 
         # Wait until all completion requests are done
         await done.wait()

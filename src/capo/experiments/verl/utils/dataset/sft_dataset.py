@@ -56,7 +56,9 @@ class SFTDataset(Dataset):
             tokenizer = hf_tokenizer(tokenizer)
         self.tokenizer: PreTrainedTokenizer = tokenizer
 
-        self.prompt_key = prompt_key if isinstance(prompt_key, (tuple, list)) else [prompt_key]
+        self.prompt_key = (
+            prompt_key if isinstance(prompt_key, (tuple, list)) else [prompt_key]
+        )
         self.response_key = (
             response_key if isinstance(response_key, (tuple, list)) else [response_key]
         )
@@ -70,14 +72,19 @@ class SFTDataset(Dataset):
 
     def _download(self):
         for i, parquet_file in enumerate(self.parquet_files):
-            self.parquet_files[i] = copy_to_local(parquet_file, verbose=True, use_shm=self.use_shm)
+            self.parquet_files[i] = copy_to_local(
+                parquet_file, verbose=True, use_shm=self.use_shm
+            )
 
     def _read_files_and_tokenize(self):
         def series_to_item(ls):
             import numpy
             import pandas
 
-            while isinstance(ls, (pandas.core.series.Series, numpy.ndarray)) and len(ls) == 1:
+            while (
+                isinstance(ls, (pandas.core.series.Series, numpy.ndarray))
+                and len(ls) == 1
+            ):
                 ls = ls[0]
             return ls
 
@@ -93,7 +100,9 @@ class SFTDataset(Dataset):
             # type(x[0]): numpy.ndarray
             # type(x[0][0]): dict
             try:
-                self.prompts = self.prompts.apply(lambda x: series_to_item(x)[key], axis=1)  # noqa: B023
+                self.prompts = self.prompts.apply(
+                    lambda x: series_to_item(x)[key], axis=1
+                )  # noqa: B023
             except Exception:
                 print(f"self.prompts={self.prompts}")
                 raise
@@ -103,7 +112,9 @@ class SFTDataset(Dataset):
         self.responses = self.dataframe[self.response_key]
         for key in self.response_dict_keys:
             try:
-                self.responses = self.responses.apply(lambda x: series_to_item(x)[key], axis=1)  # noqa: B023
+                self.responses = self.responses.apply(
+                    lambda x: series_to_item(x)[key], axis=1
+                )  # noqa: B023
             except Exception:
                 print(f"self.responses={self.responses}")
                 raise
@@ -146,13 +157,17 @@ class SFTDataset(Dataset):
         response_length = response_ids.shape[0]
 
         input_ids = torch.cat((prompt_ids, response_ids), dim=-1)
-        attention_mask = torch.cat((prompt_attention_mask, response_attention_mask), dim=-1)
+        attention_mask = torch.cat(
+            (prompt_attention_mask, response_attention_mask), dim=-1
+        )
 
         # padding to max length
         sequence_length = input_ids.shape[0]
         if sequence_length < self.max_length:
             padded_input_ids = (
-                torch.ones(size=(self.max_length - sequence_length,), dtype=input_ids.dtype)
+                torch.ones(
+                    size=(self.max_length - sequence_length,), dtype=input_ids.dtype
+                )
                 * self.tokenizer.pad_token_id
             )
             padded_attention_mask = torch.zeros(
@@ -170,9 +185,13 @@ class SFTDataset(Dataset):
                 input_ids = input_ids[: self.max_length]
                 attention_mask = attention_mask[: self.max_length]
             elif self.truncation == "error":
-                raise NotImplementedError(f"{sequence_length=} is larger than {self.max_length=}")
+                raise NotImplementedError(
+                    f"{sequence_length=} is larger than {self.max_length=}"
+                )
             else:
-                raise NotImplementedError(f"Unknown truncation method {self.truncation}")
+                raise NotImplementedError(
+                    f"Unknown truncation method {self.truncation}"
+                )
 
         position_ids = compute_position_id_with_mask(attention_mask)
 

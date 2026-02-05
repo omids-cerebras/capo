@@ -61,8 +61,12 @@ async def parallel_compute_score_async(
         try:
             # Create tasks for all rows
             tasks_async = [
-                single_compute_score(evaluation_func, c, r, t, ei, executor, timeout=300.0)
-                for c, r, t, ei in zip(completions, references, tasks, extra_info, strict=False)
+                single_compute_score(
+                    evaluation_func, c, r, t, ei, executor, timeout=300.0
+                )
+                for c, r, t, ei in zip(
+                    completions, references, tasks, extra_info, strict=False
+                )
             ]
             results = await asyncio.gather(*tasks_async, return_exceptions=False)
         except Exception as e:
@@ -131,9 +135,7 @@ class PrimeRewardManager:
         reward_fn_key: str = "data_source",
     ) -> None:
         self.tokenizer = tokenizer
-        self.num_examine = (
-            num_examine  # the number of batches of decoded responses to print to the console
-        )
+        self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or default_compute_score
         self.reward_fn_key = reward_fn_key
 
@@ -145,9 +147,12 @@ class PrimeRewardManager:
         prompt_ids = data.batch["prompts"]
 
         response_ids = data.batch["responses"]
-        sequences_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
+        sequences_str = self.tokenizer.batch_decode(
+            response_ids, skip_special_tokens=True
+        )
         ground_truth = [
-            data_item.non_tensor_batch["reward_model"]["ground_truth"] for data_item in data
+            data_item.non_tensor_batch["reward_model"]["ground_truth"]
+            for data_item in data
         ]
         data_sources = data.non_tensor_batch[self.reward_fn_key]
         extra_info = data.non_tensor_batch.get("extra_info", None)
@@ -168,7 +173,9 @@ class PrimeRewardManager:
         except Exception as e:
             print(f"[Error] Unexpected error during scoring. Setting all as 0. {e}")
             scores = [0.0 for _ in range(len(sequences_str))]
-        data.batch["acc"] = torch.tensor(scores, dtype=torch.float32, device=prompt_ids.device)
+        data.batch["acc"] = torch.tensor(
+            scores, dtype=torch.float32, device=prompt_ids.device
+        )
         return scores
 
     def __call__(self, data: DataProto, return_dict: bool = False):
@@ -187,8 +194,12 @@ class PrimeRewardManager:
         prompt_length = prompt_ids.shape[-1]
 
         response_ids = data.batch["responses"]
-        valid_response_length = data.batch["attention_mask"][:, prompt_length:].sum(dim=-1)
-        sequences_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
+        valid_response_length = data.batch["attention_mask"][:, prompt_length:].sum(
+            dim=-1
+        )
+        sequences_str = self.tokenizer.batch_decode(
+            response_ids, skip_special_tokens=True
+        )
         data_sources = data.non_tensor_batch["data_source"]
 
         scores = self.verify(data)

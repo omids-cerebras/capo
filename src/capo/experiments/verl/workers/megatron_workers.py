@@ -89,7 +89,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             rank = int(os.environ["LOCAL_RANK"])
             torch.distributed.init_process_group(
                 backend="nccl",
-                timeout=datetime.timedelta(seconds=self.config.get("nccl_timeout", 600)),
+                timeout=datetime.timedelta(
+                    seconds=self.config.get("nccl_timeout", 600)
+                ),
             )
             torch.cuda.set_device(rank)
 
@@ -137,8 +139,12 @@ class ActorRolloutRefWorker(MegatronWorker):
             self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
             self.config.actor.ppo_mini_batch_size //= mpu.get_data_parallel_world_size()
             if self.config.actor.get("ppo_micro_batch_size", None):
-                self.config.actor.ppo_micro_batch_size //= mpu.get_data_parallel_world_size()
-                self.config.rollout.log_prob_micro_batch_size //= mpu.get_data_parallel_world_size()
+                self.config.actor.ppo_micro_batch_size //= (
+                    mpu.get_data_parallel_world_size()
+                )
+                self.config.rollout.log_prob_micro_batch_size //= (
+                    mpu.get_data_parallel_world_size()
+                )
                 self.config.actor.ppo_micro_batch_size_per_gpu = (
                     self.config.actor.ppo_micro_batch_size
                 )
@@ -146,20 +152,31 @@ class ActorRolloutRefWorker(MegatronWorker):
                     self.config.rollout.log_prob_micro_batch_size
                 )
 
-            self._is_offload_param = self.config.actor.megatron.get("param_offload", False)
-            self._is_offload_grad = self.config.actor.megatron.get("grad_offload", False)
-            self._is_offload_optimizer = self.config.actor.megatron.get("optimizer_offload", False)
+            self._is_offload_param = self.config.actor.megatron.get(
+                "param_offload", False
+            )
+            self._is_offload_grad = self.config.actor.megatron.get(
+                "grad_offload", False
+            )
+            self._is_offload_optimizer = self.config.actor.megatron.get(
+                "optimizer_offload", False
+            )
         elif self._is_ref:
             if self.config.ref.get("log_prob_micro_batch_size", None):
-                self.config.ref.log_prob_micro_batch_size //= mpu.get_data_parallel_world_size()
+                self.config.ref.log_prob_micro_batch_size //= (
+                    mpu.get_data_parallel_world_size()
+                )
                 self.config.ref.log_prob_micro_batch_size_per_gpu = (
                     self.config.ref.log_prob_micro_batch_size
                 )
             else:
                 assert (
-                    self.config.ref.get("log_prob_micro_batch_size_per_gpu", None) is not None
+                    self.config.ref.get("log_prob_micro_batch_size_per_gpu", None)
+                    is not None
                 ), "Please note that in the ref policy configuration, `log_prob_micro_batch_size_per_gpu` and `log_prob_micro_batch_size` should not be None at the same time."
-            self._ref_is_offload_param = self.config.ref.megatron.get("param_offload", False)
+            self._ref_is_offload_param = self.config.ref.megatron.get(
+                "param_offload", False
+            )
 
     def _build_model_optimizer(
         self,
@@ -335,7 +352,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             # perform weight resharding between actor and rollout
             from verl.models.mcore import get_mcore_weight_converter
 
-            weight_converter = get_mcore_weight_converter(self.actor_model_config, self.dtype)
+            weight_converter = get_mcore_weight_converter(
+                self.actor_model_config, self.dtype
+            )
             sharding_manager = MegatronVLLMShardingManager(
                 inference_engine=rollout.inference_engine,
                 model_config=self.actor_model_config,
@@ -374,7 +393,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             )
 
             local_path = copy_to_local(self.config.model.path)
-            log_gpu_memory_usage(f"Before building {self.config.rollout.name} rollout", logger=None)
+            log_gpu_memory_usage(
+                f"Before building {self.config.rollout.name} rollout", logger=None
+            )
             rollout = SGLangRollout(
                 actor_module=local_path,
                 config=self.config.rollout,
@@ -383,11 +404,15 @@ class ActorRolloutRefWorker(MegatronWorker):
                 trust_remote_code=trust_remote_code,
                 device_mesh=rollout_device_mesh,
             )
-            log_gpu_memory_usage(f"After building {self.config.rollout.name} rollout", logger=None)
+            log_gpu_memory_usage(
+                f"After building {self.config.rollout.name} rollout", logger=None
+            )
 
             from verl.models.mcore import get_mcore_weight_converter
 
-            weight_converter = get_mcore_weight_converter(self.actor_model_config, self.dtype)
+            weight_converter = get_mcore_weight_converter(
+                self.actor_model_config, self.dtype
+            )
             sharding_manager = MegatronSGLangShardingManager(
                 actor_module=self.actor.actor_module,
                 inference_engine=rollout._engine,
@@ -400,7 +425,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             log_gpu_memory_usage("After building sharding manager", logger=logger)
         else:
             raise NotImplementedError("Only vllmRollout is supported with Megatron now")
-        print(f"rollout and sharding manager init done sharding_manager: {sharding_manager}")
+        print(
+            f"rollout and sharding manager init done sharding_manager: {sharding_manager}"
+        )
         return rollout, sharding_manager
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
@@ -419,12 +446,16 @@ class ActorRolloutRefWorker(MegatronWorker):
         )
         if self._is_actor:
             override_transformer_config = OmegaConf.to_container(
-                self.config.actor.megatron.get("override_transformer_config", OmegaConf.create()),
+                self.config.actor.megatron.get(
+                    "override_transformer_config", OmegaConf.create()
+                ),
                 resolve=True,
             )
         elif self._is_ref:
             override_transformer_config = OmegaConf.to_container(
-                self.config.ref.megatron.get("override_transformer_config", OmegaConf.create()),
+                self.config.ref.megatron.get(
+                    "override_transformer_config", OmegaConf.create()
+                ),
                 resolve=True,
             )
         else:
@@ -454,7 +485,9 @@ class ActorRolloutRefWorker(MegatronWorker):
                 )
             if self._is_offload_optimizer:
                 offload_megatron_optimizer(self.actor_optimizer)
-                log_gpu_memory_usage("After offload actor optimizer during init", logger=logger)
+                log_gpu_memory_usage(
+                    "After offload actor optimizer during init", logger=logger
+                )
 
         if self._is_actor:
             self.actor = MegatronPPOActor(
@@ -493,7 +526,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             )
             if self._ref_is_offload_param:
                 offload_megatron_model_to_cpu(self.ref_module)
-                log_gpu_memory_usage("After offload ref params during init", logger=logger)
+                log_gpu_memory_usage(
+                    "After offload ref params during init", logger=logger
+                )
 
         if self._is_actor:
             self.flops_counter = FlopsCounter(self.actor_model_config)
@@ -527,7 +562,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             )
         if self._is_offload_optimizer:
             load_megatron_optimizer(self.actor_optimizer)
-            log_gpu_memory_usage("After load actor optimizer during update_actor", logger=logger)
+            log_gpu_memory_usage(
+                "After load actor optimizer during update_actor", logger=logger
+            )
         data.batch = data.batch.cuda()
 
         micro_batch_size = self.config.actor.ppo_micro_batch_size_per_gpu
@@ -541,7 +578,10 @@ class ActorRolloutRefWorker(MegatronWorker):
             global_num_tokens, delta_time
         )
         metrics["perf/mfu/actor"] = (
-            estimated_flops * self.config.actor.ppo_epochs / promised_flops / self.world_size
+            estimated_flops
+            * self.config.actor.ppo_epochs
+            / promised_flops
+            / self.world_size
         )
         from verl.utils.megatron.optimizer import get_megatron_last_lr
 
@@ -559,7 +599,9 @@ class ActorRolloutRefWorker(MegatronWorker):
             )
         if self._is_offload_optimizer:
             offload_megatron_optimizer(self.actor_optimizer)
-            log_gpu_memory_usage("After offload actor optimizer during update_actor", logger=logger)
+            log_gpu_memory_usage(
+                "After offload actor optimizer during update_actor", logger=logger
+            )
 
         torch.cuda.empty_cache()
         return output
@@ -570,7 +612,9 @@ class ActorRolloutRefWorker(MegatronWorker):
         assert self._is_rollout
         if self._is_offload_param:
             load_megatron_model_to_gpu(self.actor_module)
-            log_gpu_memory_usage("After load actor params during generate_sequences", logger=logger)
+            log_gpu_memory_usage(
+                "After load actor params during generate_sequences", logger=logger
+            )
         prompts.batch = prompts.batch.cuda()
         meta_info = {
             "eos_token_id": (
@@ -601,7 +645,12 @@ class ActorRolloutRefWorker(MegatronWorker):
             if self.config.rollout.name == "vllm":
                 import inspect
 
-                if "tags" in inspect.signature(self.rollout.inference_engine.wake_up).parameters:
+                if (
+                    "tags"
+                    in inspect.signature(
+                        self.rollout.inference_engine.wake_up
+                    ).parameters
+                ):
                     self.rollout.inference_engine.wake_up(tags=["kv_cache"])
 
             prompts = self.sharding_manager.preprocess_data(prompts)
@@ -658,12 +707,18 @@ class ActorRolloutRefWorker(MegatronWorker):
                 logger=logger,
             )
         # we should always recompute old_log_probs when it is HybridEngine
-        data.meta_info["micro_batch_size"] = self.config.rollout.log_prob_micro_batch_size_per_gpu
-        data.meta_info["max_token_len"] = self.config.rollout.log_prob_max_token_len_per_gpu
+        data.meta_info[
+            "micro_batch_size"
+        ] = self.config.rollout.log_prob_micro_batch_size_per_gpu
+        data.meta_info[
+            "max_token_len"
+        ] = self.config.rollout.log_prob_max_token_len_per_gpu
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         data = data.to(torch.cuda.current_device())
-        output, entropys = self.actor.compute_log_prob(data=data, calculate_entropy=True)
+        output, entropys = self.actor.compute_log_prob(
+            data=data, calculate_entropy=True
+        )
         output = DataProto.from_dict(
             tensors={"old_log_probs": output, "entropys": entropys},
             meta_info={"temperature": self.config.rollout.temperature},
@@ -680,7 +735,9 @@ class ActorRolloutRefWorker(MegatronWorker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, checkpoint_path, hdfs_path=None, del_local_after_load=True):
+    def load_checkpoint(
+        self, checkpoint_path, hdfs_path=None, del_local_after_load=True
+    ):
         if self._is_offload_param:
             load_megatron_model_to_gpu(self.actor_module)
         self.checkpoint_mananager.load_checkpoint(
@@ -772,7 +829,9 @@ class CriticWorker(MegatronWorker):
             rank = int(os.environ["LOCAL_RANK"])
             torch.distributed.init_process_group(
                 backend="nccl",
-                timeout=datetime.timedelta(seconds=self.config.get("nccl_timeout", 600)),
+                timeout=datetime.timedelta(
+                    seconds=self.config.get("nccl_timeout", 600)
+                ),
             )
             torch.cuda.set_device(rank)
 
@@ -881,7 +940,9 @@ class CriticWorker(MegatronWorker):
 
         # TODO: add more optimizer args into config
         optim_config_megatron = init_megatron_optim_config(optim_config)
-        critic_optimizer = get_megatron_optimizer(model=critic_module, config=optim_config_megatron)
+        critic_optimizer = get_megatron_optimizer(
+            model=critic_module, config=optim_config_megatron
+        )
         critic_optimizer_scheduler = get_megatron_optimizer_param_scheduler(
             optimizer=critic_optimizer, config=optim_config
         )
@@ -1009,7 +1070,9 @@ class CriticWorker(MegatronWorker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, checkpoint_path, hdfs_path=None, del_local_after_load=True):
+    def load_checkpoint(
+        self, checkpoint_path, hdfs_path=None, del_local_after_load=True
+    ):
         if self._is_offload_param:
             load_megatron_model_to_gpu(self.critic_module)
         self.checkpoint_mananager.load_checkpoint(
@@ -1057,7 +1120,9 @@ class RewardModelWorker(MegatronWorker):
             rank = int(os.environ["LOCAL_RANK"])
             torch.distributed.init_process_group(
                 backend="nccl",
-                timeout=datetime.timedelta(seconds=self.config.get("nccl_timeout", 600)),
+                timeout=datetime.timedelta(
+                    seconds=self.config.get("nccl_timeout", 600)
+                ),
             )
             torch.cuda.set_device(rank)
 
@@ -1162,7 +1227,9 @@ class RewardModelWorker(MegatronWorker):
         )
 
         use_shm = self.config.model.get("use_shm", False)
-        sft_tokenizer_local_path = copy_to_local(self.config.model.input_tokenizer, use_shm=use_shm)
+        sft_tokenizer_local_path = copy_to_local(
+            self.config.model.input_tokenizer, use_shm=use_shm
+        )
         sft_tokenizer = hf_tokenizer(sft_tokenizer_local_path)
         rm_tokenizer_path = self.config.model.get("rm_tokenizer", None)
         rm_tokenizer = None

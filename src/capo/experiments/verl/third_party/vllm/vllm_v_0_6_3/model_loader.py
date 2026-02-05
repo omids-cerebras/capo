@@ -196,7 +196,9 @@ class MegatronLoader(BaseModelLoader):
             # TODO(sgm): This is a hack, we need to register the load_weight() func for each model in vllm
             if isinstance(actor_model, nn.Module):
                 load_megatron_weights(
-                    actor_weights=dict(actor_model.named_parameters(remove_duplicate=False)),
+                    actor_weights=dict(
+                        actor_model.named_parameters(remove_duplicate=False)
+                    ),
                     vllm_model=model,
                 )
             else:
@@ -321,7 +323,9 @@ class DTensorLoader(BaseModelLoader):
             # TODO(sgm): This is a hack, we need to register the load_weight() func for each model in vllm
             if isinstance(actor_model, nn.Module):
                 load_dtensor_weights(
-                    actor_weights=dict(actor_model.named_parameters(remove_duplicate=False)),
+                    actor_weights=dict(
+                        actor_model.named_parameters(remove_duplicate=False)
+                    ),
                     vllm_model=model,
                 )
             else:

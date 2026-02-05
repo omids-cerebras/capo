@@ -25,10 +25,14 @@ class MegatronWorkerGroup(WorkerGroup):
         self._megatron_global_info: DistGlobalInfo = None
 
     def init_megatron(self, default_megatron_kwargs: dict = None):
-        raise NotImplementedError("MegatronWorkerGroup.init_megatron should be overwritten")
+        raise NotImplementedError(
+            "MegatronWorkerGroup.init_megatron should be overwritten"
+        )
 
     def get_megatron_rank_info(self, rank: int) -> DistRankInfo:
-        assert 0 <= rank < self.world_size, f"rank must be from [0, world_size), Got {rank}"
+        assert (
+            0 <= rank < self.world_size
+        ), f"rank must be from [0, world_size), Got {rank}"
         return self._megatron_rank_info[rank]
 
     @property

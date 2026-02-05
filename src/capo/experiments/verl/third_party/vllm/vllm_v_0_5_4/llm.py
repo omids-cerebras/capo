@@ -86,7 +86,9 @@ class LLM(LLM):
     def __init__(
         self,
         model: nn.Module | dict,  # model itself or its parameter dict
-        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast | HybridEngineBaseTokenizer,
+        tokenizer: PreTrainedTokenizer
+        | PreTrainedTokenizerFast
+        | HybridEngineBaseTokenizer,
         model_hf_config: PretrainedConfig,
         tokenizer_mode: str = "auto",
         trust_remote_code: bool = False,
@@ -152,12 +154,13 @@ class LLM(LLM):
         return self.llm_engine.tokenizer
 
     def set_tokenizer(
-        self,
-        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+        self, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     ) -> None:
         self.llm_engine.tokenizer = tokenizer
 
-    def _run_engine(self, *, use_tqdm: bool) -> list[RequestOutput | EmbeddingRequestOutput]:
+    def _run_engine(
+        self, *, use_tqdm: bool
+    ) -> list[RequestOutput | EmbeddingRequestOutput]:
         # Initialize tqdm.
         if use_tqdm:
             num_requests = self.llm_engine.get_num_unfinished_requests()
@@ -181,7 +184,9 @@ class LLM(LLM):
                             # Calculate tokens only for RequestOutput
                             total_in_toks += len(output.prompt_token_ids)
                             in_spd = total_in_toks / pbar.format_dict["elapsed"]
-                            total_out_toks += sum(len(stp.token_ids) for stp in output.outputs)
+                            total_out_toks += sum(
+                                len(stp.token_ids) for stp in output.outputs
+                            )
                             out_spd = total_out_toks / pbar.format_dict["elapsed"]
                             pbar.postfix = f"est. speed input: {in_spd:.2f} toks/s, output: {out_spd:.2f} toks/s"
                         pbar.update(1)
@@ -216,7 +221,9 @@ class LLM(LLM):
                 logprobs_dicts = output.logprobs
                 if logprobs_dicts is not None:
                     logprob = []
-                    for logprobs_dict, id in zip(logprobs_dicts, output.token_ids, strict=False):
+                    for logprobs_dict, id in zip(
+                        logprobs_dicts, output.token_ids, strict=False
+                    ):
                         logprob.append(logprobs_dict[id].logprob)
                     logprobs.append(torch.tensor(logprob))
 
@@ -229,11 +236,15 @@ class LLM(LLM):
             output_token_ids, batch_first=True, padding_value=pad_token_id
         )
         if len(logprobs) > 0:
-            logprobs = pad_sequence(logprobs, batch_first=True, padding_value=pad_token_id)
+            logprobs = pad_sequence(
+                logprobs, batch_first=True, padding_value=pad_token_id
+            )
         return output_token_ids, logprobs
 
     def sync_model_weights(self, actor_weights: Iterable, load_format: str) -> None:
-        self.llm_engine.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
+        self.llm_engine.sync_model_weights(
+            actor_weights=actor_weights, load_format=load_format
+        )
 
     def offload_model_weights(self) -> None:
         self.llm_engine.offload_model_weights()

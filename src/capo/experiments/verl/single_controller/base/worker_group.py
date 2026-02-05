@@ -51,9 +51,7 @@ class ResourcePool:
             process_on_nodes = []
         self._store = process_on_nodes
         self.max_colocate_count = max_colocate_count
-        self.n_gpus_per_node = (
-            n_gpus_per_node  # this is left for future huawei GPU that contains 16 GPUs per node
-        )
+        self.n_gpus_per_node = n_gpus_per_node  # this is left for future huawei GPU that contains 16 GPUs per node
 
     def add_node(self, process_count):
         self._store.append(process_count)
@@ -73,7 +71,8 @@ class ResourcePool:
     def local_world_size_list(self) -> list[int]:
         """Returns a flat list where each process has its local world size."""
         nested_local_world_size_list = [
-            [local_world_size for _ in range(local_world_size)] for local_world_size in self._store
+            [local_world_size for _ in range(local_world_size)]
+            for local_world_size in self._store
         ]
         return [item for row in nested_local_world_size_list for item in row]
 
@@ -127,7 +126,9 @@ def check_workers_alive(workers: list, is_alive: Callable, gap_time: float = 1) 
     while True:
         for worker in workers:
             if not is_alive(worker):
-                logging.warning(f"worker {worker} is not alive sending signal to main thread")
+                logging.warning(
+                    f"worker {worker} is not alive sending signal to main thread"
+                )
                 signal.raise_signal(signal.SIGABRT)
         time.sleep(gap_time)
 
@@ -208,7 +209,9 @@ class WorkerGroup:
         for method_name in dir(user_defined_cls):
             try:
                 method = getattr(user_defined_cls, method_name)
-                assert callable(method), f"{method_name} in {user_defined_cls} is not callable"
+                assert callable(
+                    method
+                ), f"{method_name} in {user_defined_cls} is not callable"
             except Exception:
                 # if it is a property, it will fail because Class doesn't have instance property
                 continue

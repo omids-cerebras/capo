@@ -71,7 +71,9 @@ def _ulysses_flash_attention_forward(
 
     ########## AlltoAll for Ulysses ##########
     if ulysses_sp_size > 1:
-        assert position_ids is not None, "position_ids is required for Ulysses sequence parallelism"
+        assert (
+            position_ids is not None
+        ), "position_ids is required for Ulysses sequence parallelism"
 
         # NOTE: repeat kv heads to be divided by sequence parallel. Instead of repeating nheads_q//nheads_k,
         # we choose to repeat sp_size//nheads_k, since flash_attention supports MQA/GQA.
@@ -93,7 +95,9 @@ def _ulysses_flash_attention_forward(
         # https://github.com/huggingface/transformers/pull/33932
 
         # (bsz, seq_len/n) -> (bsz, seq_len)
-        position_ids_list = [torch.empty_like(position_ids) for _ in range(ulysses_sp_size)]
+        position_ids_list = [
+            torch.empty_like(position_ids) for _ in range(ulysses_sp_size)
+        ]
         torch.distributed.all_gather(
             position_ids_list, position_ids, group=get_ulysses_sequence_parallel_group()
         )
@@ -243,7 +247,8 @@ def apply_monkey_patch(
         num_attention_heads % ulysses_sp_size == 0
     ), f"num_attention_heads {num_attention_heads} must be divisible by ulysses_sp_size {ulysses_sp_size}"
     assert (
-        num_key_value_heads % ulysses_sp_size == 0 or ulysses_sp_size % num_key_value_heads == 0
+        num_key_value_heads % ulysses_sp_size == 0
+        or ulysses_sp_size % num_key_value_heads == 0
     ), f"num_key_value_heads {num_key_value_heads} must be divisible by ulysses_sp_size {ulysses_sp_size}or vise versa. Upon ulysses_sp_size % num_key_value_heads == 0,kv heads are repeated to ensure correctness."
 
     if is_trl_available():
@@ -330,7 +335,9 @@ def apply_monkey_patch(
             from transformers.integrations import flash_attention
 
             flash_attention._flash_attention_forward = _ulysses_flash_attention_forward
-            print(f"Monkey patch _flash_attention_forward in {flash_attention.__name__}")
+            print(
+                f"Monkey patch _flash_attention_forward in {flash_attention.__name__}"
+            )
 
     patch_forward_with_backends(
         model,

@@ -71,11 +71,15 @@ def get_init_weight_context_manager(use_meta_tensor=True, mesh: DeviceMesh = Non
     if use_meta_tensor:
         if mesh is None:
             init_context = (
-                init_empty_weights if torch.distributed.get_rank() != 0 else cpu_init_weights
+                init_empty_weights
+                if torch.distributed.get_rank() != 0
+                else cpu_init_weights
             )
         else:
             init_context = (
-                init_empty_weights if mesh.get_coordinate()[-1] != 0 else cpu_init_weights
+                init_empty_weights
+                if mesh.get_coordinate()[-1] != 0
+                else cpu_init_weights
             )
     else:
         init_context = cpu_init_weights
@@ -126,24 +130,29 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False):
                 and module.weight.requires_grad
             )
 
-        lambda_policy = functools.partial(lambda_auto_wrap_policy, lambda_fn=lambda_policy_fn)
+        lambda_policy = functools.partial(
+            lambda_auto_wrap_policy, lambda_fn=lambda_policy_fn
+        )
         policies.append(lambda_policy)
 
     if min_num_params > 0:
-        size_policy = functools.partial(size_based_auto_wrap_policy, min_num_params=min_num_params)
+        size_policy = functools.partial(
+            size_based_auto_wrap_policy, min_num_params=min_num_params
+        )
         policies.append(size_policy)
     elif fsdp_transformer_layer_cls_to_wrap is not None:
         transformer_cls_to_wrap = set()
         for layer_class in fsdp_transformer_layer_cls_to_wrap:
             transformer_cls = get_module_class_from_name(module, layer_class)
             if transformer_cls is None:
-                raise Exception("Could not find the transformer layer class to wrap in the model.")
+                raise Exception(
+                    "Could not find the transformer layer class to wrap in the model."
+                )
             else:
                 transformer_cls_to_wrap.add(transformer_cls)
 
         transformer_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls=transformer_cls_to_wrap,
+            transformer_auto_wrap_policy, transformer_layer_cls=transformer_cls_to_wrap,
         )
         policies.append(transformer_policy)
 
@@ -203,7 +212,9 @@ def load_fsdp_model_to_gpu(model: FSDP):
         if handle._offload_params:
             continue
         flat_param = handle.flat_param
-        handle.flat_param_to(torch.device(f"{get_device_name()}:{device_id}"), non_blocking=True)
+        handle.flat_param_to(
+            torch.device(f"{get_device_name()}:{device_id}"), non_blocking=True
+        )
         # the following still keeps id(._local_shard) != id(.data)
         flat_param._local_shard = flat_param.data
 
@@ -260,7 +271,9 @@ def meta_device_init():
             param_cls = type(module._parameters[name])
             kwargs = module._parameters[name].__dict__
             kwargs["requires_grad"] = param.requires_grad
-            module._parameters[name] = param_cls(module._parameters[name].to(device), **kwargs)
+            module._parameters[name] = param_cls(
+                module._parameters[name].to(device), **kwargs
+            )
             registered.add(module._parameters[name])
 
     try:
@@ -309,7 +322,9 @@ def parallel_load_safetensors(filepath):
     ckpt_chunks = sorted(safetensors2param.keys())
     world_size = dist.get_world_size()
     size = int(math.ceil(total_files / world_size))
-    ckpt_chunks = [ckpt_chunks[rank * size : rank * size + size] for rank in range(world_size)]
+    ckpt_chunks = [
+        ckpt_chunks[rank * size : rank * size + size] for rank in range(world_size)
+    ]
 
     shard_states = {}
     device = get_torch_device().current_device()
@@ -327,7 +342,9 @@ def parallel_load_safetensors(filepath):
     return shard_states
 
 
-def parallel_init_module_fn(module: torch.nn.Module, shard_states: dict[str, torch.nn.Parameter]):
+def parallel_init_module_fn(
+    module: torch.nn.Module, shard_states: dict[str, torch.nn.Parameter]
+):
     """
     Generate a function to initialize sub-modules in the `module` with `shard_states`
     from huggingface checkpoint.
@@ -393,7 +410,9 @@ def parallel_init_module_fn(module: torch.nn.Module, shard_states: dict[str, tor
             # for shared parameter, we get it from the first time it is created
             if state in shared:
                 if state not in materialized_states:
-                    materialized_states[state] = create_and_sync_state(fqn, state, is_param)
+                    materialized_states[state] = create_and_sync_state(
+                        fqn, state, is_param
+                    )
                 else:
                     if fqn in shard_states:
                         shard_states.pop(fqn)
@@ -498,7 +517,9 @@ def apply_fsdp2(model, fsdp_kwargs, config):
 
     for idx, module in enumerate(modules):
         fully_shard(module, **fsdp_kwargs)
-    fully_shard(model, **fsdp_kwargs)  # fsdp2 will not reshard_after_forward for root module
+    fully_shard(
+        model, **fsdp_kwargs
+    )  # fsdp2 will not reshard_after_forward for root module
 
 
 def fsdp2_clip_grad_norm_(
@@ -541,7 +562,9 @@ def layered_summon_lora_params(fsdp_module) -> OrderedDict:
     peft_model = getattr(fsdp_module, "_fsdp_wrapped_module", fsdp_module)
     for prefix in prefix_list:
         for name, submodule in __prefix_submodules(fsdp_module, prefix):
-            prefix = name.replace("_fsdp_wrapped_module.base_model.model.", "base_model.model.")
+            prefix = name.replace(
+                "_fsdp_wrapped_module.base_model.model.", "base_model.model."
+            )
             if name.endswith(".model") or name.endswith(".layers"):
                 continue
             if fsdp_version(submodule) > 0:

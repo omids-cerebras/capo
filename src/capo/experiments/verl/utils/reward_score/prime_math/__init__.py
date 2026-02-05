@@ -287,7 +287,9 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
     ):
         is_correct = False
     else:
-        for ground_truth_elem, given_elem in zip(ground_truth_elems, given_elems, strict=False):
+        for ground_truth_elem, given_elem in zip(
+            ground_truth_elems, given_elems, strict=False
+        ):
             if _is_frac(ground_truth_elem) and _is_frac(given_elem):
                 # if fractions aren't reduced, then shouldn't be marked as correct
                 # so, we don't want to allow sympy.simplify in this case
@@ -421,7 +423,11 @@ def compute_score(model_output: str, ground_truth: str) -> bool:
         if "\pi" in extracted_model_output or "\pi" in ground_truth:
             equivs = []
             for pi in [math.pi, 3.14]:
-                equivs.append(math_equal(extracted_model_output, ground_truth, timeout=True, pi=pi))
+                equivs.append(
+                    math_equal(
+                        extracted_model_output, ground_truth, timeout=True, pi=pi
+                    )
+                )
             is_correct = any(equivs)
         else:
             is_correct = math_equal(extracted_model_output, ground_truth, timeout=True)

@@ -129,7 +129,9 @@ def initialize_tools_from_config(tools_config_file) -> list[BaseTool]:
         if tool_config.get("tool_schema", None) is None:
             tool_schema = None
         else:
-            tool_schema_dict = OmegaConf.to_container(tool_config.tool_schema, resolve=True)
+            tool_schema_dict = OmegaConf.to_container(
+                tool_config.tool_schema, resolve=True
+            )
             tool_schema = OpenAIFunctionToolSchema.parse_obj(tool_schema_dict)
 
         tool = tool_cls(

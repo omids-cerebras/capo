@@ -78,7 +78,9 @@ def gptmodel_forward(
                 post_process=post_process,
             )
     else:
-        assert logits_processor is None, "logits_processor is not supported for non-packed sequence"
+        assert (
+            logits_processor is None
+        ), "logits_processor is not supported for non-packed sequence"
         batch_size, sequence_length = attention_mask.shape
         new_input_ids, new_attention_mask, new_position_ids = remove_left_padding(
             input_ids,

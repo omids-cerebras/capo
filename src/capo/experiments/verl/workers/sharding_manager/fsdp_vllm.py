@@ -174,15 +174,17 @@ class FSDPVLLMShardingManager(BaseShardingManager):
                         else:
                             model = peft_model.base_model.model
                             orig_dev = (
-                                "cpu" if "cpu" in str(next(model.parameters()).device) else "cuda"
+                                "cpu"
+                                if "cpu" in str(next(model.parameters()).device)
+                                else "cuda"
                             )
                             model = model.to("cpu")
                             for name, param in model.state_dict().items():
                                 if any(x in name for x in ["_flat_param", "lora_"]):
                                     continue
-                                name = name.replace("_fsdp_wrapped_module.", "").replace(
-                                    ".base_layer", ""
-                                )
+                                name = name.replace(
+                                    "_fsdp_wrapped_module.", ""
+                                ).replace(".base_layer", "")
                                 lora_params[name] = (
                                     param.full_tensor().detach().cpu()
                                     if hasattr(param, "full_tensor")
@@ -195,12 +197,18 @@ class FSDPVLLMShardingManager(BaseShardingManager):
                     lora_params = get_peft_model_state_dict(peft_model)
                 else:
                     model = peft_model.base_model.model
-                    orig_dev = "cpu" if "cpu" in str(next(model.parameters()).device) else "cuda"
+                    orig_dev = (
+                        "cpu"
+                        if "cpu" in str(next(model.parameters()).device)
+                        else "cuda"
+                    )
                     model = model.to("cpu")
                     for name, param in model.state_dict().items():
                         if any(x in name for x in ["_flat_param", "lora_"]):
                             continue
-                        name = name.replace("_fsdp_wrapped_module.", "").replace(".base_layer", "")
+                        name = name.replace("_fsdp_wrapped_module.", "").replace(
+                            ".base_layer", ""
+                        )
                         lora_params[name] = param.detach().cpu()
                     model = model.to(orig_dev)
             return lora_params
@@ -216,7 +224,9 @@ class FSDPVLLMShardingManager(BaseShardingManager):
         with _timer("reshard", self.timing):
             get_torch_device().empty_cache()
 
-            log_gpu_memory_usage("Before state_dict() in sharding manager memory", logger=logger)
+            log_gpu_memory_usage(
+                "Before state_dict() in sharding manager memory", logger=logger
+            )
             if self.offload_param:
                 load_fsdp_model_to_gpu(self.module)
 
@@ -230,33 +240,44 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             params = convert_weight_keys(
                 params, getattr(self.module, "_fsdp_wrapped_module", self.module)
             )
-            log_gpu_memory_usage("After state_dict() in sharding manager memory", logger=logger)
+            log_gpu_memory_usage(
+                "After state_dict() in sharding manager memory", logger=logger
+            )
 
             # Copy, not share memory
             load_format = "hf" if self.full_params else "dtensor"
 
-            if vllm_version in (
-                "0.5.4",
-                "0.6.3",
-            ):
-                self.inference_engine.sync_model_weights(params, load_format=load_format)
-                log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            if vllm_version in ("0.5.4", "0.6.3",):
+                self.inference_engine.sync_model_weights(
+                    params, load_format=load_format
+                )
+                log_gpu_memory_usage(
+                    "After sync model weights in sharding manager", logger=logger
+                )
                 del params
             else:
-                if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
+                if (
+                    "tags"
+                    in inspect.signature(self.inference_engine.wake_up).parameters
+                ):
                     self.inference_engine.wake_up(tags=["weights"])
                 else:
                     self.inference_engine.wake_up()
 
                 # update model params
                 self.update_params(params, peft_config=peft_config)
-                log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+                log_gpu_memory_usage(
+                    "After sync model weights in sharding manager", logger=logger
+                )
                 del params
                 if self.offload_param:
                     offload_fsdp_model_to_cpu(self.module)
                 get_torch_device().empty_cache()
 
-                if "tags" in inspect.signature(self.inference_engine.wake_up).parameters:
+                if (
+                    "tags"
+                    in inspect.signature(self.inference_engine.wake_up).parameters
+                ):
                     self.inference_engine.wake_up(tags=["kv_cache"])
 
             log_gpu_memory_usage(
@@ -272,10 +293,7 @@ class FSDPVLLMShardingManager(BaseShardingManager):
     @GPUMemoryLogger(role="fsdp vllm sharding_manager", logger=logger)
     def __exit__(self, exc_type, exc_value, traceback):
         # TODO(ZSL): check this
-        if vllm_version in (
-            "0.5.4",
-            "0.6.3",
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",):
             self.inference_engine.offload_model_weights()
         else:
             self.inference_engine.sleep(level=1)
@@ -297,10 +315,7 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             return data
 
         # TODO: Current impl doesn't consider FSDP with torch micro-dp
-        if vllm_version in (
-            "0.5.4",
-            "0.6.3",
-        ):
+        if vllm_version in ("0.5.4", "0.6.3",):
             group = vllm_ps.get_tensor_model_parallel_group()
         else:
             group = vllm_ps.get_tensor_model_parallel_group().device_group
@@ -349,10 +364,14 @@ class FSDPVLLMShardingManager(BaseShardingManager):
                         return k.replace(".bias", ".base_layer.bias")
                     return k
 
-                updated_params = {replace_lora_wrapper(k): v for k, v in updated_params.items()}
+                updated_params = {
+                    replace_lora_wrapper(k): v for k, v in updated_params.items()
+                }
 
         patch_vllm_moe_model_weight_loader(model)
-        device = get_torch_device().current_device()  # used when fsdp2 set cpu_offload_policy
+        device = (
+            get_torch_device().current_device()
+        )  # used when fsdp2 set cpu_offload_policy
         loaded_params = model.load_weights(
             (
                 (

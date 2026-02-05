@@ -114,7 +114,9 @@ def build_memory_reference_from_module(
         start_index[dtype] = 0
     for name, param in sorted(module.named_parameters()):
         memory_buffer = memory_buffers[param.dtype]
-        buffer = memory_buffer.get(shape=param.shape, start_index=start_index[param.dtype])
+        buffer = memory_buffer.get(
+            shape=param.shape, start_index=start_index[param.dtype]
+        )
         # need to increment start_index
         start_index[param.dtype] += calc_padded_numel(param.shape, param.dtype)
         if maintain_weight:

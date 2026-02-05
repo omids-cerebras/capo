@@ -129,12 +129,7 @@ class MegatronSGLangShardingManager(BaseShardingManager):
         for tensor_index, (name, tensor) in enumerate(named_tensors):
             if self.device_mesh["tp"].get_local_rank() == 0:
                 await self.inference_engine.update_weights_from_tensor(
-                    named_tensors=[
-                        (
-                            name,
-                            tensor.detach(),
-                        )
-                    ],
+                    named_tensors=[(name, tensor.detach(),)],
                     load_format=load_format,
                     flush_cache=False,
                 )
@@ -190,4 +185,6 @@ class MegatronSGLangShardingManager(BaseShardingManager):
         # DP_COMPUTE_PROTO: all training ranks are dp, the same as fsdp
         if self.infer_tp_size == 1:
             return data
-        return data.chunk(chunks=self.infer_tp_size)[self.device_mesh["tp"].get_local_rank()]
+        return data.chunk(chunks=self.infer_tp_size)[
+            self.device_mesh["tp"].get_local_rank()
+        ]

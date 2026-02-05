@@ -53,10 +53,14 @@ class AsyncSglangServer(AsyncServerBase):
             assert len(fields) == 2, f"invalid actor name: {matched_actor['name']}"
             pg_index, local_rank = int(fields[0].split("_")[-1]), int(fields[1])
 
-            if (self._dp_size * pg_index + local_rank) // self._tp_size == self._dp_rank:
+            if (
+                self._dp_size * pg_index + local_rank
+            ) // self._tp_size == self._dp_rank:
                 worker = ray.get_actor(**matched_actor)
                 self.workers.append(worker)
-                if (self._dp_size * pg_index + local_rank) / self._tp_size == self._dp_rank:
+                if (
+                    self._dp_size * pg_index + local_rank
+                ) / self._tp_size == self._dp_rank:
                     self.master_worker = worker
 
     async def chat_completion(self, raw_request: Request):

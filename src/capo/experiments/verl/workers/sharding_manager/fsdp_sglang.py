@@ -111,14 +111,24 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         self.timing = {}
         with _timer("reshard", self.timing):
             torch.cuda.empty_cache()
-            log_gpu_memory_usage("Before state_dict() in sharding manager memory", logger=logger)
+            log_gpu_memory_usage(
+                "Before state_dict() in sharding manager memory", logger=logger
+            )
             if self.offload_param:
                 load_fsdp_model_to_gpu(self.module)
             params = self.module.state_dict()
-            log_gpu_memory_usage("After state_dict() in sharding manager memory", logger=logger)
-            device = torch.cuda.current_device()  # used when fsdp2 set cpu_offload_policy
+            log_gpu_memory_usage(
+                "After state_dict() in sharding manager memory", logger=logger
+            )
+            device = (
+                torch.cuda.current_device()
+            )  # used when fsdp2 set cpu_offload_policy
             params = {
-                k: (v.to(device, non_blocking=True) if fsdp_version(self.module) == 2 else v)
+                k: (
+                    v.to(device, non_blocking=True)
+                    if fsdp_version(self.module) == 2
+                    else v
+                )
                 for k, v in params.items()
             }
             params = convert_weight_keys(
@@ -127,7 +137,9 @@ class FSDPSGLangShardingManager(BaseShardingManager):
             # Copy, not share memory
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self.update_weights(params))
-            log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+            log_gpu_memory_usage(
+                "After sync model weights in sharding manager", logger=logger
+            )
 
             del params
             if self.offload_param:
@@ -204,11 +216,15 @@ class FSDPSGLangShardingManager(BaseShardingManager):
     @GPUMemoryLogger(role="FSDPSGLangShardingManager enter", logger=logger)
     async def wake_up(self):
         torch.cuda.empty_cache()
-        log_gpu_memory_usage("Before state_dict() in sharding manager memory", logger=logger)
+        log_gpu_memory_usage(
+            "Before state_dict() in sharding manager memory", logger=logger
+        )
         if self.offload_param:
             load_fsdp_model_to_gpu(self.module)
         params = self.module.state_dict()
-        log_gpu_memory_usage("After state_dict() in sharding manager memory", logger=logger)
+        log_gpu_memory_usage(
+            "After state_dict() in sharding manager memory", logger=logger
+        )
         device = torch.cuda.current_device()  # used when fsdp2 set cpu_offload_policy
         params = {
             k: v.to(device, non_blocking=True) if fsdp_version(self.module) == 2 else v
@@ -216,7 +232,9 @@ class FSDPSGLangShardingManager(BaseShardingManager):
         }
         # Copy, not share memory
         await self.update_weights(params)
-        log_gpu_memory_usage("After sync model weights in sharding manager", logger=logger)
+        log_gpu_memory_usage(
+            "After sync model weights in sharding manager", logger=logger
+        )
 
         del params
         if self.offload_param:

@@ -409,6 +409,4 @@ def compute_capo_eb_full_advantage(
 compute_capo_empirical_bayes_advantage = compute_capo_eb_full_advantage
 
 # Re-export functions from eb_core that tests expect to find here
-from capo.eb_core import (  # noqa: F401, E402
-    s_kband,
-)
+from capo.eb_core import s_kband  # noqa: F401, E402

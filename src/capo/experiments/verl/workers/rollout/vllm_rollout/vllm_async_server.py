@@ -83,7 +83,9 @@ class ExternalRayDistributedExecutor(Executor):
 
         # sort actor names by pg_index and local_rank
         actor_names = sorted(actor_names, key=get_pg_index_and_local_rank)
-        actor_names = actor_names[vllm_dp_rank * vllm_tp_size : (vllm_dp_rank + 1) * vllm_tp_size]
+        actor_names = actor_names[
+            vllm_dp_rank * vllm_tp_size : (vllm_dp_rank + 1) * vllm_tp_size
+        ]
         self.workers: list[WorkerWrapperBase] = [
             ray.get_actor(actor_name) for actor_name in actor_names
         ]
@@ -147,7 +149,9 @@ class AsyncvLLMServer(AsyncServerBase):
     For vLLM AsyncLLM design, see: https://github.com/vllm-project/vllm/pull/9826
     """
 
-    def __init__(self, config: DictConfig, vllm_dp_size: int, vllm_dp_rank: int, wg_prefix: str):
+    def __init__(
+        self, config: DictConfig, vllm_dp_size: int, vllm_dp_rank: int, wg_prefix: str
+    ):
         """
         Args:
             config: DictConfig.
@@ -251,10 +255,14 @@ class AsyncvLLMServer(AsyncServerBase):
         """
         request_json = await raw_request.json()
         request = ChatCompletionRequest(**request_json)
-        generator = await self.openai_serving_chat.create_chat_completion(request, raw_request)
+        generator = await self.openai_serving_chat.create_chat_completion(
+            request, raw_request
+        )
 
         if isinstance(generator, ErrorResponse):
-            return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+            return JSONResponse(
+                content=generator.model_dump(), status_code=generator.code
+            )
         if request.stream:
             return StreamingResponse(content=generator, media_type="text/event-stream")
         else:

@@ -51,14 +51,18 @@ def forward_base_model(
     https://github.com/linkedin/Liger-Kernel/blob/main/src/liger_kernel/transformers/model/qwen2_5_vl.py
     ```"""
     output_attentions = (
-        output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions
+        if output_attentions is not None
+        else self.config.output_attentions
     )
     output_hidden_states = (
         output_hidden_states
         if output_hidden_states is not None
         else self.config.output_hidden_states
     )
-    return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+    return_dict = (
+        return_dict if return_dict is not None else self.config.use_return_dict
+    )
 
     if inputs_embeds is None:
         inputs_embeds = self.model.embed_tokens(input_ids)
@@ -104,7 +108,9 @@ def forward_base_model(
     # if we get 4D attention mask we cannot calculate rope deltas anymore. TODO @raushan fixme
     if position_ids is None and (attention_mask is None or attention_mask.ndim == 2):
         # calculate RoPE index once per generation in the pre-fill stage only
-        if (cache_position is not None and cache_position[0] == 0) or self.rope_deltas is None:
+        if (
+            cache_position is not None and cache_position[0] == 0
+        ) or self.rope_deltas is None:
             position_ids, rope_deltas = self.get_rope_index(
                 input_ids,
                 image_grid_thw,
@@ -280,11 +286,7 @@ def forward_with_triton_backend(
         )
 
     log_probs, entropy = linear_cross_entropy(
-        hidden_states,
-        self.lm_head.weight,
-        rolled_labels,
-        temperature,
-        "none",
+        hidden_states, self.lm_head.weight, rolled_labels, temperature, "none",
     )
 
     return Qwen2_5_VLCausalLMOutputForPPO(

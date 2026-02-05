@@ -50,10 +50,14 @@ class BaseCheckpointManager:
         checkpoint_contents: DictConfig = None,
     ):
         checkpoint_load_contents = (
-            checkpoint_contents.get("load_contents", None) if checkpoint_contents else None
+            checkpoint_contents.get("load_contents", None)
+            if checkpoint_contents
+            else None
         )
         checkpoint_save_contents = (
-            checkpoint_contents.get("save_contents", None) if checkpoint_contents else None
+            checkpoint_contents.get("save_contents", None)
+            if checkpoint_contents
+            else None
         )
         if checkpoint_load_contents is None:
             checkpoint_load_contents = ["model", "optimizer", "extra"]

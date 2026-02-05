@@ -97,7 +97,9 @@ class MegatronPPOCritic(BasePPOCritic):
         use_dynamic_bsz = data.meta_info.get("use_dynamic_bsz", False)
         micro_batch_size = data.meta_info.get("micro_batch_size", None)
         max_token_len = data.meta_info.get("max_token_len", None)
-        assert micro_batch_size is not None, "micro batch size is needed for forward compute"
+        assert (
+            micro_batch_size is not None
+        ), "micro batch size is needed for forward compute"
         if use_dynamic_bsz:
             assert (
                 max_token_len is not None
@@ -115,13 +117,19 @@ class MegatronPPOCritic(BasePPOCritic):
             )
             if mpu.is_pipeline_last_stage(ignore_virtual=True):
                 # only on last rank. It should be on every tp rank
-                values = [o["vpreds"] for o in output["output"]]  # (bs, seq_size, vocal_size)
+                values = [
+                    o["vpreds"] for o in output["output"]
+                ]  # (bs, seq_size, vocal_size)
                 values = torch.cat(values, dim=0).to(torch.float32)
                 if use_dynamic_bsz:
                     indices = output["indices"]
                     indices = list(itertools.chain.from_iterable(indices))
-                    assert len(indices) == values.size(0), f"{len(indices)} vs. {values.size()}"
-                    revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
+                    assert len(indices) == values.size(
+                        0
+                    ), f"{len(indices)} vs. {values.size()}"
+                    revert_indices = torch.tensor(
+                        get_reverse_idx(indices), dtype=torch.long
+                    )
                     values = values[revert_indices]
             else:
                 values = torch.empty_like(attention_mask, dtype=torch.float32)
@@ -200,7 +208,9 @@ class MegatronPPOCritic(BasePPOCritic):
                     max_token_len=max_token_len,
                 )
                 assert (
-                    len(micro_batches) % self.tf_config.microbatch_group_size_per_vp_stage == 0
+                    len(micro_batches)
+                    % self.tf_config.microbatch_group_size_per_vp_stage
+                    == 0
                 ), f"micro_batches {micro_batches} must be divisible by microbatch_group_size_per_vp_stage {microbatch_group_size_per_vp_stage} for megatron backend"
             else:
                 micro_batches, indices = rearrange_micro_batches(
@@ -275,7 +285,9 @@ class MegatronPPOCritic(BasePPOCritic):
             return output, partial(loss_func, data=batch, meta_info={})
 
         # batch should be a list of batches inside micro-batches
-        batch_generator = make_batch_generator(micro_batches, vpp_size=len(self.critic_module))
+        batch_generator = make_batch_generator(
+            micro_batches, vpp_size=len(self.critic_module)
+        )
 
         # TODO: we may use the new schedule instead
         # for flash-attn: (seq_len, batch_size, hidden_size) = (mbs*seq_len, 1, hidden_size)
