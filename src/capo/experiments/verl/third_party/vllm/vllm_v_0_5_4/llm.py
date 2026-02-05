@@ -86,9 +86,9 @@ class LLM(LLM):
     def __init__(
         self,
         model: nn.Module | dict,  # model itself or its parameter dict
-        tokenizer: PreTrainedTokenizer
-        | PreTrainedTokenizerFast
-        | HybridEngineBaseTokenizer,
+        tokenizer: (
+            PreTrainedTokenizer | PreTrainedTokenizerFast | HybridEngineBaseTokenizer
+        ),
         model_hf_config: PretrainedConfig,
         tokenizer_mode: str = "auto",
         trust_remote_code: bool = False,
@@ -154,7 +154,8 @@ class LLM(LLM):
         return self.llm_engine.tokenizer
 
     def set_tokenizer(
-        self, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+        self,
+        tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     ) -> None:
         self.llm_engine.tokenizer = tokenizer
 

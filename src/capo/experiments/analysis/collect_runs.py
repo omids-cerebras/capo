@@ -181,7 +181,9 @@ def summarize_run(run_dir: Path) -> RunSummary | None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--runs_dir", type=str, default="outputs", help="Hydra outputs directory")
+    ap.add_argument(
+        "--runs_dir", type=str, default="outputs", help="Hydra outputs directory"
+    )
     # Backwards/alias for older automation scripts.
     ap.add_argument(
         "--outputs_root",
@@ -189,7 +191,9 @@ def main() -> None:
         default=None,
         help="Alias for --runs_dir (kept for compatibility)",
     )
-    ap.add_argument("--out", type=str, default="artifacts/collected", help="Output directory")
+    ap.add_argument(
+        "--out", type=str, default="artifacts/collected", help="Output directory"
+    )
     args = ap.parse_args()
 
     runs_dir = Path(args.outputs_root) if args.outputs_root else Path(args.runs_dir)

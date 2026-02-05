@@ -6,7 +6,7 @@
 \section{Algorithms: CAPO with Empirical Bayes length and dependence estimation}\label{sec:algorithms}
 \label{sec:alg-eb-capo}
 
-\subsection*{Workflow overview (precise step-by-step)}
+\subsection{Workflow overview (precise step-by-step)}
 We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) and dependence shape \(\xi\) directly into the CAPO training loop, using the notation and objects introduced in \S\ref{sec:eb-theory} (in particular, the precisions \(\omega_i(\beta,\xi)\), weights \(w_i(\beta,\xi)\), aggregator \(m(\beta,\xi)\), and summaries \(\Lambda_\omega(\beta,\xi)\), \(\mathrm{RSS}_\omega(\beta,\xi)\)).
 
 \begin{enumerate}
@@ -49,8 +49,8 @@ We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) an
   \item \textbf{Stabilization \& diagnostics.} Apply exponential moving averages (EMA) to \((\beta,\xi)\), enforce simple box constraints such as \(|\rho|\le \rho_{\max}<1\), \(\eta\ge 0\), and clip extreme weights (e.g., the largest \(0.5\%\) of \(w_i\)). Monitor weight entropy and coefficient of variation as diagnostics, and update \((\beta,\xi)\) every \(2\!-\!4\) outer steps for additional stability.
 \end{enumerate}
 
-\subsection*{Algorithm~\ref{alg:eb-capo}: EB--CAPO in the CAPO training loop}
-Algorithm~\ref{alg:eb-capo} implements the full EB–CAPO loop described above.
+\subsection{Algorithm~\ref{alg:eb-capo}: EB--CAPO in the CAPO training loop}
+Algorithm~\ref{alg:eb-capo} implements the full EB–CAPO loop described above.  
 At each outer step \(t\), it:
 \begin{enumerate}
   \item collects a batch \(\mathcal B_t\) of trajectories \((g_i,L_i,\{Y_{i,\tau}\})\);
@@ -120,8 +120,8 @@ Thus Algorithm~\ref{alg:eb-capo} provides an online, amortized approximation to 
 }
 \end{algorithm}
 
-\subsection*{Algorithm~\ref{alg:acf-moment}: ACF-moment estimator for dependence}
-Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).
+\subsection{Algorithm~\ref{alg:acf-moment}: ACF-moment estimator for dependence}
+Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).  
 It operates at the \emph{token} level \(Y_{i,\tau}\) and:
 \begin{enumerate}
   \item computes per-trajectory empirical autocovariances \(\hat\gamma_i(h)\) up to lag \(k\), centered by the within-trajectory mean \(\bar Y_i\);
@@ -152,13 +152,13 @@ The resulting \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) can be used directly i
 \tcp*{Optionally downweight large \(h\) to reduce noise}
 \end{algorithm}
 
-\subsection*{Algorithm~\ref{alg:eb-lite}: EB-lite length-only estimator}
-Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).
+\subsection{Algorithm~\ref{alg:eb-lite}: EB-lite length-only estimator}
+Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).  
 It is based on the approximation
 \[
 \log\big((g_i-m)^2\big) \approx c - \beta \log L_i,
 \]
-which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).
+which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).  
 The algorithm:
 \begin{enumerate}
   \item initializes \(m^{(0)}\) as the unweighted mean or median of \(\{g_i\}\);
@@ -189,8 +189,8 @@ Initialize \(m^{(0)}\gets \dfrac{1}{G}\sum_{i=1}^G g_i\) or \(m^{(0)}\gets \math
 Set \(\hat\beta\gets \hat\beta^{(k+1)}\).\;
 \end{algorithm}
 
-\subsection*{Algorithm~\ref{alg:kband-weights}: $k$-banded covariance weights}
-Algorithm~\ref{alg:kband-weights} specializes the general EB weighting rule to the $k$-banded stretched-geometric dependence model of Definition~\ref{def:kband}.
+\subsection{Algorithm~\ref{alg:kband-weights}: \texorpdfstring{$k$}{k}-banded covariance weights}
+Algorithm~\ref{alg:kband-weights} specializes the general EB weighting rule to the $k$-banded stretched-geometric dependence model of Definition~\ref{def:kband}.  
 Given a batch \(\mathcal B_t\), a current length exponent \(\beta_t\), and dependence parameters \((\rho_t,\eta_t)\), it:
 \begin{enumerate}
   \item optionally refreshes \((\rho_t,\eta_t)\) using the ACF-moment estimator (Algorithm~\ref{alg:acf-moment});
@@ -243,8 +243,8 @@ This gives an explicit implementation of the weighting rule in Proposition~\ref{
 \Return \(\{s_i\}_{i\in\mathcal B_t},\ \{w_i^{(t)}\}_{i\in\mathcal B_t}\)\;
 \end{algorithm}
 
-\subsection*{Algorithm~\ref{alg:joint-eb-kband}: Joint EB update for \(\beta\), \(\rho\), and \(\eta\)}
-Algorithm~\ref{alg:joint-eb-kband} combines the EB updates for the length exponent \(\beta\) and the $k$-banded dependence parameters \((\rho,\eta)\) into a single joint gradient-ascent step on the EB objective \(\ell(\beta,\rho,\eta)\), under the stretched-geometric dependence model \(s(L;\rho,k,\eta)\).
+\subsection{Algorithm~\ref{alg:joint-eb-kband}: Joint EB update for \texorpdfstring{$\beta, \rho, \And \eta$}{beta, rho and eta}}
+Algorithm~\ref{alg:joint-eb-kband} combines the EB updates for the length exponent \(\beta\) and the $k$-banded dependence parameters \((\rho,\eta)\) into a single joint gradient-ascent step on the EB objective \(\ell(\beta,\rho,\eta)\), under the stretched-geometric dependence model \(s(L;\rho,k,\eta)\).  
 For a given batch \(\mathcal B_t\), it:
 \begin{enumerate}
   \item computes the E-step statistics \(\omega_i, w_i, m_t, e_i, \Lambda_\omega, \mathrm{RSS}_\omega\) under current hyperparameters \((\beta_{t-1},\rho_{t-1},\eta_{t-1})\);

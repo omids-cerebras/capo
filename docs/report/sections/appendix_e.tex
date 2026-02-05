@@ -5,7 +5,7 @@ In this section we give two concrete examples illustrating the EB--CAPO algorith
 (i) a simple hand-computable toy example that makes the weighting mechanism transparent, and
 (ii) a simulated rollout experiment that can be used to compare CAPO with a GRPO-style baseline and empirically demonstrate the variance and sample-efficiency gains predicted by the theory.
 
-\subsubsection{Toy example: three trajectories with different lengths}
+\subsection{Toy example: three trajectories with different lengths}
 \label{sec:toy-example-eb}
 
 Consider a single batch of \(G=3\) trajectories with lengths
@@ -203,3 +203,166 @@ On this synthetic task the ground truth \(\mu^\star\) is known, which allows cle
 The above simulation evaluates CAPO and GRPO purely as estimators of \(\mu^\star\) (i.e., of the scalarized training signal).
 To embed this into a full policy-learning loop, one can replace the role of \(g_i\) by per-trajectory gradient estimates (or log-prob increments) and use the same weights \(w_i^{\mathrm{GRPO}}\) vs.\ \(w_i^{\mathrm{CAPO}}\) to aggregate them.
 Because the EB estimator \(m(\beta,\xi)\) has strictly smaller variance than any fixed-weight scheme of the form \(w_i\propto L_i^{-\beta_0}\) when the working model is approximately correct, the same simulation framework can then be used to compare downstream learning curves (e.g., average return or teacher score versus wall-clock steps) and empirically demonstrate the superiority of CAPO over GRPO on this controlled benchmark.
+
+
+\subsubsection{Synthetic covariance benchmark: CAPO variants, GRPO++, and advantage scaling}
+\label{sec:synthetic-covariance-benchmark}
+
+This section formalizes the synthetic benchmark summarized in \S\ref{subsec:synthetic-benchmark}.
+The objective is to isolate, in a fully controlled setting, how different aggregation/normalization rules transform an identical batch of scalar rollout signals \(\{(g_i,L_i)\}_{i=1}^{B}\) into per-trajectory advantage magnitudes.
+Unlike the full CountDown pipeline, the benchmark does not require querying a base language model; instead, it directly simulates heteroscedastic returns induced by specified within-trajectory covariance regimes.
+
+\paragraph{Synthetic batch structure.}
+We simulate \(P\) prompt groups, each with \(N\) rollouts (responses), so that \(B:=PN\) trajectories are present in a batch.
+Trajectory \(i\) has a discrete length \(L_i\in\{32,64,128,256\}\), sampled i.i.d.\ within and across groups unless otherwise noted.
+The GRPO-family estimators use the prompt-group index to center/standardize within each group, while CAPO variants compute weights from the full batch (mirroring the reference implementation).
+
+\paragraph{Covariance regimes via an induced variance law.}
+We model each trajectory-level scalar return as a (scaled) sum of token-level increments,
+\(g_i=\sum_{t=1}^{L_i} Y_{i,t}\),
+where \(\{Y_{i,t}\}_{t\ge 1}\) is a zero-mean stationary process with unit marginal variance and autocovariance \(\gamma(h):=\mathrm{Cov}(Y_{i,t},Y_{i,t-h})\).
+Under stationarity, the induced variance law is
+\begin{equation}
+  \mathrm{Var}(g_i\mid L_i=L)
+  \;=\;
+  L \;+\; 2\sum_{h=1}^{L-1} (L-h)\,\gamma(h)
+  \;=\;
+  L\,s(L;\xi),
+  \label{eq:synth_vL_general}
+\end{equation}
+where \(s(L;\xi):=\mathrm{Var}(g_i\mid L_i=L)/L\) is the dependence shape factor used throughout the paper (cf.\ Lemma~\ref{lem:sL-kband-eta} and \S\ref{subsec:cs}).
+In all regimes below we keep the base length exponent at \(\beta=1\) so that variation across regimes is attributable entirely to dependence.
+
+We instantiate six regimes spanning short-range and long-range dependence by specifying \(\gamma(\cdot)\) and hence \(s(\cdot)\):
+\begin{itemize}
+  \item \textbf{IID:} \(\gamma(h)\equiv 0\) for \(h\ge 1\), so \(\mathrm{Var}(g\mid L)=L\) and \(s(L)=1\).
+  \item \textbf{AR(1) / geometric dependence (two levels):} \(\gamma(h)=\rho^{h}\) for \(h\ge 1\), yielding
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; 2\sum_{h=1}^{L-1}(L-h)\rho^{h},
+    \qquad
+    \rho\in\{0.7,0.9\}.
+    \label{eq:synth_vL_ar1}
+  \end{equation}
+  \item \textbf{$k$-banded stretched-geometric dependence:} \(\gamma(h)=\rho^{\,h^{\eta}}\mathbf 1\{h\le k\}\), giving
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; 2\sum_{h=1}^{\min\{k,L-1\}}(L-h)\rho^{\,h^{\eta}},
+    \qquad
+    (\rho,k,\eta)=(0.7,16,1.5).
+    \label{eq:synth_vL_kband}
+  \end{equation}
+  \item \textbf{Compound symmetry (two levels):} \(\gamma(h)=\rho_{\mathrm{cs}}\) for \(h\ge 1\), so
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; \rho_{\mathrm{cs}}\,L(L-1),
+    \qquad
+    \rho_{\mathrm{cs}}\in\{0.01,0.05\}.
+    \label{eq:synth_vL_cs}
+  \end{equation}
+  This regime represents long-range dependence in which off-diagonal correlations do not decay and the trajectory variance grows superlinearly in \(L\).
+\end{itemize}
+The figure and tables in \S\ref{subsec:synthetic-benchmark} are generated by the reference implementation \texttt{capo.experiments.analysis.synthetic\_covariance\_benchmark} and saved as compile-ready artifacts under \texttt{docs/report/artifacts/paper/}.
+
+\paragraph{Compared advantage constructions.}
+Given a batch \(\{(g_i,L_i)\}\), we compute scalar advantages using the following rules.
+
+\emph{(i) GRPO normalization.}
+Within each prompt group \(p\in\{1,\dots,P\}\), let \(\mathcal I_p\) denote the indices of its \(N\) trajectories.
+Define
+\begin{equation}
+  A_i^{\mathrm{GRPO}} 
+  \;:=\; 
+  \frac{g_i - \bar g_p}{\widehat\sigma_p + \varepsilon},
+  \qquad
+  \bar g_p := \frac{1}{N}\sum_{j\in\mathcal I_p} g_j,
+  \qquad
+  \widehat\sigma_p^2 := \frac{1}{N}\sum_{j\in\mathcal I_p} (g_j-\bar g_p)^2,
+  \label{eq:synth_grpo_adv}
+\end{equation}
+where \(\varepsilon>0\) is a small stabilizer.
+
+\emph{(ii) GRPO++ / $\Delta L$ length scaling.}
+For \(\alpha\in(0,\infty)\), define a normalized length factor
+\begin{equation}
+  r_i(\alpha)
+  \;:=\;
+  \frac{(L_i/\bar L_p)^{-\alpha}}{\frac{1}{N}\sum_{j\in\mathcal I_p} (L_j/\bar L_p)^{-\alpha}},
+  \qquad
+  \bar L_p := \frac{1}{N}\sum_{j\in\mathcal I_p} L_j,
+  \label{eq:synth_grpopp_factor}
+\end{equation}
+and set
+\begin{equation}
+  A_i^{\Delta L(\alpha)} 
+  \;:=\;
+  r_i(\alpha)\,A_i^{\mathrm{GRPO}}.
+  \label{eq:synth_grpopp_adv}
+\end{equation}
+
+\emph{(iii) CAPO--EB-lite (oracle length-only weighting).}
+To isolate the effect of \emph{length-only} inverse-variance proxying, we report the oracle instantiation with exponent \(\beta=1\) and \(s\equiv 1\), i.e.,
+\begin{equation}
+  w_i^{\mathrm{lite}}
+  \;\propto\;
+  L_i^{-1},
+  \qquad
+  \sum_{i=1}^{B} w_i^{\mathrm{lite}}=1.
+  \label{eq:synth_w_lite_oracle}
+\end{equation}
+Let \(m^{\mathrm{lite}}:=\sum_i w_i^{\mathrm{lite}} g_i\) and define
+\begin{equation}
+  A_i^{\mathrm{CAPO\text{-}EB\text{-}lite}} 
+  \;:=\;
+  w_i^{\mathrm{lite}}\,(g_i-m^{\mathrm{lite}}).
+  \label{eq:synth_capo_eb_lite_adv}
+\end{equation}
+
+\emph{(iv) CAPO--EB (oracle dependence-aware weighting).}
+To isolate dependence-aware inverse-variance reweighting, we report the oracle instantiation using the true induced variance law \(\mathrm{Var}(g_i\mid L_i)\) from \eqref{eq:synth_vL_general}:
+\begin{equation}
+  w_i^{\mathrm{full}}
+  \;\propto\;
+  \mathrm{Var}(g_i\mid L_i)^{-1}
+  \;=\;
+  \big(L_i\,s(L_i;\xi)\big)^{-1},
+  \qquad
+  \sum_{i=1}^{B} w_i^{\mathrm{full}}=1.
+  \label{eq:synth_w_full_oracle}
+\end{equation}
+Let \(m^{\mathrm{full}}:=\sum_i w_i^{\mathrm{full}} g_i\) and set
+\begin{equation}
+  A_i^{\mathrm{CAPO\text{-}EB}} 
+  \;:=\;
+  w_i^{\mathrm{full}}\,(g_i-m^{\mathrm{full}}).
+  \label{eq:synth_capo_eb_adv}
+\end{equation}
+In an actual training run, \(\mathrm{Var}(g_i\mid L_i)\) is replaced by the EB plug-in estimate \(\widehat v_i\) computed from rollouts (Algorithms~\ref{alg:eb-lite}--\ref{alg:eb-capo}); the oracle benchmark here is intended purely as a controlled diagnostic of the weighting rule itself.
+
+\paragraph{Evaluation metrics.}
+For each method and each covariance regime, we compute the mean-squared advantage conditional on length,
+\(\mathbb E[A_i^2\mid L_i=L]\), and summarize length sensitivity by the amplification ratio
+\begin{equation}
+  \mathrm{Amp} 
+  \;:=\;
+  \frac{\mathbb E[A_i^2\mid L_i=L_{\max}]}{\mathbb E[A_i^2\mid L_i=L_{\min}]},
+  \label{eq:synth_amp_def}
+\end{equation}
+where \(L_{\min}\) and \(L_{\max}\) denote the smallest and largest length bins in the simulation.
+Values larger than \(1\) indicate amplification of long trajectories; values below \(1\) indicate suppression.
+
+To visualize where update energy concentrates, we additionally report the \emph{signal share} contributed by each length bin:
+\begin{equation}
+  \mathrm{Share}(L)
+  \;:=\;
+  \frac{\mathbb E\big[\sum_{i:\,L_i=L} A_i^2\big]}{\mathbb E\big[\sum_{i=1}^{B} A_i^2\big]},
+  \label{eq:synth_share_def}
+\end{equation}
+which corresponds to the expected fraction of the total squared learning signal arising from trajectories of length \(L\).
+
+\paragraph{Reproducibility.}
+The benchmark used to generate Figures~\ref{fig:synthetic-covariance}--\ref{fig:synthetic-signal-share} and Table~\ref{tab:synthetic-covariance} is implemented in the repository as \texttt{capo.experiments.analysis.synthetic\_covariance\_benchmark}.
+The script is self-contained and can be executed on CPU to regenerate the corresponding \LaTeX\ table and PDF figures.

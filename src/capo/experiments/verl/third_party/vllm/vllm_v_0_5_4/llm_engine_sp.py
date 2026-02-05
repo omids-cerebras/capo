@@ -271,7 +271,8 @@ class LLMEngine(LLMEngine):
             self.seq_counter,
             self.get_tokenizer_for_seq,
             stop_checker=StopChecker(
-                self.scheduler_config.max_model_len, self.get_tokenizer_for_seq,
+                self.scheduler_config.max_model_len,
+                self.get_tokenizer_for_seq,
             ),
         )
 

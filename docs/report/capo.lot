@@ -1,5 +1,6 @@
-\babel@toc {english}{}\relax
+\babel@toc {english}{}\relax 
 \contentsline {table}{\numberline {1}{\ignorespaces Core notation used throughout the paper.\relax }}{11}{table.caption.3}%
-\contentsline {table}{\numberline {2}{\ignorespaces Key optimization and rollout hyperparameters used in the CountDown RLVR experiments. We hold these fixed across methods within a given context budget; only the advantage aggregation / normalization rule varies.\relax }}{42}{table.caption.13}%
-\contentsline {table}{\numberline {3}{\ignorespaces Main accuracy on CountDown with Qwen2.5--1.5B--Instruct. We report Avg@8 under a short (2048) and long (8192) response budget.\relax }}{43}{table.caption.14}%
-\contentsline {table}{\numberline {4}{\ignorespaces Stability and efficiency diagnostics computed from validation curves. Higher monotonicity is better; lower NDR and lower TTT are better.\relax }}{43}{table.caption.16}%
+\contentsline {table}{\numberline {2}{\ignorespaces Key optimization and rollout hyperparameters used in the CountDown RLVR experiments. We hold these fixed across methods within a given context budget; only the advantage aggregation / normalization rule varies.\relax }}{43}{table.caption.13}%
+\contentsline {table}{\numberline {3}{\ignorespaces Main accuracy on CountDown with Qwen2.5--1.5B--Instruct. We report Avg@8 under a short (2048) and long (8192) response budget.\relax }}{44}{table.caption.14}%
+\contentsline {table}{\numberline {4}{\ignorespaces Stability and efficiency diagnostics computed from validation curves. Higher monotonicity is better; lower NDR and lower TTT are better.\relax }}{44}{table.caption.16}%
+\contentsline {table}{\numberline {5}{\ignorespaces Length amplification in the synthetic covariance benchmark, summarized as the ratio $\mathbb {E}[A^2\mid L_{\max }]/\mathbb {E}[A^2\mid L_{\min }]$. Ratios greater than $1$ indicate amplification of long trajectories; ratios below $1$ indicate suppression. Dependence-aware CAPO--EB adapts sharply in long-range (compound-symmetry) regimes where length-only rules cannot capture superlinear variance growth.\relax }}{50}{table.caption.21}%

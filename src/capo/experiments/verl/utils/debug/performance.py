@@ -28,7 +28,7 @@ from verl.utils.logger import DecoratorLoggerBase
 def _get_current_mem_info(unit: str = "GB", precision: int = 2) -> tuple[str]:
     """Get current memory usage."""
     assert unit in ["GB", "MB", "KB"]
-    divisor = 1024 ** 3 if unit == "GB" else 1024 ** 2 if unit == "MB" else 1024
+    divisor = 1024**3 if unit == "GB" else 1024**2 if unit == "MB" else 1024
     mem_allocated = get_torch_device().memory_allocated()
     mem_reserved = get_torch_device().memory_reserved()
     # use get_torch_device().mem_get_info to profile device memory

@@ -59,7 +59,7 @@ Taking $\Psi(\boldsymbol{A})=\boldsymbol{u}^\top\boldsymbol{A}\boldsymbol{u}$ re
 % they follow directly from the principle of inverse-variance weighting.
 
 % \subsection{Setup}
-% Suppose we have $G$ groups, each contributing $M$ trajectories. Let
+% Suppose we have $G$ groups, each contributing $M$ trajectories. Let 
 % $\{\widehat{\theta}_i\}_{i=1}^G$ denote unbiased estimators from each group, with
 % covariance proxy $v_i := \Psi(\mathrm{Var}(\boldsymbol{g}_i)) \in (0,\infty)$ as defined in
 % Eq.~\eqref{eq:scalar-proxy}. The goal is to form a linear aggregate
@@ -107,8 +107,8 @@ Taking $\Psi(\boldsymbol{A})=\boldsymbol{u}^\top\boldsymbol{A}\boldsymbol{u}$ re
 % \end{equation}
 
 % \subsection{Accounting for $M$ Trajectories per Group}
-% If each group $i$ contributes $M$ trajectories that are averaged to form
-% $\widehat{\theta}_i$, then the effective weight per trajectory is scaled by
+% If each group $i$ contributes $M$ trajectories that are averaged to form 
+% $\widehat{\theta}_i$, then the effective weight per trajectory is scaled by 
 % a factor of $1/M$. Thus, the per-trajectory weights are
 % \begin{equation}
 %   x_i^\star \;=\; \frac{1}{M}\,\frac{v_i^{-1}}{\sum_{j=1}^G v_j^{-1}},
@@ -116,6 +116,6 @@ Taking $\Psi(\boldsymbol{A})=\boldsymbol{u}^\top\boldsymbol{A}\boldsymbol{u}$ re
 % as claimed in Eq.~\eqref{eq:mvu-weights}.
 
 % \subsection{Conclusion}
-% The derivation shows that the MVU weights correspond to
-% \emph{inverse-variance weighting}, adapted to trajectory-level
+% The derivation shows that the MVU weights correspond to 
+% \emph{inverse-variance weighting}, adapted to trajectory-level 
 % variances summarized by the scalar functional $\Psi$.

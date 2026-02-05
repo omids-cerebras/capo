@@ -836,14 +836,14 @@ class ActorRolloutRefWorker(Worker):
                 / promised_flops
                 / self.world_size
             )
-            metrics[
-                "perf/max_memory_allocated_gb"
-            ] = get_torch_device().max_memory_allocated() / (1024 ** 3)
-            metrics[
-                "perf/max_memory_reserved_gb"
-            ] = get_torch_device().max_memory_reserved() / (1024 ** 3)
+            metrics["perf/max_memory_allocated_gb"] = (
+                get_torch_device().max_memory_allocated() / (1024**3)
+            )
+            metrics["perf/max_memory_reserved_gb"] = (
+                get_torch_device().max_memory_reserved() / (1024**3)
+            )
             metrics["perf/cpu_memory_used_gb"] = psutil.virtual_memory().used / (
-                1024 ** 3
+                1024**3
             )
 
             lr = self.actor_lr_scheduler.get_last_lr()[0]
@@ -931,12 +931,12 @@ class ActorRolloutRefWorker(Worker):
         )
         data = data.to(get_torch_device().current_device())
         # we should always recompute old_log_probs when it is HybridEngine
-        data.meta_info[
-            "micro_batch_size"
-        ] = self.config.rollout.log_prob_micro_batch_size_per_gpu
-        data.meta_info[
-            "max_token_len"
-        ] = self.config.rollout.log_prob_max_token_len_per_gpu
+        data.meta_info["micro_batch_size"] = (
+            self.config.rollout.log_prob_micro_batch_size_per_gpu
+        )
+        data.meta_info["max_token_len"] = (
+            self.config.rollout.log_prob_max_token_len_per_gpu
+        )
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         # perform recompute log_prob

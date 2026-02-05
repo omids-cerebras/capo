@@ -607,7 +607,11 @@ def eb_lite_fit_beta_and_weights(
         # Provisional weights: ω_i ∝ L_i^{-β_new}
         omega = L.pow(-beta_new)
         omega_sum = omega.sum()
-        w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
+        w = (
+            torch.full_like(omega, 1.0 / omega.numel())
+            if omega_sum <= eps
+            else omega / omega_sum
+        )
 
         m_new = (w * g).sum()
 
@@ -622,7 +626,11 @@ def eb_lite_fit_beta_and_weights(
     # Final weights at β̂.
     omega = L.pow(-beta_hat)
     omega_sum = omega.sum()
-    w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
+    w = (
+        torch.full_like(omega, 1.0 / omega.numel())
+        if omega_sum <= eps
+        else omega / omega_sum
+    )
 
     m = (w * g).sum()
     return float(beta_hat), w.float(), m.float()
@@ -671,7 +679,11 @@ def kband_weights(
     omega = omega.clamp_min(eps)
 
     omega_sum = omega.sum()
-    w = torch.full_like(omega, 1.0 / omega.numel()) if omega_sum <= eps else omega / omega_sum
+    w = (
+        torch.full_like(omega, 1.0 / omega.numel())
+        if omega_sum <= eps
+        else omega / omega_sum
+    )
 
     return s.float(), w.float()
 
@@ -772,7 +784,9 @@ def joint_eb_update_kband(
 
     # Optional warm-start for (ρ, η) from token-level autocorrelations.
     if use_acf_warmstart and increments is not None and increments_mask is not None:
-        rho_hat, eta_hat = acf_moment_estimate(increments=increments, mask=increments_mask, k=k)
+        rho_hat, eta_hat = acf_moment_estimate(
+            increments=increments, mask=increments_mask, k=k
+        )
         # Project into admissible region and blend with old parameters.
         rho = max(-rho_max, min(rho_hat, rho_max))
         eta = max(0.0, eta_hat)

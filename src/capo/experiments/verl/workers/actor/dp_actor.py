@@ -234,7 +234,10 @@ class DataParallelPPOActor(BasePPOActor):
                 if self.use_ulysses_sp:
                     # gather and unpad for the ulysses sp
                     log_probs = gather_outpus_and_unpad(
-                        log_probs, gather_dim=0, unpad_dim=0, padding_size=pad_size,
+                        log_probs,
+                        gather_dim=0,
+                        unpad_dim=0,
+                        padding_size=pad_size,
                     )
                     if calculate_entropy:
                         entropy_rmpad = gather_outpus_and_unpad(

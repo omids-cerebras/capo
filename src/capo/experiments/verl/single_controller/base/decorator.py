@@ -391,7 +391,9 @@ def dispatch_dp_compute_data_proto(worker_group, *args, **kwargs):
     assert isinstance(worker_group, WorkerGroup)
     # Note: enable auto padding for dp compute DatapProto
     splitted_args, splitted_kwargs = _split_args_kwargs_data_proto_with_auto_padding(
-        worker_group.world_size, *args, **kwargs,
+        worker_group.world_size,
+        *args,
+        **kwargs,
     )
     return splitted_args, splitted_kwargs
 

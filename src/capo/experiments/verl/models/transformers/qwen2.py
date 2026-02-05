@@ -38,8 +38,9 @@ def qwen2_flash_attn_forward(
     output_attentions: bool = False,
     use_cache: bool = False,
     cache_position: torch.LongTensor | None = None,
-    position_embeddings: tuple[torch.Tensor, torch.Tensor]
-    | None = None,  # will become mandatory in v4.46
+    position_embeddings: (
+        tuple[torch.Tensor, torch.Tensor] | None
+    ) = None,  # will become mandatory in v4.46
 ):
     """
     Adapted from transformers 4.47.1 to support Ulysses sequence parallelism.

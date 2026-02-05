@@ -64,7 +64,10 @@ class Gsm8kTool(BaseTool):
         return self.tool_schema
 
     async def create(
-        self, instance_id: str | None = None, ground_truth: str | None = None, **kwargs,
+        self,
+        instance_id: str | None = None,
+        ground_truth: str | None = None,
+        **kwargs,
     ) -> str:
         if instance_id is None:
             instance_id = str(uuid4())

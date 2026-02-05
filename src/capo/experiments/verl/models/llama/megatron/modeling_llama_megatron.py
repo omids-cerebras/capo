@@ -118,7 +118,9 @@ class ParallelLlamaModel(nn.Module):
         combined_attention_mask = None
         if input_shape[-1] > 1:
             combined_attention_mask = _make_causal_mask(
-                input_shape, inputs_embeds.dtype, device=inputs_embeds.device,
+                input_shape,
+                inputs_embeds.dtype,
+                device=inputs_embeds.device,
             )
 
         if attention_mask is not None:
@@ -162,7 +164,9 @@ class ParallelLlamaModel(nn.Module):
 
         for idx, decoder_layer in enumerate(self.layers):
             layer_outputs = decoder_layer(
-                hidden_states, attention_mask=attention_mask, position_ids=position_ids,
+                hidden_states,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
             )
 
             hidden_states = layer_outputs

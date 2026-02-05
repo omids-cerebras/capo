@@ -222,7 +222,9 @@ def convert_checkpoint_from_transformers_to_megatron(hf_model, model, hf_config)
 
 
 def safe_copy(
-    src_tensor: torch.Tensor, dst_tensor: torch.Tensor, skip_dtype_assert: bool = False,
+    src_tensor: torch.Tensor,
+    dst_tensor: torch.Tensor,
+    skip_dtype_assert: bool = False,
 ):
     if not skip_dtype_assert:
         if src_tensor.dtype != dst_tensor.dtype:

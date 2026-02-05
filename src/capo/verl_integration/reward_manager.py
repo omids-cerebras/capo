@@ -241,7 +241,9 @@ class CAPORewardManager:
             reward_tensor = data.batch["token_level_rewards"]
             if return_dict:
                 reward_extra_keys = data.meta_info.get("reward_extra_keys", [])
-                reward_extra_info = {key: data.non_tensor_batch[key] for key in reward_extra_keys}
+                reward_extra_info = {
+                    key: data.non_tensor_batch[key] for key in reward_extra_keys
+                }
                 return {
                     "reward_tensor": reward_tensor,
                     "reward_extra_info": reward_extra_info,
@@ -279,8 +281,12 @@ class CAPORewardManager:
             valid_response_ids = response_ids[:valid_response_length]
 
             # Decode prompt and response into strings.
-            prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
-            solution_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+            prompt_str = self.tokenizer.decode(
+                valid_prompt_ids, skip_special_tokens=True
+            )
+            solution_str = self.tokenizer.decode(
+                valid_response_ids, skip_special_tokens=True
+            )
 
             # Extract non-tensor metadata.
             non_tensor = data_item.non_tensor_batch

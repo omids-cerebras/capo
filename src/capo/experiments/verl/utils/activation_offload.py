@@ -435,7 +435,8 @@ class ActivationHandler:
         self._tensor_filter = tensor_filter
         if enable_ckpt:
             self.checkpoint_fn = functools.partial(
-                torch.utils.checkpoint.checkpoint, use_reentrant=True,
+                torch.utils.checkpoint.checkpoint,
+                use_reentrant=True,
             )
 
     def pre_forward(self, module):
@@ -476,7 +477,10 @@ class ActivationHandler:
             # run original module
             return forward_method(*unpacked_args, **unpacked_kwargs)
 
-        return self.checkpoint_fn(my_function, *flat_args,)
+        return self.checkpoint_fn(
+            my_function,
+            *flat_args,
+        )
 
     def forward(self, module, forward_method, *args, **kwargs):
         if not module.training:

@@ -814,8 +814,8 @@ class RayPPOTrainer:
                 )
             else:
                 self.async_rollout_manager.wake_up()
-                test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(
-                    test_gen_batch_padded
+                test_output_gen_batch_padded = (
+                    self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
                 )
                 self.async_rollout_manager.sleep()
 
@@ -974,9 +974,9 @@ class RayPPOTrainer:
             OmegaConf.select(self.config.trainer, "ray_wait_register_center_timeout")
             is not None
         ):
-            wg_kwargs[
-                "ray_wait_register_center_timeout"
-            ] = self.config.trainer.ray_wait_register_center_timeout
+            wg_kwargs["ray_wait_register_center_timeout"] = (
+                self.config.trainer.ray_wait_register_center_timeout
+            )
 
         for resource_pool, class_dict in self.resource_pool_to_cls.items():
             worker_dict_cls = create_colocated_worker_cls(class_dict=class_dict)
@@ -1012,7 +1012,8 @@ class RayPPOTrainer:
 
             self.async_rollout_mode = True
             self.async_rollout_manager = AsyncLLMServerManager(
-                config=self.config, worker_group=self.actor_rollout_wg,
+                config=self.config,
+                worker_group=self.actor_rollout_wg,
             )
 
     def _save_checkpoint(self):
@@ -1300,8 +1301,8 @@ class RayPPOTrainer:
                             )
                         else:
                             self.async_rollout_manager.wake_up()
-                            gen_batch_output = self.async_rollout_manager.generate_sequences(
-                                gen_batch
+                            gen_batch_output = (
+                                self.async_rollout_manager.generate_sequences(gen_batch)
                             )
                             self.async_rollout_manager.sleep()
                         timing_raw.update(gen_batch_output.meta_info["timing"])
@@ -1311,8 +1312,10 @@ class RayPPOTrainer:
                         with _timer("gen_max", timing_raw):
                             gen_baseline_batch = deepcopy(gen_batch)
                             gen_baseline_batch.meta_info["do_sample"] = False
-                            gen_baseline_output = self.actor_rollout_wg.generate_sequences(
-                                gen_baseline_batch
+                            gen_baseline_output = (
+                                self.actor_rollout_wg.generate_sequences(
+                                    gen_baseline_batch
+                                )
                             )
 
                             batch = batch.union(gen_baseline_output)
@@ -1419,8 +1422,8 @@ class RayPPOTrainer:
                                     batch
                                 )
                             else:
-                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(
-                                    batch
+                                ref_log_prob = (
+                                    self.actor_rollout_wg.compute_ref_log_prob(batch)
                                 )
                             batch = batch.union(ref_log_prob)
 
@@ -1531,9 +1534,9 @@ class RayPPOTrainer:
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
-                            batch.meta_info[
-                                "multi_turn"
-                            ] = self.config.actor_rollout_ref.rollout.multi_turn.enable
+                            batch.meta_info["multi_turn"] = (
+                                self.config.actor_rollout_ref.rollout.multi_turn.enable
+                            )
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(
                             actor_output.meta_info["metrics"]

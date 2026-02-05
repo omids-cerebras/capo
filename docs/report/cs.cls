@@ -21,7 +21,7 @@
 \RequirePackage[latin, english]{babel}
 \RequirePackage{etoolbox}
 
-\DisableLigatures[f]{family=sf*}
+\DisableLigatures[f]{family=sf*} 
 
 % Graphics %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -97,7 +97,7 @@
 \renewcommand\addtolist[5][]{
   \begingroup
     \if\relax#3\relax\def\sep{}\else\def\sep{#5}\fi
-    \let\protect\@unexpandable@protect
+    \let\protect\@unexpandable@protect 
     \xdef#3{\expandafter{#3}\sep #4[#1]{#2}}%
   \endgroup
 }
@@ -147,7 +147,7 @@
     at= (frame.south east),
     xshift=-0.5cm,
     yshift=0.2cm] {\includegraphics[width=2cm]{assets/cerebras_logo.png}};}}
-  %
+  % 
   \begin{tcolorbox}
     \setlength{\parindent}{0cm}
     \setlength{\parskip}{0.5cm}

@@ -46,9 +46,9 @@ class BaseModelInitializer(ABC):
         if "rope_scaling" in self.hf_config:
             if self.hf_config.rope_scaling is not None:
                 # assert self.hf_config.rope_scaling["type"] == "linear", "only linear scaling is supported for now"
-                rope_scaling_args[
-                    "seq_len_interpolation_factor"
-                ] = self.hf_config.rope_scaling["factor"]
+                rope_scaling_args["seq_len_interpolation_factor"] = (
+                    self.hf_config.rope_scaling["factor"]
+                )
         return rope_scaling_args
 
     def initialize(
@@ -199,7 +199,8 @@ class DeepseekV3Model(BaseModelInitializer):
         return rope_scaling_args
 
     def initialize(
-        self, **kwargs,
+        self,
+        **kwargs,
     ):
         freeze_moe_router = kwargs.get("freeze_moe_router", True)
         if freeze_moe_router:
@@ -269,7 +270,8 @@ class Qwen25VLModel(BaseModelInitializer):
             spatial_merge_size=hf_config.vision_config.spatial_merge_size,
         )
         vision_projection_layer_spec = MLPSubmodules(
-            linear_fc1=TEColumnParallelLinear, linear_fc2=TERowParallelLinear,
+            linear_fc1=TEColumnParallelLinear,
+            linear_fc2=TERowParallelLinear,
         )
         vision_transformer_layer_spec = get_vit_layer_with_transformer_engine_spec()
 

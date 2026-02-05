@@ -43,7 +43,7 @@ import math
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
@@ -54,7 +54,9 @@ import matplotlib.pyplot as plt
 VAL_N = 8
 DATA_SOURCE = "countdown"
 VAL_ACC_KEY = f"val-core/{DATA_SOURCE}/acc/mean@{VAL_N}"
-VAL_PASS_KEY = f"val-core/{DATA_SOURCE}/acc/best@{VAL_N}/mean"  # best@K/mean acts like pass@K
+VAL_PASS_KEY = (
+    f"val-core/{DATA_SOURCE}/acc/best@{VAL_N}/mean"  # best@K/mean acts like pass@K
+)
 
 # Stability table definitions
 TTT_THRESHOLD = 0.50  # accuracy threshold for tokens-to-target
@@ -69,8 +71,8 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -83,7 +85,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _safe_float(x: Any) -> float | None:
+def _safe_float(x: Any) -> Optional[float]:
     try:
         v = float(x)
     except Exception:
@@ -93,7 +95,7 @@ def _safe_float(x: Any) -> float | None:
     return v
 
 
-def _mean_std(xs: list[float]) -> tuple[float | None, float | None]:
+def _mean_std(xs: List[float]) -> Tuple[Optional[float], Optional[float]]:
     xs = [x for x in xs if _safe_float(x) is not None]
     if not xs:
         return None, None
@@ -102,14 +104,14 @@ def _mean_std(xs: list[float]) -> tuple[float | None, float | None]:
     return statistics.mean(xs), statistics.pstdev(xs)
 
 
-def _fmt_cell(v: float | None, digits: int = 3) -> str:
+def _fmt_cell(v: Optional[float], digits: int = 3) -> str:
     if v is None:
         return "\\textemdash"
     return f"{v:.{digits}f}"
 
 
-def _latex_tabular(col_spec: str, header: list[str], rows: list[list[str]]) -> str:
-    lines: list[str] = []
+def _latex_tabular(col_spec: str, header: List[str], rows: List[List[str]]) -> str:
+    lines: List[str] = []
     lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
     lines.append("\\toprule")
     lines.append(" & ".join(header) + " \\")
@@ -121,7 +123,7 @@ def _latex_tabular(col_spec: str, header: list[str], rows: list[list[str]]) -> s
     return "\n".join(lines) + "\n"
 
 
-def _pearson_corr(xs: list[float], ys: list[float]) -> float | None:
+def _pearson_corr(xs: List[float], ys: List[float]) -> Optional[float]:
     if len(xs) != len(ys) or len(xs) < 2:
         return None
     mx = statistics.mean(xs)
@@ -142,18 +144,18 @@ def _pearson_corr(xs: list[float], ys: list[float]) -> float | None:
 @dataclass
 class Run:
     run_dir: Path
-    config: dict[str, Any]
-    best_val_metric: float | None
+    config: Dict[str, Any]
+    best_val_metric: Optional[float]
 
     @property
-    def max_resp_len(self) -> int | None:
+    def max_resp_len(self) -> Optional[int]:
         try:
             return int(self.config.get("data", {}).get("max_response_length"))
         except Exception:
             return None
 
     @property
-    def seed(self) -> int | None:
+    def seed(self) -> Optional[int]:
         try:
             return int(self.config.get("seed"))
         except Exception:
@@ -222,9 +224,9 @@ class Run:
         return k
 
 
-def _load_runs(collected_runs_json: Path) -> list[Run]:
+def _load_runs(collected_runs_json: Path) -> List[Run]:
     raw = _read_json(collected_runs_json)
-    runs: list[Run] = []
+    runs: List[Run] = []
     for r in raw:
         try:
             run_dir = Path(r["run_dir"])
@@ -236,9 +238,11 @@ def _load_runs(collected_runs_json: Path) -> list[Run]:
     return runs
 
 
-def _val_series(metrics_rows: list[dict[str, Any]], key: str) -> tuple[list[int], list[float]]:
-    steps: list[int] = []
-    vals: list[float] = []
+def _val_series(
+    metrics_rows: List[Dict[str, Any]], key: str
+) -> Tuple[List[int], List[float]]:
+    steps: List[int] = []
+    vals: List[float] = []
     for row in metrics_rows:
         if key not in row:
             continue
@@ -256,8 +260,8 @@ def _val_series(metrics_rows: list[dict[str, Any]], key: str) -> tuple[list[int]
 
 
 def _cumulative_tokens_to_step(
-    metrics_rows: list[dict[str, Any]], step_target: int
-) -> float | None:
+    metrics_rows: List[Dict[str, Any]], step_target: int
+) -> Optional[float]:
     total = 0.0
     have_any = False
     for row in metrics_rows:
@@ -276,8 +280,8 @@ def _cumulative_tokens_to_step(
 
 
 def _stability_metrics(
-    metrics_rows: list[dict[str, Any]],
-) -> dict[str, float | None]:
+    metrics_rows: List[Dict[str, Any]],
+) -> Dict[str, Optional[float]]:
     steps, acc = _val_series(metrics_rows, VAL_ACC_KEY)
     if len(steps) < 2:
         return {"monotonicity": None, "ndr": None, "ttt": None}
@@ -287,7 +291,7 @@ def _stability_metrics(
 
     # Negative drift rate: fraction of evaluation intervals with a decrease.
     decreases = 0
-    for a0, a1 in zip(acc[:-1], acc[1:], strict=False):
+    for a0, a1 in zip(acc[:-1], acc[1:]):
         if a1 < a0:
             decreases += 1
     ndr = decreases / max(1, (len(acc) - 1))
@@ -309,8 +313,15 @@ def _stability_metrics(
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--collected", type=Path, required=True, help="Directory containing runs.json")
+    ap.add_argument(
+        "--collected", type=Path, required=True, help="Directory containing runs.json"
+    )
     ap.add_argument("--out", type=Path, required=True, help="Artifact root directory")
+    ap.add_argument(
+        "--skip_synthetic",
+        action="store_true",
+        help="Skip synthetic covariance benchmark artifacts.",
+    )
     args = ap.parse_args()
 
     collected = args.collected
@@ -337,9 +348,9 @@ def main() -> None:
 
     # ---------------- Table: main accuracy ----------------
     # For each method/context, average best_val_metric across seeds.
-    table_rows: list[list[str]] = []
+    table_rows: List[List[str]] = []
     for mk in method_keys:
-        row: list[str] = []
+        row: List[str] = []
         # display name from a dummy run-like object
         display = None
         for r in runs:
@@ -349,7 +360,7 @@ def main() -> None:
         row.append(display or mk)
 
         for ctx in contexts:
-            vals: list[float] = []
+            vals: List[float] = []
             for r in runs:
                 if r.method_key() != mk:
                     continue
@@ -380,7 +391,9 @@ def main() -> None:
     any_line = False
     for mk in dyn_methods:
         # Choose best run among available contexts=2048 for dynamics.
-        candidates = [r for r in runs if r.method_key() == mk and r.max_resp_len == 2048]
+        candidates = [
+            r for r in runs if r.method_key() == mk and r.max_resp_len == 2048
+        ]
         candidates = [r for r in candidates if (r.run_dir / "metrics.jsonl").exists()]
         if not candidates:
             continue
@@ -402,11 +415,11 @@ def main() -> None:
 
     # ---------------- Stability figure + table ----------------
     # Compute stability metrics per run, then average across seeds per method.
-    stab_rows: list[list[str]] = []
-    method_points: list[tuple[str, float, float]] = []  # (label, mono, ndr)
+    stab_rows: List[List[str]] = []
+    method_points: List[Tuple[str, float, float]] = []  # (label, mono, ndr)
 
     # Precompute per-run stability metrics (2048 context).
-    per_run_stab: dict[tuple[str, Path], dict[str, float | None]] = {}
+    per_run_stab: Dict[Tuple[str, Path], Dict[str, Optional[float]]] = {}
     for r in runs:
         if r.max_resp_len != 2048:
             continue
@@ -417,12 +430,12 @@ def main() -> None:
         per_run_stab[(r.method_key(), r.run_dir)] = _stability_metrics(rows)
 
     # Aggregate per method.
-    agg: dict[str, dict[str, float | None]] = {}
+    agg: Dict[str, Dict[str, Optional[float]]] = {}
     for mk in method_keys:
-        monos: list[float] = []
-        ndrs: list[float] = []
-        ttts: list[float] = []
-        for (mk2, _rd), m in per_run_stab.items():
+        monos: List[float] = []
+        ndrs: List[float] = []
+        ttts: List[float] = []
+        for (mk2, rd), m in per_run_stab.items():
             if mk2 != mk:
                 continue
             if m.get("monotonicity") is not None:
@@ -445,14 +458,18 @@ def main() -> None:
         m = agg.get(mk, {})
         if m.get("monotonicity") is not None:
             mono_best = (
-                max(mono_best, m["monotonicity"]) if mono_best is not None else m["monotonicity"]
+                max(mono_best, m["monotonicity"])
+                if mono_best is not None
+                else m["monotonicity"]
             )
         if m.get("ndr") is not None:
             ndr_best = min(ndr_best, m["ndr"]) if ndr_best is not None else m["ndr"]
         if m.get("ttt") is not None:
             ttt_best = min(ttt_best, m["ttt"]) if ttt_best is not None else m["ttt"]
 
-    def _maybe_bold(v: float | None, best: float | None, higher_is_better: bool) -> str:
+    def _maybe_bold(
+        v: Optional[float], best: Optional[float], higher_is_better: bool
+    ) -> str:
         if v is None:
             return "\\textemdash"
         s = _fmt_cell(v, digits=3)
@@ -518,7 +535,7 @@ def main() -> None:
     # Use the latest validation generations from the best long-context run of
     # CAPO-EB and ΔL (alpha=1.00), if available.
 
-    def _latest_val_jsonl(run_dir: Path) -> Path | None:
+    def _latest_val_jsonl(run_dir: Path) -> Optional[Path]:
         val_dir = run_dir / "val_generations"
         if not val_dir.exists():
             return None
@@ -546,12 +563,16 @@ def main() -> None:
         # Prefer model path from any run config (they should all match).
         model_path = None
         for r in runs:
-            mp = r.config.get("actor_rollout_ref", {}).get("model", {}).get("path", None)
+            mp = (
+                r.config.get("actor_rollout_ref", {}).get("model", {}).get("path", None)
+            )
             if mp:
                 model_path = mp
                 break
         if model_path:
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_path, trust_remote_code=True
+            )
     except Exception:
         tokenizer = None
 
@@ -563,12 +584,12 @@ def main() -> None:
         except Exception:
             return len(x)
 
-    def _deciles_acc(val_file: Path) -> tuple[list[float], list[float]] | None:
+    def _deciles_acc(val_file: Path) -> Optional[Tuple[List[float], List[float]]]:
         rows = _read_jsonl(val_file)
         if not rows:
             return None
-        lens: list[int] = []
-        accs: list[float] = []
+        lens: List[int] = []
+        accs: List[float] = []
         for r in rows:
             out = r.get("output", "")
             a = _safe_float(r.get("acc"))
@@ -598,7 +619,9 @@ def main() -> None:
     plt.figure()
     any_bars = False
     for mk in long_methods:
-        candidates = [r for r in runs if r.method_key() == mk and r.max_resp_len == 8192]
+        candidates = [
+            r for r in runs if r.method_key() == mk and r.max_resp_len == 8192
+        ]
         candidates = [r for r in candidates if (r.run_dir / "val_generations").exists()]
         if not candidates:
             continue
@@ -620,6 +643,14 @@ def main() -> None:
     plt.tight_layout()
     plt.savefig(paper_out / "fig_length_deciles.pdf")
     plt.close()
+
+    # Synthetic covariance benchmark (base-model-free, deterministic up to RNG seed).
+    if not args.skip_synthetic:
+        from capo.experiments.analysis.synthetic_covariance_benchmark import (
+            build_synthetic_covariance_artifacts,
+        )
+
+        build_synthetic_covariance_artifacts(paper_out)
 
     print(f"Wrote paper artifacts -> {paper_out}")
 

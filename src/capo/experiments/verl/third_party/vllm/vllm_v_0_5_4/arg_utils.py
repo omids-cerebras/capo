@@ -300,7 +300,9 @@ class EngineArgs:
         engine_args = cls(**{attr: getattr(args, attr) for attr in attrs})
         return engine_args
 
-    def create_engine_config(self,) -> EngineConfig:
+    def create_engine_config(
+        self,
+    ) -> EngineConfig:
         # bitsandbytes quantization needs a specific model loader
         # so we make sure the quant method and the load format are consistent
         if (
@@ -391,8 +393,8 @@ class EngineArgs:
                 is_gpu = device_config.device_type == "cuda"
                 use_sliding_window = model_config.get_sliding_window() is not None
                 use_spec_decode = self.speculative_model is not None
-                has_seqlen_agnostic_layers = model_config.contains_seqlen_agnostic_layers(
-                    parallel_config
+                has_seqlen_agnostic_layers = (
+                    model_config.contains_seqlen_agnostic_layers(parallel_config)
                 )
                 if (
                     is_gpu
@@ -476,9 +478,9 @@ class EngineArgs:
         ):
             if self.model_loader_extra_config is None:
                 self.model_loader_extra_config = {}
-            self.model_loader_extra_config[
-                "qlora_adapter_name_or_path"
-            ] = self.qlora_adapter_name_or_path
+            self.model_loader_extra_config["qlora_adapter_name_or_path"] = (
+                self.qlora_adapter_name_or_path
+            )
 
         load_config = LoadConfig(
             load_format=self.load_format,

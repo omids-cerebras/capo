@@ -77,14 +77,16 @@ def get_huggingface_actor_config(
 
 
 def get_generation_config(
-    model: str, trust_remote_code: bool = False,
+    model: str,
+    trust_remote_code: bool = False,
 ) -> GenerationConfig | None:
     try:
         return GenerationConfig.from_pretrained(model)
     except OSError:  # Not found
         try:
             config = get_huggingface_actor_config(
-                model, trust_remote_code=trust_remote_code,
+                model,
+                trust_remote_code=trust_remote_code,
             )
             return GenerationConfig.from_model_config(config)
         except OSError:  # Not found

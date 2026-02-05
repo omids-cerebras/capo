@@ -298,8 +298,9 @@ def ulysses_flash_attn_forward(
     hidden_states: torch.Tensor,
     attention_mask: torch.Tensor | None = None,
     position_ids: torch.LongTensor | None = None,
-    position_embeddings: tuple[torch.Tensor, torch.Tensor]
-    | None = None,  # will become mandatory in v4.46
+    position_embeddings: (
+        tuple[torch.Tensor, torch.Tensor] | None
+    ) = None,  # will become mandatory in v4.46
     **kwargs,
 ) -> tuple[torch.Tensor, None, None]:
     from transformers.models.qwen2_vl.modeling_qwen2_vl import (
@@ -640,7 +641,11 @@ def forward_with_triton_backend(
         )
 
     log_probs, entropy = linear_cross_entropy(
-        hidden_states, self.lm_head.weight, rolled_labels, temperature, "none",
+        hidden_states,
+        self.lm_head.weight,
+        rolled_labels,
+        temperature,
+        "none",
     )
 
     return Qwen2VLCausalLMOutputForPPO(

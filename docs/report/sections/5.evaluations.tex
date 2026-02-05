@@ -153,3 +153,59 @@ For publication-quality reporting, we recommend additionally stratifying by rewa
 The variance law $v(L)\propto L^{\beta}s(L;\xi)$ is a working model.
 When this model is misspecified, CAPO remains unbiased (because \eqref{eq:linear-agg} enforces unbiasedness), but suboptimal weighting can increase variance and exacerbate instability.
 The robustness results in \S\ref{subsec:cs} and the covariance examples in Appendix~\ref{sec:eb-examples} provide guidance for diagnosing when simple dependence surrogates (e.g., exponential or compound-symmetry) are adequate.
+
+
+\subsection{Synthetic covariance benchmark: CAPO vs. GRPO and \texorpdfstring{$\Delta L$}{Delta L}}\label{subsec:synthetic-benchmark}
+
+The online CountDown experiments exercise CAPO in a full RLVR pipeline, but they do not isolate the specific statistical question that CAPO targets: \emph{how a batch of heterogeneous-length trajectories should be reweighted when within-trajectory dependence induces structured heteroscedasticity.}
+To make this question maximally controlled, we include a simulator that generates synthetic per-trajectory return statistics under configurable covariance structures \emph{without querying a base model}.
+The simulator produces trajectory lengths $L_i$ and scalar returns $g_i$ consistent with the working variance law $\mathrm{Var}(g_i)\propto L_i^{\beta}\,s(L_i;\xi)$, where $s(\cdot;\xi)$ encodes token-level dependence (Appendix~\ref{sec:synthetic-covariance-benchmark}).
+
+\paragraph{Covariance regimes.}
+We instantiate six canonical regimes spanning short-range and long-range dependence:
+(i) IID token noise, (ii)--(iii) geometric (AR(1)) dependence at two correlation levels, (iv) $k$-banded stretched-geometric dependence with finite-range interactions, and (v)--(vi) compound-symmetry regimes in which off-diagonal correlations do not decay and the trajectory variance grows superlinearly in $L$.
+These regimes are chosen to directly mirror the covariance families analyzed in \S\ref{subsec:kband-eta}--\S\ref{subsec:cs}.
+
+\paragraph{Compared advantage constructions.}
+Within each synthetic batch we compute scalar advantages produced by: (i) GRPO normalization (group-centered and standardized), (ii) GRPO++/``$\Delta L$'' length scaling with $\alpha\in\{0.75,1\}$, and (iii) CAPO with length-only inverse-variance proxy (CAPO--EB-lite) and dependence-aware inverse-variance weighting (CAPO--EB).
+In this synthetic setting we report the \emph{oracle} instantiations of CAPO--EB and CAPO--EB-lite (Appendix~\ref{sec:synthetic-covariance-benchmark}), since the goal is to compare the deterministic transformations that each method applies to an identical batch $\{(g_i,L_i)\}$ rather than to study hyperparameter-estimation error.
+
+\paragraph{Diagnostics.}
+We report two complementary diagnostics that make length effects explicit:
+(a) the normalized mean-squared advantage profile $\mathbb{E}[A^2\mid L]/\mathbb{E}[A^2\mid L_{\min}]$ as a function of $L$ (Figure~\ref{fig:synthetic-covariance}), and
+(b) the fraction of the total squared learning signal contributed by each length bin (Figure~\ref{fig:synthetic-signal-share}), which visualizes whether a method concentrates update energy on long rollouts.
+
+Table~\ref{tab:synthetic-covariance} summarizes \emph{length amplification} as the ratio $\mathbb{E}[A^2\mid L_{\max}]/\mathbb{E}[A^2\mid L_{\min}]$.
+Values greater than $1$ indicate amplification of long trajectories (a known instability driver in long-horizon RLVR); values below $1$ indicate systematic suppression of long trajectories.
+Across short-range regimes (IID, AR(1), and $k$-band), CAPO and $\Delta L$ suppress length amplification relative to GRPO, while the compound-symmetry regimes highlight why dependence-aware weighting is essential: CAPO--EB downweights long trajectories much more aggressively when their variance grows superlinearly, whereas length-only rules cannot adapt to the underlying covariance.
+
+Full simulator details, including the exact covariance/variance laws and reproducibility instructions, appear in Appendix~\ref{sec:synthetic-covariance-benchmark}.
+The reference implementation is provided in the codebase under \texttt{capo.experiments.analysis.synthetic\_covariance\_benchmark}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{artifacts/paper/fig_synthetic_covariance.pdf}
+\caption{Synthetic covariance benchmark: normalized mean-squared scalar advantage versus trajectory length.
+Each panel corresponds to a covariance regime; within a panel, curves show $\mathbb{E}[A^2\mid L]/\mathbb{E}[A^2\mid L_{\min}]$ for the advantages produced by GRPO, $\Delta L$ baselines, and CAPO variants.
+Curves above $1$ indicate length amplification (long trajectories receive disproportionately high-variance learning signals), while curves below $1$ indicate suppression of long trajectories.}
+\label{fig:synthetic-covariance}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{artifacts/paper/fig_synthetic_signal_share.pdf}
+\caption{Synthetic covariance benchmark: signal allocation across length bins.
+For each covariance regime, bars show the fraction of the total squared learning signal $\sum_i A_i^2$ contributed by each length bin.
+This diagnostic complements Figure~\ref{fig:synthetic-covariance} by directly visualizing whether an update concentrates on long trajectories under different dependence structures.}
+\label{fig:synthetic-signal-share}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\input{artifacts/paper/tab_synthetic_covariance.tex}
+\caption{Length amplification in the synthetic covariance benchmark, summarized as the ratio $\mathbb{E}[A^2\mid L_{\max}]/\mathbb{E}[A^2\mid L_{\min}]$.
+Ratios greater than $1$ indicate amplification of long trajectories; ratios below $1$ indicate suppression.
+Dependence-aware CAPO--EB adapts sharply in long-range (compound-symmetry) regimes where length-only rules cannot capture superlinear variance growth.}
+\label{tab:synthetic-covariance}
+\end{table}

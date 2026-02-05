@@ -204,7 +204,9 @@ def compute_capo_eb_lite_advantage(
     adv_metrics : dict
         Lightweight diagnostics for logging (JSON-serializable floats).
     """
-    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(
+        token_level_rewards, response_mask
+    )
 
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)
@@ -336,7 +338,9 @@ def compute_capo_eb_full_advantage(
     returns : Tensor, shape [B, T]
         Returns (here equal to CAPO token-level rewards masked).
     """
-    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(
+        token_level_rewards, response_mask
+    )
 
     if not torch.any(valid):
         advantages = torch.zeros_like(token_level_rewards)

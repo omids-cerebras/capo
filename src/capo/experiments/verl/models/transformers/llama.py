@@ -45,8 +45,9 @@ def llama_flash_attn_forward(
     output_attentions: bool = False,
     use_cache: bool = False,
     cache_position: torch.LongTensor | None = None,
-    position_embeddings: tuple[torch.Tensor, torch.Tensor]
-    | None = None,  # will become mandatory in v4.46
+    position_embeddings: (
+        tuple[torch.Tensor, torch.Tensor] | None
+    ) = None,  # will become mandatory in v4.46
     **kwargs,
 ) -> tuple[torch.Tensor, torch.Tensor | None, tuple[torch.Tensor] | None]:
     """

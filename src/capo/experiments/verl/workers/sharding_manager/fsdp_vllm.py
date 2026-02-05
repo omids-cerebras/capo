@@ -247,7 +247,10 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             # Copy, not share memory
             load_format = "hf" if self.full_params else "dtensor"
 
-            if vllm_version in ("0.5.4", "0.6.3",):
+            if vllm_version in (
+                "0.5.4",
+                "0.6.3",
+            ):
                 self.inference_engine.sync_model_weights(
                     params, load_format=load_format
                 )
@@ -293,7 +296,10 @@ class FSDPVLLMShardingManager(BaseShardingManager):
     @GPUMemoryLogger(role="fsdp vllm sharding_manager", logger=logger)
     def __exit__(self, exc_type, exc_value, traceback):
         # TODO(ZSL): check this
-        if vllm_version in ("0.5.4", "0.6.3",):
+        if vllm_version in (
+            "0.5.4",
+            "0.6.3",
+        ):
             self.inference_engine.offload_model_weights()
         else:
             self.inference_engine.sleep(level=1)
@@ -315,7 +321,10 @@ class FSDPVLLMShardingManager(BaseShardingManager):
             return data
 
         # TODO: Current impl doesn't consider FSDP with torch micro-dp
-        if vllm_version in ("0.5.4", "0.6.3",):
+        if vllm_version in (
+            "0.5.4",
+            "0.6.3",
+        ):
             group = vllm_ps.get_tensor_model_parallel_group()
         else:
             group = vllm_ps.get_tensor_model_parallel_group().device_group

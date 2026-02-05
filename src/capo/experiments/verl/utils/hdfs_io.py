@@ -123,10 +123,8 @@ def _copy(from_path: str, to_path: str, timeout: int = None) -> bool:
     else:
         if from_path.startswith("hdfs"):
             returncode = _run_cmd(
-                _hdfs_cmd(
-                    f"-get \
-                {from_path} {to_path}"
-                ),
+                _hdfs_cmd(f"-get \
+                {from_path} {to_path}"),
                 timeout=timeout,
             )
         else:
