@@ -7,9 +7,8 @@ channels:
 
 dependencies:
   - python=3.11
-  - pytorch>=2.4
-  - pytorch-cuda=12.1
   - numpy=1.26
+  - pip
   - pandas
   - pyarrow
   - ray-default>=2.9
@@ -25,7 +24,7 @@ dependencies:
   # Dev tools
   - pre-commit
   - ruff
+  - jupyterlab
   # Vendored verl dependencies
-  - tensordict
   - codetiming
   - cloudpickle
