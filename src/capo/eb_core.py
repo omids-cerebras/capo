@@ -115,32 +115,33 @@ def s_kband(
     """
     L = torch.as_tensor(L, dtype=torch.double)
     G = L.numel()
-    s_vals = torch.ones(G, dtype=torch.double)
 
     if k <= 0 or abs(rho) < eps:
         # Independence / no effective correlation: s ≡ 1.
-        return s_vals.float()
+        return torch.ones(G, dtype=torch.float32)
 
     rho = float(rho)
     eta = float(eta)
 
-    for idx in range(G):
-        Li = float(L[idx].item())
-        if Li <= 1:
-            # Degenerate trajectory: no internal correlation.
-            s_vals[idx] = 1.0
-            continue
+    # Vectorised: precompute |rho|^{h^eta} for h = 1..k once,
+    # then broadcast across all G trajectories.
+    # NOTE: we use abs(rho) so that rho^{h^eta} is well-defined for
+    # non-integer exponents when rho < 0.  The k-banded shape factor
+    # s(L) is meant to capture the *magnitude* of lag-h auto-covariance,
+    # and should be positive.
+    h = torch.arange(1, k + 1, dtype=torch.double)  # (k,)
+    powers = abs(rho) ** (h**eta)  # (k,)
 
-        m_i = min(k, int(Li) - 1)
-        if m_i <= 0:
-            s_vals[idx] = 1.0
-            continue
+    L2 = L.unsqueeze(-1)  # (G, 1)
+    diff = L2 - h.unsqueeze(0)  # (G, k)
+    # mask: h <= L_i - 1  ⟺  L_i - h >= 1
+    mask = diff >= 1.0  # (G, k)
+    summand = diff * powers.unsqueeze(0) * mask  # (G, k)
+    total = summand.sum(dim=-1)  # (G,)
 
-        h = torch.arange(1, m_i + 1, dtype=torch.double)
-        # Use h^η in the exponent, as in the stretched-geometric model.
-        powers = rho ** (h**eta)
-        summand = (Li - h) * powers
-        s_vals[idx] = 1.0 + (2.0 / Li) * summand.sum()
+    s_vals = 1.0 + (2.0 / L) * total
+    # For L <= 1, s = 1 (no internal correlation)
+    s_vals = torch.where(L > 1, s_vals, torch.ones_like(s_vals))
 
     # Numerical floor to avoid division by zero downstream.
     return s_vals.clamp_min(eps).float()
@@ -554,8 +555,8 @@ def eb_lite_fit_beta_and_weights(
     2. Iterate:
        - e_i = g_i - m^{(k)},
        - z_i = log(e_i^2 + ε),
-       - OLS regression z_i = c - β log L_i + ε_i yields slope b,
-         set β^{(k+1)} = -b,
+       - OLS regression z_i = c + β log L_i + ε_i yields slope b,
+         set β^{(k+1)} = b,
        - weights ω_i ∝ L_i^{-β^{(k+1)}}, normalized to w_i,
        - update m^{(k+1)} = Σ_i w_i g_i.
     3. Stop when |m^{(k+1)} - m^{(k)}| < tol or after max_iters.
@@ -602,7 +603,7 @@ def eb_lite_fit_beta_and_weights(
         var_x = ((x - x_mean) ** 2).sum().clamp_min(eps)
 
         slope = cov_xz / var_x
-        beta_new = float(-slope.item())
+        beta_new = float(slope.item())
 
         # Provisional weights: ω_i ∝ L_i^{-β_new}
         omega = L.pow(-beta_new)

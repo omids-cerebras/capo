@@ -61,19 +61,25 @@ def test_empirical_bayes_advantage_basic_shape():
 
 def test_empirical_bayes_shrinkage_behavior():
     """
-    Construct an asymmetric scenario with one small group and one large
-    group and check that the small group's baseline is closer to the
-    global mean (i.e., more shrinkage).
+    With per-group baselines (like GRPO), advantages centre around zero
+    **within each prompt group**.  The test verifies:
+
+    - Within group 0 (g = [1.0, 1.5]): higher-reward trajectory has
+      positive advantage, lower-reward trajectory has negative advantage.
+    - Within group 1 (g = [5.0] × 8): all trajectories are identical,
+      so all within-group advantages ≈ 0.
+
+    This matches the paper: w normalised *within* I_p, m_p per-group.
     """
     torch.manual_seed(0)
 
     # Group 0: small group (n=2) with low rewards.
-    # Group 1: large group (n=8) with high rewards.
+    # Group 1: large group (n=8) with identical high rewards.
     rewards_list = [
         [1.0, 1.0],
         [1.5, 1.5],
-    ] + [  # g0  # g0
-        [5.0, 5.0],  # g1 x 8
+    ] + [
+        [5.0, 5.0],
         [5.0, 5.0],
         [5.0, 5.0],
         [5.0, 5.0],
@@ -98,10 +104,10 @@ def test_empirical_bayes_shrinkage_behavior():
     # Collapse advantages per sequence.
     adv_scalar = (advantages * mask).mean(dim=-1)
 
-    # For a sanity check, the average advantage in group 0 and group 1
-    # should have opposite signs (since group 1's rewards are higher).
-    adv_g0 = adv_scalar[:2].mean().item()
-    adv_g1 = adv_scalar[2:].mean().item()
+    # Group 0: trajectory 0 (g=2.0) < trajectory 1 (g=3.0),
+    # so adv[0] < adv[1].
+    assert adv_scalar[0].item() < adv_scalar[1].item()
 
-    assert adv_g0 < 0.0
-    assert adv_g1 > 0.0
+    # Group 1: all trajectories identical → all advantages ≈ 0.
+    adv_g1 = adv_scalar[2:].abs().max().item()
+    assert adv_g1 < 1e-6, f"Group 1 advantages should be ~0, got max={adv_g1}"

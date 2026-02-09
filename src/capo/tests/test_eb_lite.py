@@ -50,3 +50,34 @@ def test_eb_lite_recovers_beta():
     assert math.isfinite(beta_hat)
     # Weights sum to 1
     assert torch.allclose(w.sum(), torch.tensor(1.0), atol=1e-6)
+
+
+def test_eb_lite_recovers_beta_sign_and_value():
+    """
+    Verify beta_hat has the correct sign convention: beta > 0 when
+    Var(g|L) grows with L, matching the paper's convention where
+    omega_i = L_i^{-beta} down-weights long (noisy) trajectories.
+    """
+    torch.manual_seed(0)
+    possible_L = torch.tensor([128.0, 256.0, 512.0, 1024.0, 2048.0])
+    Ls = possible_L.repeat(200)
+
+    for true_beta in [0.5, 1.0, 1.5]:
+        std_i = Ls.pow(true_beta / 2.0)
+        g = torch.randn_like(Ls) * std_i
+
+        beta_hat, w, m = eb_lite_fit_beta_and_weights(g=g, L=Ls, max_iters=50, tol=1e-5)
+
+        # beta_hat should be positive and close to true_beta
+        assert beta_hat > 0.0, f"beta_hat={beta_hat} should be > 0 for true_beta={true_beta}"
+        assert (
+            abs(beta_hat - true_beta) < 0.3
+        ), f"beta_hat={beta_hat:.3f} too far from true_beta={true_beta}"
+
+        # Weights should down-weight long trajectories (precision weighting)
+        w_short = w[Ls == 128.0].mean().item()
+        w_long = w[Ls == 2048.0].mean().item()
+        assert w_short > w_long, (
+            f"w_short={w_short:.6f} should be > w_long={w_long:.6f} "
+            f"(short seqs are more precise)"
+        )

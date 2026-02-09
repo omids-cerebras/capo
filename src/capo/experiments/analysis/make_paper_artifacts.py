@@ -628,11 +628,11 @@ def main() -> None:
 
     # Synthetic covariance benchmark (base-model-free, deterministic up to RNG seed).
     if not args.skip_synthetic:
-        from capo.experiments.analysis.synthetic_covariance_benchmark import (
-            build_synthetic_covariance_artifacts,
+        from capo.experiments.analysis.synthetic_benchmark import (
+            build_paper_artifacts as build_synthetic_paper_artifacts,
         )
 
-        build_synthetic_covariance_artifacts(paper_out)
+        build_synthetic_paper_artifacts(paper_out)
 
     print(f"Wrote paper artifacts -> {paper_out}")
 

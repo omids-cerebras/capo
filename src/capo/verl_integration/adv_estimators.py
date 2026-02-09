@@ -30,6 +30,7 @@ import torch
 from capo.eb_core import (
     eb_lite_fit_beta_and_weights,
     joint_eb_update_kband,
+    s_kband,
 )
 
 Tensor = torch.Tensor
@@ -93,6 +94,68 @@ def _lengths_and_scalar_returns(
     # artificially shrink returns for longer responses.
     returns_scalar = (token_level_rewards * valid).sum(dim=-1)
     return lengths, returns_scalar, valid
+
+
+def _groupwise_advantages(
+    omega: Tensor,
+    g: Tensor,
+    index: Any,
+    eps: float = 1e-8,
+) -> tuple[Tensor, Tensor]:
+    """Per-group weight normalisation and baseline subtraction.
+
+    Global EB parameter estimation produces per-trajectory *unnormalised*
+    precision weights ``omega_i``.  CAPO advantages are then constructed
+    **within each prompt group** (exactly like GRPO), not batch-wide:
+
+        w_i = omega_i / sum_{j in I_p} omega_j,    (per-group normalisation)
+        m_p = sum_{j in I_p} w_j g_j,                (per-group baseline)
+        A_i = w_i (g_i - m_p).
+
+    Parameters
+    ----------
+    omega : Tensor [B]
+        Unnormalised precision weights (e.g. L_i^{-beta} or
+        L_i^{-beta} / s(L_i; xi)).
+    g : Tensor [B]
+        Scalar returns g_i.
+    index : array-like [B] or None
+        Prompt-group IDs.  When *None*, the whole batch is treated as
+        a single group (backward-compatible fallback).
+    eps : float
+        Numerical floor.
+
+    Returns
+    -------
+    w : Tensor [B]    – per-group normalised weights.
+    adv_scalar : Tensor [B] – scalar advantages.
+    """
+    _ = omega.shape[0]
+    w = torch.empty_like(omega)
+    adv_scalar = torch.empty_like(omega)
+
+    if index is None:
+        # Fallback: whole batch is one group.
+        omega_sum = omega.sum().clamp_min(eps)
+        w[:] = omega / omega_sum
+        m = (w * g).sum()
+        adv_scalar[:] = w * (g - m)
+        return w, adv_scalar
+
+    idx_t = torch.as_tensor(index, dtype=torch.long, device=omega.device)
+    unique_groups = idx_t.unique()
+
+    for gid in unique_groups:
+        mask = idx_t == gid
+        om_g = omega[mask]
+        g_g = g[mask]
+        om_sum = om_g.sum().clamp_min(eps)
+        w_g = om_g / om_sum
+        m_g = (w_g * g_g).sum()
+        w[mask] = w_g
+        adv_scalar[mask] = w_g * (g_g - m_g)
+
+    return w, adv_scalar
 
 
 def compute_capo_advantage(
@@ -211,7 +274,8 @@ def compute_capo_eb_lite_advantage(
         returns = token_level_rewards.clone()
         return advantages, returns, {}
 
-    beta_hat, w, m = eb_lite_fit_beta_and_weights(
+    # ---- batch-wide parameter estimation ----
+    beta_hat, _w_global, _m_global = eb_lite_fit_beta_and_weights(
         g=returns_scalar,
         L=lengths,
         eps=epsilon,
@@ -219,8 +283,9 @@ def compute_capo_eb_lite_advantage(
         tol=tol,
     )
 
-    # Per-trajectory scalar advantages A_i = w_i (g_i - m̂).
-    adv_scalar = w * (returns_scalar - m)
+    # ---- per-group advantages (like GRPO) ----
+    omega = lengths.double().pow(-beta_hat).float()  # unnorm. precision
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
     advantages = adv_scalar.unsqueeze(-1) * valid.float()
 
     # Optional global std-normalization (GRPO-style).
@@ -369,9 +434,12 @@ def compute_capo_eb_full_advantage(
         eps=epsilon,
     )
 
-    # Scalar advantages A_i = w_i (g_i - m_t), with m_t = Σ_i w_i g_i.
-    m_t = (w * returns_scalar).sum()
-    adv_scalar = w * (returns_scalar - m_t)
+    # ---- per-group advantages (like GRPO) ----
+    # ``w`` from joint_eb_update_kband is globally normalised; recover
+    # unnormalised precision omega and re-normalise per group.
+    s_vals = s_kband(lengths, rho_t, k_band, eta_t)  # [B]
+    omega = (lengths.double().pow(beta_t) * s_vals.double()).reciprocal().float().clamp_min(epsilon)
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
     advantages = adv_scalar.unsqueeze(-1) * valid.float()
 
     # Optional global std-normalization (GRPO-style).
@@ -409,4 +477,4 @@ def compute_capo_eb_full_advantage(
 compute_capo_empirical_bayes_advantage = compute_capo_eb_full_advantage
 
 # Re-export functions from eb_core that tests expect to find here
-from capo.eb_core import s_kband  # noqa: F401, E402
+from capo.eb_core import s_kband as s_kband  # noqa: F811, E402

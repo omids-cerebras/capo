@@ -37,7 +37,7 @@ htmlcov/
 # Data/outputs (user-generated)
 data/
 outputs/
-artifacts/
+# artifacts/
 *.parquet
 
 # Misc
