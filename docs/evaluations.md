@@ -48,7 +48,7 @@ threshold.
 - We then solve for the earliest step that reaches the target
   accuracy and convert it to tokens consumed.
 
-On synthetic and Math-style benchmarks, EB–CAPO typically reduces
+On synthetic and Math-style benchmarks, LV-CAPO typically reduces
 TTT relative to ΔL, reflecting the variance reduction predicted by
 the theory.
 
@@ -67,17 +67,17 @@ CAPO’s EB weights tend to:
 - lead to smoother learning curves with fewer catastrophic spikes,
 - increase monotonicity scores relative to ΔL.
 
-This matches the intuition that EB–CAPO avoids overreacting to
+This matches the intuition that LV-CAPO avoids overreacting to
 noisy, atypically long trajectories.
 
 ## Length robustness and equity
 
-Because EB–CAPO explicitly models how variance contracts with length,
+Because LV-CAPO explicitly models how variance contracts with length,
 it is more robust under **sublinear dependence** (\(\alpha < 1\)):
 
 - ΔL-style rules can over-penalize long trajectories even when they
   are less noisy on a per-token basis.
-- EB–CAPO adjusts β and ξ to reflect the observed variance–length
+- LV-CAPO adjusts β and ξ to reflect the observed variance–length
   curve, leading to more equitable weighting across lengths.
 
 In practice, this shows up as:

@@ -1,7 +1,7 @@
 \section{Illustrative examples}
 \label{sec:eb-examples}
 
-In this section we give two concrete examples illustrating the EB--CAPO algorithm:
+In this section we give two concrete examples illustrating the LV--CAPO algorithm:
 (i) a simple hand-computable toy example that makes the weighting mechanism transparent, and
 (ii) a simulated rollout experiment that can be used to compare CAPO with a GRPO-style baseline and empirically demonstrate the variance and sample-efficiency gains predicted by the theory.
 
@@ -84,7 +84,7 @@ This case can be illustrated by repeating the above calculations with, say, \(\b
 
 These hand-computable examples are convenient for visual demonstrations (e.g., plotting the weights \(w_i(\beta)\) as a function of \(\beta\)) and for sanity-checking code paths that implement Algorithm~\ref{alg:eb-capo}.
 
-\subsubsection{Simulated rollouts: CAPO--EB versus GRPO}
+\subsubsection{Simulated rollouts: LV--CAPO versus GRPO}
 \label{sec:simulated-eb-vs-grpo}
 
 We now outline a fully specified simulated experiment that can be used to compare CAPO with a GRPO-style baseline on a controlled synthetic task.
@@ -123,7 +123,7 @@ We construct a synthetic rollout generator with the following components:
   By construction, conditional on \(L_i\) and \(\{Y_{i,\tau}\}\), we have \(\mathbb E[g_i\mid L_i]=\mu^\star\) and \(\mathrm{Var}(g_i\mid L_i)\approx \sigma^2 L_i^{-\gamma}\) for a suitable \(\sigma^2\), so the true length–variance exponent is \(\beta^\star\approx -\gamma\) (under the family \(v_i(\vartheta)=\sigma^2 L_i^\beta s(L_i;\xi)\), we have \(\beta^\star=-\gamma\) and \(s\equiv 1\) in the simplest case).
 \end{itemize}
 
-\paragraph{Compared estimators (CAPO--EB vs.\ GRPO).}
+\paragraph{Compared estimators (LV--CAPO vs.\ GRPO).}
 On top of this generator, we compare two weighting strategies for estimating \(\mu^\star\) (or, in an RL context, for aggregating policy gradients):
 
 \begin{itemize}
@@ -136,7 +136,7 @@ On top of this generator, we compare two weighting strategies for estimating \(\
   \]
   In a full GRPO implementation, these same weights would be used to aggregate per-trajectory gradients or log-prob increments for the policy update.
 
-  \item \textbf{CAPO--EB.}
+  \item \textbf{LV--CAPO.}
   Use the EB objective \(\ell(\beta,\xi)\) in \eqref{eq:EB-obj} to fit \(\beta\) (and optionally \(\xi\)), and then weight trajectories according to
   \[
   \omega_i^{\mathrm{CAPO}} = L_i^{-\beta_t} s(L_i;\xi_t)^{-1},
@@ -147,8 +147,8 @@ On top of this generator, we compare two weighting strategies for estimating \(\
   \]
   Two variants are particularly simple to implement:
   \begin{itemize}
-    \item \emph{CAPO--EB-lite:} Set \(s\equiv 1\) and estimate \(\beta_t\) using Algorithm~\ref{alg:eb-lite} (no token-level ACFs required).
-    \item \emph{Full CAPO--EB:} Use \(s(L;\rho,k,\eta)\) from Definition~\ref{def:kband}, update \(\beta_t\) via Corollary~\ref{cor:grad-beta}, and update \(\xi_t=(\rho_t,\eta_t)\) via Algorithm~\ref{alg:eb-capo} (possibly combined with the ACF-moment estimator, Algorithm~\ref{alg:acf-moment}).
+    \item \emph{L--CAPO:} Set \(s\equiv 1\) and estimate \(\beta_t\) using Algorithm~\ref{alg:eb-lite} (no token-level ACFs required).
+    \item \emph{Full LV--CAPO:} Use \(s(L;\rho,k,\eta)\) from Definition~\ref{def:kband}, update \(\beta_t\) via Corollary~\ref{cor:grad-beta}, and update \(\xi_t=(\rho_t,\eta_t)\) via Algorithm~\ref{alg:eb-capo} (possibly combined with the ACF-moment estimator, Algorithm~\ref{alg:acf-moment}).
   \end{itemize}
 \end{itemize}
 
@@ -161,7 +161,7 @@ A simple protocol that is straightforward to implement and plot is:
   \begin{enumerate}
     \item Generate a batch \(\mathcal B_t\) using the generative model above.
     \item \textbf{GRPO branch:} Compute \((w_i^{\mathrm{GRPO}},m_{\mathrm{GRPO}}^{(t)})\) using \(\omega_i^{\mathrm{GRPO}}=L_i^{-1}\).
-    \item \textbf{CAPO branch:} Run one iteration of Algorithm~\ref{alg:eb-capo} (or EB-lite, Algorithm~\ref{alg:eb-lite}) to update \((\beta_t,\xi_t)\) and compute \((w_i^{\mathrm{CAPO}},m_{\mathrm{CAPO}}^{(t)})\).
+    \item \textbf{CAPO branch:} Run one iteration of Algorithm~\ref{alg:eb-capo} (or L-CAPO, Algorithm~\ref{alg:eb-lite}) to update \((\beta_t,\xi_t)\) and compute \((w_i^{\mathrm{CAPO}},m_{\mathrm{CAPO}}^{(t)})\).
   \end{enumerate}
   \item Repeat the entire \(T\)-step process over \(R\) independent trials (e.g., \(R=500\) or \(R=1000\)), re-simulating fresh data each time, and record the sequences
   \(\{m_{\mathrm{GRPO}}^{(t,r)}\}_{t,r}\) and \(\{m_{\mathrm{CAPO}}^{(t,r)}\}_{t,r}\).
@@ -291,9 +291,9 @@ For \(\alpha\in(0,\infty)\), set
   L_i^{-\alpha}.
   \label{eq:synth_deltal_omega}
 \end{equation}
-This is structurally identical to CAPO-lite with a fixed exponent \(\beta=\alpha\) and \(s\equiv 1\).
+This is structurally identical to L-CAPO with a fixed exponent \(\beta=\alpha\) and \(s\equiv 1\).
 
-\emph{(iii) CAPO--EB-lite (length-only weighting).}
+\emph{(iii) L--CAPO (length-only weighting).}
 Estimate \(\hat\beta\) from the batch via Algorithm~\ref{alg:eb-lite} and set
 \begin{equation}
   \omega_i^{\mathrm{lite}}
@@ -302,7 +302,7 @@ Estimate \(\hat\beta\) from the batch via Algorithm~\ref{alg:eb-lite} and set
   \label{eq:synth_w_lite}
 \end{equation}
 
-\emph{(iv) CAPO--EB (dependence-aware weighting).}
+\emph{(iv) LV--CAPO (dependence-aware weighting).}
 Estimate \((\hat\beta,\hat\xi)\) via Algorithm~\ref{alg:eb-capo} and set
 \begin{equation}
   \omega_i^{\mathrm{full}}

@@ -59,7 +59,7 @@ or remove normalizations:
   normalization via GRPO++-style trajectory weighting.
 \end{itemize}
 We report CAPO with outcome-only trajectory covariance estimation:
-\textbf{CAPO-EB-lite} (diagonal empirical Bayes) and \textbf{CAPO-EB} (banded
+\textbf{L-CAPO} (diagonal empirical Bayes) and \textbf{LV-CAPO} (banded
 empirical Bayes).
 
 \subsection{Metrics}
@@ -183,7 +183,7 @@ The normalised mean-squared advantage profile $\mathbb{E}[A^2 \mid L] / \mathbb{
 GRPO amplifies long (noisy) trajectories by $3$--$7\times$ across regimes.
 $\Delta L$ ($\alpha = 1.0$) and CAPO both \emph{suppress} long trajectories (ratios $\ll 1$), but for different reasons:
 $\Delta L$ applies a fixed correction $L^{-\alpha}$ that is optimal only under IID, while CAPO's precision weighting $w_i \propto 1/v(L_i)$ adapts to the true variance law.
-Under compound symmetry, where $v(L)$ grows superlinearly, $\Delta L$'s fixed-$\alpha$ rule under-corrects: CAPO-EB-lite (which assumes $v(L) = L^{\beta}$) shows amplification ratios rising above 1 at CS $\rho = 0.05$, whereas dependence-aware CAPO-EB achieves the lowest amplification across all long-range regimes.
+Under compound symmetry, where $v(L)$ grows superlinearly, $\Delta L$'s fixed-$\alpha$ rule under-corrects: L-CAPO (which assumes $v(L) = L^{\beta}$) shows amplification ratios rising above 1 at CS $\rho = 0.05$, whereas dependence-aware LV-CAPO achieves the lowest amplification across all long-range regimes.
 
 \noindent
 \emph{(b) Signal allocation} (Figure~\ref{fig:synthetic-signal-share}).
@@ -193,7 +193,7 @@ GRPO over-allocates to the longest bin; CAPO redistributes signal towards shorte
 \paragraph{Relative efficiency.}
 Beyond the distributional view, Figure~\ref{fig:efficiency-heatmap} reports the baseline-MSE relative efficiency $\mathrm{RelEff}(M) = \mathrm{Var}(\hat m_{\text{unif}}) / \mathrm{Var}(\hat m_M)$, estimated via Monte Carlo.
 This is the primary metric: values above 1 mean the method achieves a \emph{strictly lower-variance} baseline estimate than uniform averaging.
-CAPO-EB achieves the highest relative efficiency across all regimes, with gains of $2$--$6\times$ under dependence, because its inverse-variance weighting is the minimum-variance unbiased (MVU) linear combination (Lemma~\ref{lem:optimal-weights}).
+LV-CAPO achieves the highest relative efficiency across all regimes, with gains of $2$--$6\times$ under dependence, because its inverse-variance weighting is the minimum-variance unbiased (MVU) linear combination (Lemma~\ref{lem:optimal-weights}).
 $\Delta L$ provides partial correction ($1$--$2\times$), while GRPO is the $1.0\times$ reference by construction.
 
 \paragraph{Summary.}
@@ -210,7 +210,7 @@ The reference implementation is provided as \texttt{capo.experiments.analysis.sy
 \includegraphics[width=0.98\linewidth]{artifacts/paper/fig_synthetic_covariance.pdf}
 \caption{Synthetic benchmark: normalised mean-squared advantage $\mathbb{E}[A^2 \mid L] / \mathbb{E}[A^2 \mid L_{\min}]$ versus trajectory length under six covariance regimes.
 Curves above~$1$ indicate length amplification (long trajectories dominate the gradient); curves below~$1$ indicate precision-optimal suppression of noisy trajectories.
-GRPO amplifies long trajectories by $3$--$7\times$; CAPO-EB suppresses them by concentrating weight on high-precision (short) trajectories.}
+GRPO amplifies long trajectories by $3$--$7\times$; LV-CAPO suppresses them by concentrating weight on high-precision (short) trajectories.}
 \label{fig:synthetic-covariance}
 \end{figure}
 
@@ -228,7 +228,7 @@ GRPO over-allocates to the longest bin; CAPO shifts signal towards shorter traje
 \includegraphics[width=0.98\linewidth]{artifacts/paper/fig_efficiency_heatmap.pdf}
 \caption{Baseline-MSE relative efficiency $\mathrm{Var}(\hat m_{\text{unif}}) / \mathrm{Var}(\hat m_M)$ across methods and covariance regimes.
 Values above $1.0$ indicate strictly lower-variance baseline estimation than uniform averaging.
-CAPO-EB achieves $2$--$6\times$ relative efficiency under dependence, the theoretical optimum for inverse-variance weighting.}
+LV-CAPO achieves $2$--$6\times$ relative efficiency under dependence, the theoretical optimum for inverse-variance weighting.}
 \label{fig:efficiency-heatmap}
 \end{figure}
 
@@ -239,6 +239,6 @@ CAPO-EB achieves $2$--$6\times$ relative efficiency under dependence, the theore
 \caption{Length amplification ratio $\mathbb{E}[A^2 \mid L_{\max}] / \mathbb{E}[A^2 \mid L_{\min}]$.
 Ratios $\gg 1$ indicate that long trajectories dominate the gradient (GRPO); ratios $\ll 1$ indicate precision-optimal suppression.
 Column-wise best (lowest ratio) is bolded.
-Under short-range dependence, $\Delta L$ ($\alpha{=}1$) achieves the lowest ratio; under compound symmetry, CAPO-EB adapts to the superlinear variance law and dominates.}
+Under short-range dependence, $\Delta L$ ($\alpha{=}1$) achieves the lowest ratio; under compound symmetry, LV-CAPO adapts to the superlinear variance law and dominates.}
 \label{tab:synthetic-covariance}
 \end{table}

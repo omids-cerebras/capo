@@ -16,7 +16,7 @@ when variance depends on length.
 Key Components
 --------------
 **Empirical Bayes Core** (`capo.eb_core`):
-    - Length exponent β estimation (EB-lite algorithm)
+    - Length exponent β estimation (L-CAPO algorithm)
     - Dependence shape ξ = (ρ, η) estimation (ACF-moment algorithm)
     - k-banded covariance weights for precision-optimal aggregation
     - Joint EB updates for online parameter learning

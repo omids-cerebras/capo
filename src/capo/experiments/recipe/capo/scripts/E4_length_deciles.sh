@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # The default subset is:
 #   - GRPO++ (alpha=1.0) as the strongest length-only baseline
-#   - CAPO-EB as the covariance-aware method
+#   - LV-CAPO as the covariance-aware method
 #
 # The artifact builder consumes the per-run `val_generations/*.jsonl`.
 # -----------------------------------------------------------------------------

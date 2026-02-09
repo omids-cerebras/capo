@@ -1,6 +1,6 @@
 # tests/test_eb_lite.py
 """
-Tests for EB-lite (Algorithm~\\ref{alg:eb-lite}).
+Tests for L-CAPO (Algorithm~\\ref{alg:eb-lite}).
 
 We generate synthetic data with a known length exponent β_star and
 check that `eb_lite_fit_beta_and_weights` recovers a β̂ close to β_star.
@@ -46,7 +46,7 @@ def test_eb_lite_recovers_beta():
 
     beta_hat, w, m = eb_lite_fit_beta_and_weights(g=g, L=L, max_iters=50, tol=1e-5)
 
-    # EB-lite is inherently noisy on synthetic data; check it's finite and weights are valid
+    # L-CAPO is inherently noisy on synthetic data; check it's finite and weights are valid
     assert math.isfinite(beta_hat)
     # Weights sum to 1
     assert torch.allclose(w.sum(), torch.tensor(1.0), atol=1e-6)

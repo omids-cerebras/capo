@@ -7,12 +7,12 @@ Test Organization
 -----------------
 **Core EB Tests** (no VERL dependency):
     - `test_eb_toy.py`: 3-trajectory toy example from the paper
-    - `test_eb_lite.py`: EB-lite recovery of β on synthetic data
+    - `test_eb_lite.py`: L-CAPO recovery of β on synthetic data
     - `test_acf_moment.py`: ACF-moment recovery of ρ on AR(1) data
 
 **VERL Integration Tests** (require VERL):
     - `test_adv_capo_base.py`: Plain CAPO advantage shape/masking
-    - `test_eb_lite_and_full.py`: EB-lite and full EB advantage estimators
+    - `test_eb_lite_and_full.py`: L-CAPO and full EB advantage estimators
     - `test_s_kband_and_grad.py`: k-banded shape functions and gradients
     - `test_empirical_bayes_adv.py`: EB shrinkage behavior
     - `test_reward_fn.py`: CAPO reward function (outcome + process table)

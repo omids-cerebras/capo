@@ -37,7 +37,7 @@ Ten Experiments
 5.  Effective Sample Size
 6.  Length-Bias Diagnostic
 7.  Advantage Concentration
-8.  EB-lite Parameter Recovery
+8.  L-CAPO Parameter Recovery
 9.  Mixed-Dependence Stress Test
 10. Scaling with Group Size N
 
@@ -369,7 +369,7 @@ def compute_capo_eb_lite_advantage(
     tol: float = 1e-4,
     **kwargs,
 ) -> tuple[torch.Tensor, torch.Tensor, dict]:
-    """EB-CAPO-lite advantage — mirrors production ``adv_estimators``."""
+    """L-CAPO advantage — mirrors production ``adv_estimators``."""
     lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
 
     if not torch.any(valid):
@@ -438,7 +438,7 @@ def compute_capo_eb_full_advantage(
     dlog_pi_eta: float = 0.0,
     **kwargs,
 ) -> tuple[torch.Tensor, torch.Tensor, dict]:
-    """Full EB-CAPO advantage — mirrors production ``adv_estimators``.
+    """Full LV-CAPO advantage — mirrors production ``adv_estimators``.
 
     Note: defaults for beta_steps/xi_steps/beta_lr are tuned for the
     *single-batch* regime used in this benchmark.  In production (the
@@ -585,18 +585,18 @@ def compute_all_advantages(
         )
         results["deltal_1.0"] = adv
 
-    if "capo_lite" in method_keys:
+    if "l_capo" in method_keys:
         adv, _, _ = compute_capo_eb_lite_advantage(
             token_level_rewards, response_mask, index=index, config=_make_config(norm=False)
         )
-        results["capo_lite"] = adv
+        results["l_capo"] = adv
 
-    if "capo_full" in method_keys:
+    if "lv_capo" in method_keys:
         kw = eb_full_kwargs or {}
         adv, _, _ = compute_capo_eb_full_advantage(
             token_level_rewards, response_mask, index=index, config=_make_config(norm=False), **kw
         )
-        results["capo_full"] = adv
+        results["lv_capo"] = adv
 
     return results
 
@@ -653,12 +653,12 @@ def compute_scalar_baselines(
             omega = L.pow(-alpha_val)
             out[key] = _groupwise_baseline(omega, g, index)
 
-    if "capo_lite" in method_keys:
+    if "l_capo" in method_keys:
         beta_hat, _w, _m = eb_lite_fit_beta_and_weights(g, L)
         omega = L.double().pow(-beta_hat).float()
-        out["capo_lite"] = _groupwise_baseline(omega, g, index)
+        out["l_capo"] = _groupwise_baseline(omega, g, index)
 
-    if "capo_full" in method_keys:
+    if "lv_capo" in method_keys:
         beta_t, rho_t, eta_t, _w = joint_eb_update_kband(
             g,
             L,
@@ -674,7 +674,7 @@ def compute_scalar_baselines(
         )
         s_vals = s_kband(L, rho_t, 64, eta_t)
         omega = (L.double().pow(beta_t) * s_vals.double()).reciprocal().float().clamp_min(1e-8)
-        out["capo_full"] = _groupwise_baseline(omega, g, index)
+        out["lv_capo"] = _groupwise_baseline(omega, g, index)
 
     return out
 
@@ -687,13 +687,13 @@ _PAL = {
     "grpo": "#d62728",
     "deltal_0.5": "#ff7f0e",
     "deltal_1.0": "#bcbd22",
-    "capo_lite": "#1f77b4",
-    "capo_full": "#2ca02c",
+    "l_capo": "#1f77b4",
+    "lv_capo": "#2ca02c",
 }
-_MK = {"grpo": "o", "deltal_0.5": "v", "deltal_1.0": "^", "capo_lite": "D", "capo_full": "s"}
-_LS = {"grpo": "--", "deltal_0.5": ":", "deltal_1.0": ":", "capo_lite": "-", "capo_full": "-"}
-_ZO = {"grpo": 2, "deltal_0.5": 2, "deltal_1.0": 2, "capo_lite": 5, "capo_full": 6}
-_LW = {"grpo": 1.6, "deltal_0.5": 1.4, "deltal_1.0": 1.4, "capo_lite": 2.3, "capo_full": 2.6}
+_MK = {"grpo": "o", "deltal_0.5": "v", "deltal_1.0": "^", "l_capo": "D", "lv_capo": "s"}
+_LS = {"grpo": "--", "deltal_0.5": ":", "deltal_1.0": ":", "l_capo": "-", "lv_capo": "-"}
+_ZO = {"grpo": 2, "deltal_0.5": 2, "deltal_1.0": 2, "l_capo": 5, "lv_capo": 6}
+_LW = {"grpo": 1.6, "deltal_0.5": 1.4, "deltal_1.0": 1.4, "l_capo": 2.3, "lv_capo": 2.6}
 
 
 def _sty(key: str) -> dict:
@@ -748,15 +748,15 @@ METHODS: list[Method] = [
     Method("GRPO", "grpo"),
     Method(r"$\Delta L$ ($\alpha$=0.5)", "deltal_0.5"),
     Method(r"$\Delta L$ ($\alpha$=1.0)", "deltal_1.0"),
-    Method("CAPO-lite", "capo_lite"),
-    Method("CAPO-EB", "capo_full"),
+    Method("L-CAPO", "l_capo"),
+    Method("LV-CAPO", "lv_capo"),
 ]
 
 METHODS4: list[Method] = [
     Method("GRPO", "grpo"),
     Method(r"$\Delta L$ ($\alpha$=1.0)", "deltal_1.0"),
-    Method("CAPO-lite", "capo_lite"),
-    Method("CAPO-EB", "capo_full"),
+    Method("L-CAPO", "l_capo"),
+    Method("LV-CAPO", "lv_capo"),
 ]
 
 
@@ -821,7 +821,7 @@ def experiment_01_variance_landscape(out: Path) -> None:
         (
             "$k$-band (0.8,64,1.3)",
             lambda x: v_kband(int(x), 0.8, 64, 1.3),
-            _PAL["capo_lite"],
+            _PAL["l_capo"],
             "-",
             2.0,
         ),
@@ -901,7 +901,7 @@ def experiment_02_weight_comparison(out: Path) -> None:
         # DeltaL(alpha=1): w proportional to 1/L
         w_dl = bins.astype(float) ** (-1.0)
         w_dl /= w_dl.sum()
-        # CAPO-lite: use production eb_lite_fit to find beta from oracle v(L)
+        # L-CAPO: use production eb_lite_fit to find beta from oracle v(L)
         L_t = torch.tensor(bins, dtype=torch.float32)
         g_t = torch.tensor(v, dtype=torch.float32).sqrt()  # dummy g with right scale
         beta_hat, w_t, _ = eb_lite_fit_beta_and_weights(g_t, L_t)
@@ -915,7 +915,7 @@ def experiment_02_weight_comparison(out: Path) -> None:
             w_oracle,
             w,
             label="Oracle ($1/v(L)$)",
-            color=_PAL["capo_full"],
+            color=_PAL["lv_capo"],
             edgecolor="white",
             lw=0.8,
             zorder=4,
@@ -924,8 +924,8 @@ def experiment_02_weight_comparison(out: Path) -> None:
             x - 0.5 * w,
             w_lite,
             w,
-            label=f"CAPO-lite ($\\beta$={beta_hat:.2f})",
-            color=_PAL["capo_lite"],
+            label=f"L-CAPO ($\\beta$={beta_hat:.2f})",
+            color=_PAL["l_capo"],
             edgecolor="white",
             lw=0.8,
             zorder=3,
@@ -1352,12 +1352,12 @@ def experiment_07_advantage_concentration(out, seed, P, N, bins):
 
 
 # ######################################################################## #
-#  EXPERIMENT 8 — EB-lite Parameter Recovery                               #
+#  EXPERIMENT 8 — L-CAPO Parameter Recovery                               #
 # ######################################################################## #
 
 
 def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
-    """EB-lite (production code) recovers the true beta under power-law v(L)."""
+    """L-CAPO (production code) recovers the true beta under power-law v(L)."""
     bins = DEFAULT_LENGTH_BINS
     betas = np.array([0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.5])
     T_max = int(bins.max())
@@ -1390,7 +1390,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
             g = (rewards * mask).sum(dim=-1)
             L = mask.sum(dim=-1).clamp_min(1).float()
 
-            # Use production EB-lite
+            # Use production L-CAPO
             beta_hat, w_fit, m_fit = eb_lite_fit_beta_and_weights(g, L)
             bhats[bs].append(beta_hat)
 
@@ -1417,7 +1417,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
         medianprops={"color": "black", "lw": 2},
     )
     for p in bp["boxes"]:
-        p.set_facecolor(_PAL["capo_lite"])
+        p.set_facecolor(_PAL["l_capo"])
         p.set_alpha(0.55)
     ax.plot(
         range(len(betas)),
@@ -1433,7 +1433,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
     ax.set_xticklabels([f"{b:.1f}" for b in betas])
     ax.set_xlabel("True $\\beta^*$")
     ax.set_ylabel("Recovered $\\hat{\\beta}$")
-    ax.set_title("(a) EB-lite parameter recovery", fontweight="bold")
+    ax.set_title("(a) L-CAPO parameter recovery", fontweight="bold")
     ax.legend(fontsize=9)
 
     ax = axes[1]
@@ -1453,20 +1453,20 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
         betas,
         re_o,
         "s-",
-        color=_PAL["capo_full"],
+        color=_PAL["lv_capo"],
         lw=2.5,
         markersize=7,
-        label="CAPO-EB (oracle $\\beta^*$)",
+        label="LV-CAPO (oracle $\\beta^*$)",
         zorder=5,
     )
     ax.plot(
         betas,
         re_f,
         "D-",
-        color=_PAL["capo_lite"],
+        color=_PAL["l_capo"],
         lw=2.5,
         markersize=7,
-        label="CAPO-lite (fitted $\\hat{\\beta}$)",
+        label="L-CAPO (fitted $\\hat{\\beta}$)",
         zorder=5,
     )
     ax.axhline(1.0, color=_PAL["grpo"], lw=1.5, ls="--", label="GRPO")
@@ -1477,7 +1477,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
 
     rmse = float(np.sqrt(np.mean([(bh - b) ** 2 for b in betas for bh in bhats[b]])))
     fig.suptitle(
-        f"Experiment 8 — EB-lite Parameter Recovery " f"(RMSE = {rmse:.3f})",
+        f"Experiment 8 — L-CAPO Parameter Recovery " f"(RMSE = {rmse:.3f})",
         fontweight="bold",
         fontsize=12,
         y=1.02,

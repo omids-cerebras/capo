@@ -1,7 +1,7 @@
 # Method: Length and Dependence Modelling
 
 This section summarizes the modelling choices behind CAPO and
-EB–CAPO: how trajectory variance scales with length and dependence,
+LV-CAPO: how trajectory variance scales with length and dependence,
 and how we use a simple Normal–Normal hierarchy to derive a tractable
 Empirical Bayes objective.
 

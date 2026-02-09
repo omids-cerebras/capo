@@ -7,11 +7,11 @@ This module implements three CAPO-side advantage estimators:
 - "capo": plain CAPO advantage, GRPO-style token-wise z-normalization
   of CAPO token-level rewards.
 
-- "capo_eb_lite": EB–CAPO-lite (Algorithm~\\ref{alg:eb-lite}), which
-  fits only a length exponent β (no dependence) using the EB-lite
+- "capo_eb_lite": L-CAPO (Algorithm~\\ref{alg:eb-lite}), which
+  fits only a length exponent β (no dependence) using the L-CAPO
   regression and reweights trajectories as w_i ∝ L_i^{-β̂}.
 
-- "capo_eb": full EB–CAPO (Algorithm~\\ref{alg:eb-capo} and
+- "capo_eb": full LV-CAPO (Algorithm~\\ref{alg:eb-capo} and
   Algorithm~\\ref{alg:joint-eb-kband}), which treats both length and
   dependence under the k-banded stretched-geometric model and performs
   a joint EB update on (β, ρ, η) via `joint_eb_update_kband`.
@@ -228,10 +228,10 @@ def compute_capo_eb_lite_advantage(
     **kwargs,
 ) -> tuple[Tensor, Tensor, dict]:
     """
-    EB–CAPO-lite advantage (Algorithm~\\ref{alg:eb-lite}).
+    L-CAPO advantage (Algorithm~\\ref{alg:eb-lite}).
 
     This estimator ignores dependence (s(L; ξ) ≡ 1) and fits only
-    a length exponent β via the EB-lite regression. It then
+    a length exponent β via the L-CAPO regression. It then
     reweights trajectories as:
 
         w_i ∝ L_i^{-β̂},
@@ -254,14 +254,14 @@ def compute_capo_eb_lite_advantage(
     epsilon : float
         Numerical floor (used only if we decide to normalize again).
     max_iters : int
-        Max iterations for EB-lite.
+        Max iterations for L-CAPO.
     tol : float
-        Convergence tolerance for EB-lite.
+        Convergence tolerance for L-CAPO.
 
     Returns
     -------
     advantages : Tensor, shape [B, T]
-        Token-level advantages from EB–CAPO-lite.
+        Token-level advantages from L-CAPO.
     returns : Tensor, shape [B, T]
         Returns (here equal to CAPO token-level rewards masked).
     adv_metrics : dict
@@ -344,7 +344,7 @@ def compute_capo_eb_full_advantage(
     **kwargs,
 ) -> tuple[Tensor, Tensor, dict]:
     """
-    Full EB–CAPO advantage (Algorithms~\\ref{alg:eb-capo} and
+    Full LV-CAPO advantage (Algorithms~\\ref{alg:eb-capo} and
     ~\\ref{alg:joint-eb-kband}).
 
     This estimator implements the full EB machinery:
@@ -397,7 +397,7 @@ def compute_capo_eb_full_advantage(
     Returns
     -------
     advantages : Tensor, shape [B, T]
-        Token-level EB–CAPO advantages.
+        Token-level LV-CAPO advantages.
     returns : Tensor, shape [B, T]
         Returns (here equal to CAPO token-level rewards masked).
     """

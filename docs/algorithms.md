@@ -3,9 +3,9 @@
 This page describes the three algorithmic components from §4, and
 how they map to the functions in `capo/verl_integration/adv_estimators.py`.
 
-## 1. EB–CAPO workflow (online)
+## 1. LV-CAPO workflow (online)
 
-The EB–CAPO workflow maintains streaming estimates
+The LV-CAPO workflow maintains streaming estimates
 \((\beta_t, \xi_t)\) and uses them to reweight trajectories at each
 outer step \(t\).
 
@@ -82,19 +82,19 @@ At step \(t\):
   - Function: `compute_capo_advantage`
   - Algorithm: token-wise z-normalization over CAPO rewards.
 
-- **EB–CAPO-lite** (length-only):
+- **L-CAPO** (length-only):
 
-  - Algorithm: “EB-lite (no dependence)” in the text.
+  - Algorithm: “L-CAPO (no dependence)” in the text.
   - Function implementing EB fit:
     `eb_lite_fit_beta_and_weights(g, L)`
   - VERL estimator: `capo_eb_lite`
     (`compute_capo_eb_lite_advantage`):
     - Collapses to \((g_i, L_i)\),
-    - Runs EB-lite,
+    - Runs L-CAPO,
     - Sets \(A_i = w_i (g_i - m)\),
     - Broadcasts \(A_i\) across tokens.
 
-- **Full EB–CAPO** (length + dependence):
+- **Full LV-CAPO** (length + dependence):
 
   - Dependence shape: `s_kband(L, rho, k, eta)`
     implements \(s(L; \rho, k, \eta)\).
@@ -112,14 +112,14 @@ At step \(t\):
     (`compute_capo_eb_full_advantage`):
     - Optional ACF-based initialization of \((\rho, \eta)\),
     - Few gradient steps for β and ξ,
-    - Final weights and advantages as in EB-lite.
+    - Final weights and advantages as in L-CAPO.
 
 ---
 
-## 2. EB-lite: log–log regression
+## 2. L-CAPO: log–log regression
 
-EB-lite is a length-only, single-batch algorithm designed to sit
-between fixed ΔL-style weights and the full EB–CAPO machinery.
+L-CAPO is a length-only, single-batch algorithm designed to sit
+between fixed ΔL-style weights and the full LV-CAPO machinery.
 
 Given \((g_i, L_i)\), it iteratively:
 

@@ -10,7 +10,7 @@ set -euo pipefail
 #   - provide data for stability/efficiency summaries
 #
 # Design:
-#   - sweep a small grid of k_band values for CAPO-EB
+#   - sweep a small grid of k_band values for LV-CAPO
 #   - keep all other knobs identical
 #
 # Output:

@@ -32,7 +32,7 @@ import capo.verl_integration  # Register with VERL
 
 - [Setup & Notation](setup.md) — Mathematical foundations
 - [CAPO Method](method.md) — Core methodology
-- [Algorithms](algorithms.md) — EB-lite, ACF-moment, k-banded weights
+- [Algorithms](algorithms.md) — L-CAPO, ACF-moment, k-banded weights
 - [Evaluations](evaluations.md) — Experimental results
 - [API Reference](api.md) — Code documentation
 - [Experiments](experiments.md) — Reproducing paper results

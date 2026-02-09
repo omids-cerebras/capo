@@ -6,7 +6,7 @@ This module implements the algorithms described in the "Algorithms:
 CAPO with Empirical Bayes length and dependence estimation" section of
 the paper:
 
-- Algorithm EB-lite (Algorithm~\\ref{alg:eb-lite}):
+- Algorithm L-CAPO (Algorithm~\\ref{alg:eb-lite}):
   A single-parameter length-only EB fit ignoring dependence
   (s(L; ξ) ≡ 1).
 
@@ -536,9 +536,9 @@ def eb_lite_fit_beta_and_weights(
     tol: float = 1e-4,
 ) -> tuple[float, Tensor, Tensor]:
     """
-    EB-lite (Algorithm~\\ref{alg:eb-lite}): length-only EB estimator.
+    L-CAPO (Algorithm~\\ref{alg:eb-lite}): length-only EB estimator.
 
-    The EB-lite algorithm ignores dependence (s(L; ξ) ≡ 1) and fits only
+    The L-CAPO algorithm ignores dependence (s(L; ξ) ≡ 1) and fits only
     the length exponent β in the variance model
 
         Var(g_i | L_i) ≈ σ^2 L_i^β,
@@ -570,7 +570,7 @@ def eb_lite_fit_beta_and_weights(
     eps : float
         Numerical floor used in log(e_i^2 + eps).
     max_iters : int
-        Maximum number of EB-lite iterations.
+        Maximum number of L-CAPO iterations.
     tol : float
         Convergence tolerance for |m^{(k+1)} - m^{(k)}|.
 

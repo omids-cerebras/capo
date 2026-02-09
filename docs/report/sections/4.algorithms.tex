@@ -49,8 +49,8 @@ We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) an
   \item \textbf{Stabilization \& diagnostics.} Apply exponential moving averages (EMA) to \((\beta,\xi)\), enforce simple box constraints such as \(|\rho|\le \rho_{\max}<1\), \(\eta\ge 0\), and clip extreme weights (e.g., the largest \(0.5\%\) of \(w_i\)). Monitor weight entropy and coefficient of variation as diagnostics, and update \((\beta,\xi)\) every \(2\!-\!4\) outer steps for additional stability.
 \end{enumerate}
 
-\subsection{Algorithm~\ref{alg:eb-capo}: EB--CAPO in the CAPO training loop}
-Algorithm~\ref{alg:eb-capo} implements the full EB–CAPO loop described above.  
+\subsection{Algorithm~\ref{alg:eb-capo}: LV--CAPO in the CAPO training loop}
+Algorithm~\ref{alg:eb-capo} implements the full LV-CAPO loop described above.
 At each outer step \(t\), it:
 \begin{enumerate}
   \item collects a batch \(\mathcal B_t\) of trajectories \((g_i,L_i,\{Y_{i,\tau}\})\);
@@ -63,7 +63,7 @@ Thus Algorithm~\ref{alg:eb-capo} provides an online, amortized approximation to 
 
 \begin{algorithm}
 \DontPrintSemicolon
-\caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+\caption{LV--CAPO: Online EB estimation and trajectory reweighting}
 \label{alg:eb-capo}
 \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 \Input{Initial EB parameters \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA coefficients \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\) for the banded family).}
@@ -121,7 +121,7 @@ Thus Algorithm~\ref{alg:eb-capo} provides an online, amortized approximation to 
 \end{algorithm}
 
 \subsection{Algorithm~\ref{alg:acf-moment}: ACF-moment estimator for dependence}
-Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).  
+Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).
 It operates at the \emph{token} level \(Y_{i,\tau}\) and:
 \begin{enumerate}
   \item computes per-trajectory empirical autocovariances \(\hat\gamma_i(h)\) up to lag \(k\), centered by the within-trajectory mean \(\bar Y_i\);
@@ -152,13 +152,13 @@ The resulting \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) can be used directly i
 \tcp*{Optionally downweight large \(h\) to reduce noise}
 \end{algorithm}
 
-\subsection{Algorithm~\ref{alg:eb-lite}: EB-lite length-only estimator}
-Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).  
+\subsection{Algorithm~\ref{alg:eb-lite}: L-CAPO length-only estimator}
+Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).
 It is based on the approximation
 \[
 \log\big((g_i-m)^2\big) \approx c - \beta \log L_i,
 \]
-which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).  
+which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).
 The algorithm:
 \begin{enumerate}
   \item initializes \(m^{(0)}\) as the unweighted mean or median of \(\{g_i\}\);
@@ -170,7 +170,7 @@ This yields a single-parameter EB estimate \(\hat\beta\) that can be used as a p
 
 \begin{algorithm}
 \DontPrintSemicolon
-\caption{EB-lite (no dependence): single-parameter length fit}
+\caption{L-CAPO (no dependence): single-parameter length fit}
 \label{alg:eb-lite}
 \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 \Input{Trajectory pairs \(\{(g_i,L_i)\}_{i=1}^G\); small regularization constant \(\varepsilon>0\).}
@@ -190,7 +190,7 @@ Set \(\hat\beta\gets \hat\beta^{(k+1)}\).\;
 \end{algorithm}
 
 \subsection{Algorithm~\ref{alg:kband-weights}: \texorpdfstring{$k$}{k}-banded covariance weights}
-Algorithm~\ref{alg:kband-weights} specializes the general EB weighting rule to the $k$-banded stretched-geometric dependence model of Definition~\ref{def:kband}.  
+Algorithm~\ref{alg:kband-weights} specializes the general EB weighting rule to the $k$-banded stretched-geometric dependence model of Definition~\ref{def:kband}.
 Given a batch \(\mathcal B_t\), a current length exponent \(\beta_t\), and dependence parameters \((\rho_t,\eta_t)\), it:
 \begin{enumerate}
   \item optionally refreshes \((\rho_t,\eta_t)\) using the ACF-moment estimator (Algorithm~\ref{alg:acf-moment});
@@ -244,7 +244,7 @@ This gives an explicit implementation of the weighting rule in Proposition~\ref{
 \end{algorithm}
 
 \subsection{Algorithm~\ref{alg:joint-eb-kband}: Joint EB update for \texorpdfstring{$\beta, \rho, \And \eta$}{beta, rho and eta}}
-Algorithm~\ref{alg:joint-eb-kband} combines the EB updates for the length exponent \(\beta\) and the $k$-banded dependence parameters \((\rho,\eta)\) into a single joint gradient-ascent step on the EB objective \(\ell(\beta,\rho,\eta)\), under the stretched-geometric dependence model \(s(L;\rho,k,\eta)\).  
+Algorithm~\ref{alg:joint-eb-kband} combines the EB updates for the length exponent \(\beta\) and the $k$-banded dependence parameters \((\rho,\eta)\) into a single joint gradient-ascent step on the EB objective \(\ell(\beta,\rho,\eta)\), under the stretched-geometric dependence model \(s(L;\rho,k,\eta)\).
 For a given batch \(\mathcal B_t\), it:
 \begin{enumerate}
   \item computes the E-step statistics \(\omega_i, w_i, m_t, e_i, \Lambda_\omega, \mathrm{RSS}_\omega\) under current hyperparameters \((\beta_{t-1},\rho_{t-1},\eta_{t-1})\);
@@ -334,7 +334,7 @@ $\log \omega_i = -\beta \log L_i - \log s(L_i;\xi)$ and then use a log-sum-exp r
 Similarly, when the dependence model includes exponential terms (e.g., $e^{-L/\xi}$), it is preferable to evaluate $\log s(L;\xi)$ directly.
 
 From an identifiability perspective, $(\beta,\xi)$ are only weakly identifiable in small batches when the empirical length distribution is narrow.
-In such cases, we recommend (i) restricting $\beta$ to a conservative interval (e.g., $[0,1]$), (ii) using the outcomes-only EB objective as a warm-start for the full CAPO-EB updates, and (iii) employing mild regularization or informative priors as in \S\ref{subsec:informative-beta}.
+In such cases, we recommend (i) restricting $\beta$ to a conservative interval (e.g., $[0,1]$), (ii) using the outcomes-only EB objective as a warm-start for the full LV-CAPO updates, and (iii) employing mild regularization or informative priors as in \S\ref{subsec:informative-beta}.
 These steps stabilize estimation without altering the unbiasedness constraint in \eqref{eq:linear-agg}.
 
 
@@ -391,7 +391,7 @@ These steps stabilize estimation without altering the unbiasedness constraint in
 
 % \begin{algorithm}
 % \DontPrintSemicolon
-% \caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+% \caption{LV--CAPO: Online EB estimation and trajectory reweighting}
 % \label{alg:eb-capo}
 % \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 % \Input{Initial EB parameters \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA coefficients \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\) for the banded family).}
@@ -471,7 +471,7 @@ These steps stabilize estimation without altering the unbiasedness constraint in
 
 % \begin{algorithm}
 % \DontPrintSemicolon
-% \caption{EB-lite (no dependence): single-parameter length fit}
+% \caption{L-CAPO (no dependence): single-parameter length fit}
 % \label{alg:eb-lite}
 % \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 % \Input{Trajectory pairs \(\{(g_i,L_i)\}_{i=1}^G\); small regularization constant \(\varepsilon>0\).}
@@ -623,7 +623,7 @@ These steps stabilize estimation without altering the unbiasedness constraint in
 
 % \begin{algorithm}[h]
 % \DontPrintSemicolon
-% \caption{EB--CAPO: Online EB estimation and trajectory reweighting}
+% \caption{LV--CAPO: Online EB estimation and trajectory reweighting}
 % \label{alg:eb-capo}
 % \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 % \Input{Initial \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\)).}
@@ -681,7 +681,7 @@ These steps stabilize estimation without altering the unbiasedness constraint in
 
 % \begin{algorithm}[h]
 % \DontPrintSemicolon
-% \caption{EB-lite (no dependence): single-parameter length fit}
+% \caption{L-CAPO (no dependence): single-parameter length fit}
 % \label{alg:eb-lite}
 % \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
 % \Input{Trajectory pairs \(\{(g_i,L_i)\}\); small \(\varepsilon>0\).}

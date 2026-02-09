@@ -57,7 +57,7 @@ algorithm:
 capo:
   epsilon: 1e-8
 
-  # EB-lite
+  # L-CAPO
   eb_lite:
     max_iters: 20
     tol: 1e-4

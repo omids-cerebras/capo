@@ -23,7 +23,7 @@ reward_fn
 reward_manager
     Token-level reward manager for VERL's PPO/GRPO trainer.
 adv_estimators
-    Empirical Bayes advantage estimators (EB-lite and full EB).
+    Empirical Bayes advantage estimators (L-CAPO and full EB).
 """
 
 from .adv_estimators import compute_capo_empirical_bayes_advantage

@@ -216,9 +216,9 @@ class Run:
         if k == "capo":
             return "CAPO"
         if k == "capo_eb_lite":
-            return "CAPO-EB-lite"
+            return "L-CAPO"
         if k == "capo_eb":
-            return "CAPO-EB"
+            return "LV-CAPO"
         return k
 
 
@@ -521,7 +521,7 @@ def main() -> None:
 
     # ---------------- Length deciles figure ----------------
     # Use the latest validation generations from the best long-context run of
-    # CAPO-EB and ΔL (alpha=1.00), if available.
+    # LV-CAPO and ΔL (alpha=1.00), if available.
 
     def _latest_val_jsonl(run_dir: Path) -> Path | None:
         val_dir = run_dir / "val_generations"
