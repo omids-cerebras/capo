@@ -76,7 +76,7 @@ We observe $G$ trajectories indexed by $i\in\{1,\dots,G\}$. Trajectory $i$ has l
   \mathbb{E}\!\left[\,\boldsymbol{g}_i\,\right] \;=\; \boldsymbol{\mu}\ \in\ \mathbb{R}^{p},
   \label{eq:traj-grad}
 \end{equation}
-where $\boldsymbol{Z}_{i,t}$ is the token-level score contribution (e.g., advantage-weighted policy-score increment). The learning signal $\boldsymbol{\mu}$ is common across trajectories in a batch.
+where $\boldsymbol{Z}_{i,t}$ is the token-level score contribution (e.g., advantage-weighted policy-score increment). In GRPO-style training, trajectories are sampled in \emph{prompt groups}; within a group (fixed prompt) the learning signal is common, while across groups the location may shift. Our EB development therefore treats group-specific means as nuisance parameters integrated out (Section~\ref{subsec:eb-grouped}).
 
 \subsection{A Statistically Efficient, Linear, Unbiased Estimator}
 Training aggregates the per-trajectory gradients linearly,

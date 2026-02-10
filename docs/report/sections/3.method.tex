@@ -776,7 +776,7 @@ Practical summary.
   \newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par}
 \fi
 
-We consider trajectories \(i=1,\dots,G\) with length \(L_i\in\mathbb N\) and scalarized return \(g_i\in\mathbb R\).
+We consider trajectories \(i=1,\dots,G\) with length \(L_i\in\mathbb N\) and a scalarized trajectory-gradient statistic \(g_i\in\mathbb R\) (e.g., a fixed-direction projection of the per-trajectory policy-gradient, as in \eqref{eq:def_gi_scalar}).
 Adopt the Normal working model
 \begin{equation}
 \label{eq:model}
@@ -1135,6 +1135,58 @@ where \(C\) does not depend on \((\beta,\xi)\).
 Dropping the additive constant proves \eqref{eq:EB-obj}.
 \end{proof}
 
+\subsubsection{Prompt-group (GRPO) extension: group-specific means}\label{subsec:eb-grouped}
+In GRPO-style training, rollouts are naturally organized into \emph{prompt groups}: for each prompt $p\in\{1,\dots,P\}$ we sample $N_p\ge 2$ trajectories and construct within-group normalized advantages/baselines. To align the EB variance-law estimation with this grouping while preserving the closed-form structure above, we extend \eqref{eq:model} to allow a \emph{group-specific} location parameter $\mu_p$ that is integrated out with the same flat prior.
+
+Let $\mathcal I_p$ be the index set of trajectories in group $p$, with $|\mathcal I_p|=N_p$ and total $G:=\sum_{p=1}^P N_p$. We observe $(g_{p,i},L_{p,i})$ for $i\in\mathcal I_p$, and adopt the grouped working model
+\begin{equation}
+\label{eq:model-grouped}
+g_{p,i}\mid \mu_p,\sigma^2,\vartheta \sim \mathcal N\!\Big(\mu_p,\; v_{p,i}(\vartheta)\Big),\qquad
+v_{p,i}(\vartheta)=\sigma^2 L_{p,i}^{\beta}s(L_{p,i};\xi),
+\end{equation}
+with independent improper priors $p(\mu_p)\propto 1$ and $p(\sigma^2)\propto 1/\sigma^2$.
+Define group precisions and weights
+\begin{equation}
+\label{eq:prec-weights-grouped}
+\omega_{p,i}(\beta,\xi)=\frac{1}{L_{p,i}^{\beta}s(L_{p,i};\xi)},\qquad
+\Lambda_{\omega,p}=\sum_{j\in\mathcal I_p}\omega_{p,j},\qquad
+w_{p,i}=\frac{\omega_{p,i}}{\Lambda_{\omega,p}},
+\end{equation}
+and the within-group precision-weighted aggregator
+\begin{equation}
+\label{eq:mu-agg-grouped}
+m_p(\beta,\xi)=\sum_{i\in\mathcal I_p} w_{p,i}(\beta,\xi)\,g_{p,i}.
+\end{equation}
+Let $e_{p,i}(\beta,\xi)=g_{p,i}-m_p(\beta,\xi)$ and define the grouped RSS
+\begin{equation}
+\label{eq:RSS-grouped}
+\mathrm{RSS}_{\omega}^{\mathrm{grp}}(\beta,\xi)=\sum_{p=1}^P\sum_{i\in\mathcal I_p}\omega_{p,i}(\beta,\xi)\,e_{p,i}(\beta,\xi)^2.
+\end{equation}
+
+\begin{theorem}[Grouped EB marginal objective for $\,\vartheta=(\beta,\xi)$]
+\label{thm:EB-obj-grouped}
+Under \eqref{eq:model-grouped} with the above priors, the marginal type-II log-posterior for $\vartheta=(\beta,\xi)$ is (up to an additive constant)
+\begin{equation}
+\label{eq:EB-obj-grouped}
+\ell_{\mathrm{grp}}(\beta,\xi)
+=\log \pi_\beta(\beta)+\log \pi_\xi(\xi)
++\tfrac{1}{2}\sum_{p=1}^P\sum_{i\in\mathcal I_p}\log \omega_{p,i}(\beta,\xi)
+-\tfrac{1}{2}\sum_{p=1}^P\log \Lambda_{\omega,p}(\beta,\xi)
+-\tfrac{G-P}{2}\log \mathrm{RSS}_{\omega}^{\mathrm{grp}}(\beta,\xi).
+\end{equation}
+When $P=1$ (a single group), \eqref{eq:EB-obj-grouped} reduces to \eqref{eq:EB-obj}.
+\end{theorem}
+\begin{proof}
+Conditioned on $\vartheta$, the likelihood factorizes over groups:
+$p(\{g_{p,i}\}\mid\{\mu_p\},\sigma^2,\vartheta)=\prod_{p=1}^P\prod_{i\in\mathcal I_p} \mathcal N\!\big(g_{p,i};\mu_p,\sigma^2/\omega_{p,i}\big)$.
+For each group $p$, completing the square yields
+\(\sum_{i\in\mathcal I_p}\omega_{p,i}(g_{p,i}-\mu_p)^2=\Lambda_{\omega,p}(\mu_p-m_p)^2+\sum_{i\in\mathcal I_p}\omega_{p,i}(g_{p,i}-m_p)^2\).
+Integrating out $\mu_p$ under $p(\mu_p)\propto 1$ gives a factor $\sqrt{2\pi\sigma^2/\Lambda_{\omega,p}}$ per group, hence the grouped marginal (conditional on $\sigma^2$) is proportional to
+\((\sigma^2)^{-G/2}\prod_{p,i}\omega_{p,i}^{1/2}\cdot \prod_{p}\Lambda_{\omega,p}^{-1/2}\cdot\exp\{-\mathrm{RSS}_{\omega}^{\mathrm{grp}}/(2\sigma^2)\}\).
+Multiplying by $p(\sigma^2)\propto 1/\sigma^2$ and integrating out $\sigma^2$ produces the exponent $(G-P)/2$ in \eqref{eq:EB-obj-grouped}, since integrating out $P$ group means reduces the degrees of freedom by $P$.
+Taking logarithms and adding $\log\pi_\beta+\log\pi_\xi$ yields \eqref{eq:EB-obj-grouped}.
+\end{proof}
+
 \begin{lemma}[Weighted RSS derivative identity]
 \label{lem:rss-deriv}
 $\forall$ component \(\phi\in\{\beta\}\cup\{\xi\text{ components}\}\),
@@ -1312,6 +1364,22 @@ The second term in \eqref{eq:EB-grad-general} becomes
 \sum_{i=1}^G \omega_i e_i^2 \log L_i.
 \]
 Adding the prior derivative \(\partial \log \pi_\beta(\beta)/\partial\beta\) yields \eqref{eq:EB-grad-beta}.
+\end{proof}
+
+\begin{corollary}[Grouped gradient in the length direction (prompt groups)]
+\label{cor:grad-beta-grouped}
+Under the grouped EB objective \eqref{eq:EB-obj-grouped}, the gradient with respect to the length exponent $\beta$ is
+\begin{equation}
+\label{eq:EB-grad-beta-grouped}
+\frac{\partial \ell_{\mathrm{grp}}}{\partial \beta}
+=\frac{1}{2}\!\left[-\sum_{p=1}^P\sum_{i\in\mathcal I_p} \log L_{p,i}
++\sum_{p=1}^P\frac{\sum_{i\in\mathcal I_p} \omega_{p,i} \log L_{p,i}}{\Lambda_{\omega,p}}\right]
++\frac{G-P}{2}\frac{1}{\mathrm{RSS}_{\omega}^{\mathrm{grp}}}\sum_{p=1}^P\sum_{i\in\mathcal I_p} \omega_{p,i} e_{p,i}^2 \log L_{p,i}
++\frac{\partial \log \pi_\beta(\beta)}{\partial \beta}.
+\end{equation}
+\end{corollary}
+\begin{proof}
+Differentiate \eqref{eq:EB-obj-grouped} with respect to $\beta$, using $\partial_\beta\log \omega_{p,i}=-\log L_{p,i}$ and $\partial_\beta \omega_{p,i}=-\omega_{p,i}\log L_{p,i}$. The second term in \eqref{eq:EB-obj-grouped} contributes a sum of groupwise normalizers $\Lambda_{\omega,p}$, and integrating out $P$ group means yields the replacement $G-1\mapsto G-P$ in the RSS exponent. The resulting expression is \eqref{eq:EB-grad-beta-grouped}.
 \end{proof}
 
 \begin{definition}[Stretched-geometric \(k\)-band dependence]
@@ -1933,4 +2001,101 @@ Under the Jeffreys baseline $\beta=1$, $v_i=\Theta(L_i^2)$ and $x_i\propto L_i^{
 
 \begin{remark}[Parameter constraints]
 For a fixed length $L$, compound symmetry is positive definite for $\rho\in(-1/(L-1),1)$. To model batches with unbounded $L$, take $\rho\in[0,1)$ so that $s(L;\rho)$ remains positive and the covariance is valid for all $L$.
+\end{remark}
+
+
+% =========================================================
+% Plug-in induced-variance estimators and named CAPO variants
+% =========================================================
+\subsection{Variance-law plug-ins and CAPO variants}\label{subsec:capo-plugins}
+
+\paragraph{From covariance to a one-dimensional target.}
+The preceding sections derive a common structural conclusion: for a scalarized trajectory-gradient signal $g$ at length $L$, the effect of within-trajectory token covariance enters the statistically efficient weighting rule only through the \emph{induced variance law}
+\begin{equation}
+\label{eq:induced-variance-law}
+v(L)\;:=\;\mathrm{Var}(g\mid L).
+\end{equation}
+In the working model \eqref{eq:model} (or its GRPO/grouped extension \eqref{eq:model-grouped}), $v(L)$ takes the parametric form
+\begin{equation}
+\label{eq:vL-parametric}
+v(L;\vartheta)=\sigma^2 L^{\beta}s(L;\xi),\qquad \vartheta=(\beta,\xi),\qquad s(L;\xi)>0.
+\end{equation}
+Crucially, for the group-based update used in GRPO-style training, the CAPO reweighting requires only a \emph{plug-in} estimate $\widehat v(L)$ (up to a common scale), which is converted into within-group precision weights
+\begin{equation}
+\label{eq:plugin-weights}
+\widehat\omega_{p,i}\ \propto\ \widehat v(L_{p,i})^{-1},
+\qquad
+\widehat w_{p,i}=\frac{\widehat\omega_{p,i}}{\sum_{j\in\mathcal I_p}\widehat\omega_{p,j}}.
+\end{equation}
+The remainder of the CAPO update (baseline construction, advantage normalization, and policy optimization) is identical across plug-ins (\S\ref{sec:algorithms}).
+
+\paragraph{Named plug-ins.}
+We use the term \emph{CAPO variant} to mean ``CAPO with a specific choice of $\widehat v(L)$''. This section defines four submission-ready plug-ins that cover the key dependence regimes analyzed in \S\ref{subsec:token_dependence}--\S\ref{subsec:cs}.
+
+\subsubsection{L-CAPO: independence / length-only plug-in (includes $\Delta L$)}\label{subsec:l-capo-plugin}
+Under the i.i.d. token model (\S\ref{subsec:warmup}), Bartlett’s identity reduces to $\mathrm{Var}(g\mid L)=\tau^2 L$, i.e. $v(L)\propto L$. Equivalently, \eqref{eq:vL-parametric} holds with the \emph{identity} dependence shape $s(L;\xi)\equiv 1$ and the correctly specified exponent $\beta=1$.
+
+\begin{proposition}[L-CAPO as the independence plug-in]\label{prop:lcapo-independence}
+Assume i.i.d. tokens so that $\gamma(h)=0$ for $h\ne 0$ and $\mathrm{Var}(g\mid L)=\tau^2 L$. Then the plug-in rule \eqref{eq:plugin-weights} with $\widehat v(L)=L$ yields within-group weights $\widehat w_{p,i}\propto L_{p,i}^{-1}$, i.e. the $\Delta L$ normalization ($\alpha=1$) as the correctly specified independence special case.
+More generally, \textbf{L-CAPO} denotes the length-only family obtained by fixing $s(L;\xi)\equiv 1$ and estimating only the length exponent $\beta$ (diagonal EB), so that $\widehat v(L)=L^{\widehat\beta}$ and $\widehat w_{p,i}\propto L_{p,i}^{-\widehat\beta}$.
+\end{proposition}
+\begin{proof}
+Under i.i.d. tokens, $v(L)$ is linear and inverse-variance weights are inverse-length (Lemma~\ref{lem:mvu}). Plugging $\widehat v(L)=L$ into \eqref{eq:plugin-weights} yields $\widehat\omega\propto 1/L$ and hence $\widehat w\propto 1/L$ after within-group normalization.
+The length-only generalization with $\widehat v(L)=L^{\widehat\beta}$ follows by the same plug-in mapping.
+\end{proof}
+
+\subsubsection{LV-CAPO: empirical-Bayes length\,+\,dependence plug-in}\label{subsec:lvcapo-plugin}
+\textbf{LV-CAPO} is the fully structured empirical-Bayes instantiation developed in \S\ref{sec:eb-theory}: it fits $(\beta,\xi)$ by marginal likelihood (either the single-group objective \eqref{eq:EB-obj} or the prompt-group objective \eqref{eq:EB-obj-grouped}) under a chosen structured dependence family $s(L;\xi)$ (e.g., the $k$-banded stretched-geometric model of Definition~\ref{def:kband}). The resulting plug-in is
+\begin{equation}
+\widehat v_{\mathrm{LV}}(L)=L^{\widehat\beta}\,s(L;\widehat\xi),\qquad \widehat\omega_{p,i}^{\mathrm{LV}}\propto \widehat v_{\mathrm{LV}}(L_{p,i})^{-1}.
+\end{equation}
+The dependence correction $s(L;\widehat\xi)$ makes LV-CAPO sensitive to correlation-induced variance inflation even when $v(L)$ remains asymptotically linear (summable dependence) or becomes superlinear (persistent dependence).
+
+\subsubsection{CAPO-Q: quadratic induced-variance plug-in (compound symmetry / random intercept)}\label{subsec:capo-q-plugin}
+Compound symmetry (\S\ref{subsec:cs}) provides a minimal low-dimensional surrogate for persistent within-trajectory correlation: the covariance between any two distinct token positions is approximately constant. Lemma~\ref{lem:cs-var} implies
+\begin{equation}
+\label{eq:capo-q-law}
+\mathrm{Var}(g\mid L)\ \propto\ (1-\rho)L + \rho L^2,
+\end{equation}
+and under \eqref{eq:vL-parametric} this becomes $v(L;\beta,\rho)\propto L^{\beta}((1-\rho)+\rho L)= (1-\rho)L^{\beta}+\rho L^{\beta+1}$.
+This motivates \textbf{CAPO-Q}, a quadratic plug-in that fits a two-term variance law and then applies inverse-variance weighting.
+
+\begin{proposition}[Outcomes-only quadratic plug-in]\label{prop:capoq-fit}
+Fix $\beta$ (e.g., $\beta=1$ for the Jeffreys/independence baseline) and consider the regression model
+\begin{equation}
+\label{eq:capo-q-reg}
+\mathbb E\big[e_{p,i}^2\mid L_{p,i}\big]\ \approx\ a\,L_{p,i}^{\beta}+b\,L_{p,i}^{\beta+1},\qquad a\ge 0,\ b\ge 0,
+\end{equation}
+where $e_{p,i}=g_{p,i}-m_p$ are within-group residuals from \eqref{eq:mu-agg-grouped}. Let $(\widehat a,\widehat b)$ be any nonnegative least-squares fit of \eqref{eq:capo-q-reg} pooled across groups. Then the quadratic plug-in
+\begin{equation}
+\label{eq:capo-q-plugin-v}
+\widehat v_{\mathrm{Q}}(L)=\widehat a\,L^{\beta}+\widehat b\,L^{\beta+1}
+\end{equation}
+induces precision weights $\widehat\omega_{p,i}^{\mathrm{Q}}\propto \widehat v_{\mathrm{Q}}(L_{p,i})^{-1}$ and within-group weights $\widehat w_{p,i}^{\mathrm{Q}}$ via \eqref{eq:plugin-weights}.
+If the data are generated under compound symmetry with parameter $\rho$ (Lemma~\ref{lem:cs-var}) and correctly specified $\beta$, then $(a,b)$ are proportional to $((1-\rho),\rho)$ and CAPO-Q coincides with the oracle inverse-variance rule (up to scale).
+\end{proposition}
+\begin{proof}
+Lemma~\ref{lem:cs-var} gives $\mathrm{Var}(g\mid L)=\tau^2((1-\rho)L+\rho L^2)$. Under \eqref{eq:vL-parametric}, this is $\sigma^2((1-\rho)L^{\beta}+\rho L^{\beta+1})$ for some scale $\sigma^2$. Thus \eqref{eq:capo-q-reg} is correctly specified with $(a,b)\propto ((1-\rho),\rho)$. Since CAPO weights depend on $v(L)$ only through relative scale within a group, the common multiplicative factor cancels in \eqref{eq:plugin-weights}, yielding oracle weights when $\widehat a,\widehat b$ recover the shape.
+\end{proof}
+
+\subsubsection{CAPO-HAC: lag-window (Newey--West) induced-variance plug-in}\label{subsec:capo-hac-plugin}
+When token dependence is \emph{short-range} (summable autocovariance), the induced variance can be estimated directly via long-run variance estimators. For a scalarized token increment process $Y_{p,i,t}=\bm u^\top \boldsymbol Z_{p,i,t}$, Bartlett’s identity gives
+\begin{equation}
+\label{eq:bartlett-vL}
+v(L)=\mathrm{Var}\Big(\sum_{t=1}^{L} Y_t\Big)=L\gamma(0)+2\sum_{h=1}^{L-1}(L-h)\gamma(h),\qquad \gamma(h)=\mathrm{Cov}(Y_t,Y_{t-h}).
+\end{equation}
+\textbf{CAPO-HAC} replaces the parametric $s(L;\xi)$ with a lag-window estimate of the long-run variance. Let $K\ge 1$ be a bandwidth and define pooled lag-$h$ autocovariance estimates (centered within each trajectory)
+\begin{equation}
+\label{eq:gammahat-pooled}
+\widehat\gamma(h)=\frac{\sum_{p,i}\sum_{t=h+1}^{L_{p,i}}\big(Y_{p,i,t}-\bar Y_{p,i}\big)\big(Y_{p,i,t-h}-\bar Y_{p,i}\big)}{\sum_{p,i}(L_{p,i}-h)},\qquad \bar Y_{p,i}=\frac{1}{L_{p,i}}\sum_{t=1}^{L_{p,i}}Y_{p,i,t}.
+\end{equation}
+Then the Bartlett-window (Newey--West) estimator of the induced variance at length $L$ is
+\begin{equation}
+\label{eq:hac-vhat}
+\widehat v_{\mathrm{HAC}}(L)=L\widehat\gamma(0)+2\sum_{h=1}^{\min\{K,L-1\}}(L-h)\Big(1-\frac{h}{K+1}\Big)\widehat\gamma(h),
+\end{equation}
+and CAPO-HAC uses $\widehat\omega_{p,i}^{\mathrm{HAC}}\propto \widehat v_{\mathrm{HAC}}(L_{p,i})^{-1}$ with within-group normalization \eqref{eq:plugin-weights}. Under standard mixing conditions and $K\to\infty$ sufficiently slowly, \eqref{eq:hac-vhat} is a consistent estimator of the long-run variance and therefore yields consistent inverse-variance reweighting \citep{newey1987simple,andrews1991heteroskedasticity}.
+
+\begin{remark}[Which plug-in when?]
+L-CAPO is the independence/length-only surrogate (good when autocovariances are negligible or when a conservative hedge is preferred). LV-CAPO is the fully structured EB surrogate (best when the chosen $s(L;\xi)$ family matches the dependence). CAPO-Q is the minimal persistent-correlation surrogate, designed to capture superlinear $v(L)$ growth with two parameters. CAPO-HAC is a nonparametric short-range surrogate that targets $v(L)$ directly without committing to a parametric $s(L;\xi)$.
 \end{remark}

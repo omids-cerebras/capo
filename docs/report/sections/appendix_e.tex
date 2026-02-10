@@ -145,10 +145,12 @@ On top of this generator, we compare two weighting strategies for estimating \(\
   \qquad
   m_{\mathrm{CAPO}} = \sum_i w_i^{\mathrm{CAPO}} g_i.
   \]
-  Two variants are particularly simple to implement:
+  In terms of the modular view (Algorithm~\ref{alg:capo-modular}), we instantiate CAPO with the following variance-law plug-ins (Section~\ref{subsec:capo-plugins}):
   \begin{itemize}
-    \item \emph{L--CAPO:} Set \(s\equiv 1\) and estimate \(\beta_t\) using Algorithm~\ref{alg:eb-lite} (no token-level ACFs required).
-    \item \emph{Full LV--CAPO:} Use \(s(L;\rho,k,\eta)\) from Definition~\ref{def:kband}, update \(\beta_t\) via Corollary~\ref{cor:grad-beta}, and update \(\xi_t=(\rho_t,\eta_t)\) via Algorithm~\ref{alg:eb-capo} (possibly combined with the ACF-moment estimator, Algorithm~\ref{alg:acf-moment}).
+    \item \emph{L--CAPO:} Set \(s\equiv 1\) and either fix \(\beta=1\) (\(\Delta L\)) or estimate \(\beta_t\) using Algorithm~\ref{alg:eb-lite} (no token-level ACFs required).
+    \item \emph{LV--CAPO:} Use \(s(L;\rho,k,\eta)\) from Definition~\ref{def:kband}, update \(\beta_t\) via EB ascent, and update \(\xi_t=(\rho_t,\eta_t)\) via Algorithm~\ref{alg:eb-capo} (optionally warm-started by Algorithm~\ref{alg:acf-moment}).
+    \item \emph{CAPO-Q:} Fit a two-term variance law \(\widehat v(L)=\widehat a L^{\beta}+\widehat b L^{\beta+1}\) and weight by \(\omega_i\propto 1/\widehat v(L_i)\) (Algorithm~\ref{alg:capo-q}).
+    \item \emph{CAPO-HAC:} Estimate the induced variance directly via a Bartlett/Newey--West lag window and weight by \(\omega_i\propto 1/\widehat v_{\mathrm{HAC}}(L_i)\) (Algorithm~\ref{alg:capo-hac}).
   \end{itemize}
 \end{itemize}
 
@@ -161,7 +163,7 @@ A simple protocol that is straightforward to implement and plot is:
   \begin{enumerate}
     \item Generate a batch \(\mathcal B_t\) using the generative model above.
     \item \textbf{GRPO branch:} Compute \((w_i^{\mathrm{GRPO}},m_{\mathrm{GRPO}}^{(t)})\) using \(\omega_i^{\mathrm{GRPO}}=L_i^{-1}\).
-    \item \textbf{CAPO branch:} Run one iteration of Algorithm~\ref{alg:eb-capo} (or L-CAPO, Algorithm~\ref{alg:eb-lite}) to update \((\beta_t,\xi_t)\) and compute \((w_i^{\mathrm{CAPO}},m_{\mathrm{CAPO}}^{(t)})\).
+    \item \textbf{CAPO branch:} Choose a plug-in (L-CAPO, LV-CAPO, CAPO-Q, or CAPO-HAC), run one iteration of its \textsc{FitAndPredict} routine (Algorithms~\ref{alg:eb-lite}, \ref{alg:eb-capo}, \ref{alg:capo-q}, \ref{alg:capo-hac}) to compute precisions \(\omega_i\) and within-group weights \(w_i^{\mathrm{CAPO}}\), and form \(m_{\mathrm{CAPO}}^{(t)}\).
   \end{enumerate}
   \item Repeat the entire \(T\)-step process over \(R\) independent trials (e.g., \(R=500\) or \(R=1000\)), re-simulating fresh data each time, and record the sequences
   \(\{m_{\mathrm{GRPO}}^{(t,r)}\}_{t,r}\) and \(\{m_{\mathrm{CAPO}}^{(t,r)}\}_{t,r}\).

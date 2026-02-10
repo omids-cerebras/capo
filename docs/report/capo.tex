@@ -66,7 +66,7 @@
 \subsection{Bayesian graphical model for CAPO}
 \label{subsec:capo-plate}
 
-We summarize the Empirical Bayes CAPO model from \S\ref{sec:method} and \S\ref{sec:eb-theory} as a hierarchical Bayesian graphical model.
+We summarize the \textbf{LV-CAPO} (empirical Bayes) instantiation of CAPO from \S\ref{sec:method} and \S\ref{sec:eb-theory} as a hierarchical Bayesian graphical model. Other CAPO variants correspond to alternative plug-in estimators of the induced variance law $v(L)$ (\S\ref{subsec:capo-plugins}) and plug into the same grouped training loop (\S\ref{sec:algorithms}).
 
 \paragraph{Generative story.}
 At a given outer optimization step (suppressing the step index \(t\) for clarity):
@@ -98,7 +98,7 @@ At a given outer optimization step (suppressing the step index \(t\) for clarity
       s(L_i;\xi)>0
     \]
     as in Lemma~\ref{lem:sL-kband-eta} and \eqref{eq:hetero_general_prior}.
-    \item The scalarized trajectory return \(g_i\in\mathbb R\) obeys the heteroscedastic Normal working model
+    \item The scalarized trajectory-gradient statistic \(g_i\in\mathbb R\) obeys the heteroscedastic Normal working model
     \[
       g_i \mid \mu,\sigma^2,\beta,\xi,L_i \sim
       \mathcal N\!\big(\mu,\ v_i(\vartheta)\big),\qquad

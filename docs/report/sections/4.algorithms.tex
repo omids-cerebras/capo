@@ -1,125 +1,142 @@
 % =========================================================
-% §4  Algorithms: CAPO with Empirical Bayes length & dependence estimation
+% §4  Algorithms: modular CAPO with variance-law plug-ins
 % Place this as a separate top-level section after Methods.
 % Requires: \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 % =========================================================
-\section{Algorithms: CAPO with Empirical Bayes length and dependence estimation}\label{sec:algorithms}
+\section{Algorithms: modular CAPO with variance-law plug-ins}\label{sec:algorithms}
 \label{sec:alg-eb-capo}
 
-\subsection{Workflow overview (precise step-by-step)}
-We integrate Empirical Bayes (EB) estimation of the length exponent \(\beta\) and dependence shape \(\xi\) directly into the CAPO training loop, using the notation and objects introduced in \S\ref{sec:eb-theory} (in particular, the precisions \(\omega_i(\beta,\xi)\), weights \(w_i(\beta,\xi)\), aggregator \(m(\beta,\xi)\), and summaries \(\Lambda_\omega(\beta,\xi)\), \(\mathrm{RSS}_\omega(\beta,\xi)\)).
+\subsection{Workflow overview (precise step-by-step; modular plug-in view)}
+CAPO is implemented as a GRPO-style, \emph{grouped} training loop with a modular \emph{variance-law plug-in} (Section~\ref{subsec:capo-plugins}). At each optimizer step, we (i) collect prompt groups, (ii) invoke a plug-in to estimate an induced variance law $\widehat v(L)$ (up to scale) and hence per-trajectory precisions, (iii) normalize these precisions \emph{within each prompt group} to obtain trajectory weights, and (iv) apply the resulting reweighted group objective. LV-CAPO corresponds to the empirical-Bayes plug-in based on \eqref{eq:EB-obj-grouped}; L-CAPO, CAPO-Q, and CAPO-HAC are alternative plug-ins that change only Step~2/4 below.
 
 \begin{enumerate}
-  \item \textbf{Rollout collection.} At optimization step \(t\), sample trajectories under the current policy \(\pi_{\theta_t}\). This yields a batch
+  \item \textbf{Rollout collection (prompt groups).} At optimizer step $t$, sample $P_t$ prompts and, for each prompt $p\in\{1,\dots,P_t\}$, sample $N$ trajectories under the current policy $\pi_{\theta_t}$. This yields a grouped batch
   \[
-  \mathcal B_t=\big\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\big\}_{i=1}^{G_t},
+  \mathcal B_t=\big\{(p,i,\,g_{p,i},\,L_{p,i},\,\{Y_{p,i,\tau}\}_{\tau=1}^{L_{p,i}})\big\}_{p=1,i\in\mathcal I_p}^{P_t},
   \]
-  where \(L_i\in\mathbb N\) is the trajectory length, \(g_i\in\mathbb R\) is a scalarized trajectory return (e.g., episode reward or aggregated advantage), and \(Y_{i,\tau}\in\mathbb R\) are per-token scalar increments used for estimating within-trajectory dependence.
+  where $\mathcal I_p$ indexes the $N$ rollouts in group $p$, $L_{p,i}\in\mathbb N$ is the response length, $g_{p,i}\in\mathbb R$ is a scalarized trajectory-gradient statistic (e.g., a fixed-direction projection of the per-trajectory policy-gradient, \eqref{eq:def_gi_scalar}), and $Y_{p,i,\tau}\in\mathbb R$ are token-level scalar increments available to token-aware plug-ins (LV-CAPO and CAPO-HAC). Outcomes-only plug-ins (L-CAPO, CAPO-Q) depend only on $(g_{p,i},L_{p,i})$.
 
-  \item \textbf{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\)).} Using the current EB parameters \((\beta_{t-1},\xi_{t-1})\), compute per-trajectory precisions and normalized weights as
+  \item \textbf{Variance-law plug-in: compute unnormalized precisions.} Choose a plug-in $\mathsf{P}$ that returns a variance-law estimate $\widehat v_{\mathsf{P}}(L)$ (up to scale) and set
   \[
-  \omega_i^{(t)} \;=\; \omega_i(\beta_{t-1},\xi_{t-1})
-  \;=\; \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1},\qquad
-  w_i^{(t)} \;=\; \frac{\omega_i^{(t)}}{\sum_{j\in\mathcal B_t}\omega_j^{(t)}}.
+  \widehat\omega_{p,i}\ \propto\ \widehat v_{\mathsf{P}}(L_{p,i})^{-1}.
   \]
-  Form the batch aggregator (the empirical version of \(m(\beta,\xi)\)),
-  \[
-  m_t \;=\; \sum_{i\in\mathcal B_t} w_i^{(t)} g_i,
-  \]
-  the residuals \(e_i^{(t)}=g_i-m_t\), and the summaries
-  \[
-  \Lambda_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)},
-  \qquad
-  \mathrm{RSS}_\omega^{(t)}=\sum_{i\in\mathcal B_t} \omega_i^{(t)}\big(e_i^{(t)}\big)^2.
-  \]
-
-  \item \textbf{M-step on EB objective.} Using the EB objective \(\ell(\beta,\xi)\) from \eqref{eq:EB-obj} and its gradients from Proposition~\ref{prop:grad} and Corollary~\ref{cor:grad-beta}, take damped/EMA-smoothed ascent steps on \(\beta\) and \(\xi\). For \(\xi\), either
+  Concretely:
   \begin{itemize}
-    \item[(i)] use the \emph{ACF-moment} estimator (Algorithm~\ref{alg:acf-moment}), which fits the dependence family \(s(L;\rho,k,\eta)\) of Definition~\ref{def:kband} to empirical autocorrelations, or
-    \item[(ii)] directly use the EB gradient \(\nabla_\xi \ell(\beta,\xi)\) in combination with the derivatives from Lemma~\ref{lem:kband-deriv}.
+    \item \textbf{L-CAPO} fixes $s(L)\equiv 1$ and uses $\widehat v(L)=L^{\widehat\beta}$ (with $\widehat\beta$ either fixed to $1$ for $\Delta L$ or estimated online; Algorithm~\ref{alg:eb-lite}).
+    \item \textbf{LV-CAPO} uses the structured family $\widehat v(L)=L^{\widehat\beta}s(L;\widehat\xi)$ with $(\widehat\beta,\widehat\xi)$ estimated by grouped EB; Algorithm~\ref{alg:eb-capo}.
+    \item \textbf{CAPO-Q} fits a quadratic variance law $\widehat v(L)=\widehat a\,L^{\beta}+\widehat b\,L^{\beta+1}$ motivated by compound symmetry; Algorithm~\ref{alg:capo-q}.
+    \item \textbf{CAPO-HAC} estimates the long-run variance by a Bartlett/Newey--West lag window and sets $\widehat v(L)=\widehat v_{\mathrm{HAC}}(L)$; Algorithm~\ref{alg:capo-hac}.
   \end{itemize}
 
-  \item \textbf{Reweight and update policy.} After updating to \((\beta_t,\xi_t)\), recompute trajectory weights
+  \item \textbf{Within-group normalization and grouped summaries.} Convert unnormalized precisions into within-group weights
   \[
-  w_i^{(t)} \;\propto\; \omega_i(\beta_t,\xi_t)
-  \;=\; \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1},
+  \widehat w_{p,i}=\frac{\widehat\omega_{p,i}}{\sum_{j\in\mathcal I_p}\widehat\omega_{p,j}},\qquad
+  m_{p,t}=\sum_{i\in\mathcal I_p}\widehat w_{p,i}\,g_{p,i},\qquad
+  e_{p,i}=g_{p,i}-m_{p,t}.
   \]
-  and feed these into CAPO’s policy/teacher update (e.g., reweighted SFT/OPD losses or variance-aware policy gradients).
+  If the plug-in requires an EB objective (LV-CAPO/L-CAPO), form grouped summaries
+  \[
+  \Lambda_{\omega,p}=\sum_{i\in\mathcal I_p}\widehat\omega_{p,i},\qquad
+  \mathrm{RSS}_{\omega}^{\mathrm{grp}}=\sum_{p=1}^{P_t}\sum_{i\in\mathcal I_p}\widehat\omega_{p,i}\,e_{p,i}^2,
+  \]
+  matching \eqref{eq:prec-weights-grouped}--\eqref{eq:RSS-grouped}.
 
-  \item \textbf{Stabilization \& diagnostics.} Apply exponential moving averages (EMA) to \((\beta,\xi)\), enforce simple box constraints such as \(|\rho|\le \rho_{\max}<1\), \(\eta\ge 0\), and clip extreme weights (e.g., the largest \(0.5\%\) of \(w_i\)). Monitor weight entropy and coefficient of variation as diagnostics, and update \((\beta,\xi)\) every \(2\!-\!4\) outer steps for additional stability.
+  \item \textbf{Plug-in parameter update (optional).} Update plug-in parameters using the current batch:
+  \begin{itemize}
+    \item \textbf{LV-CAPO}: update $(\beta,\xi)$ by ascent on \eqref{eq:EB-obj-grouped} using \eqref{eq:EB-grad-beta-grouped} and the corresponding $\xi$-gradient (Proposition~\ref{prop:grad} with groupwise means; optionally warm-start via Algorithm~\ref{alg:acf-moment}).
+    \item \textbf{L-CAPO}: update $\beta$ only (set $s\equiv 1$) using the same grouped EB structure; $\Delta L$ is the fixed $\beta=1$ special case.
+    \item \textbf{CAPO-Q}: update $(a,b)$ by nonnegative least squares on residual squares $e_{p,i}^2$ versus $L_{p,i}^{\beta}$ and $L_{p,i}^{\beta+1}$ (Proposition~\ref{prop:capoq-fit}).
+    \item \textbf{CAPO-HAC}: update $\widehat\gamma(h)$ and $\widehat v_{\mathrm{HAC}}(L)$ using lag-window pooling over token increments (Section~\ref{subsec:capo-hac-plugin}).
+  \end{itemize}
+
+  \item \textbf{Policy update.} Use the within-group weights $\{\widehat w_{p,i}\}$ to form a weighted GRPO objective (baseline $m_{p,t}$, residual advantages $e_{p,i}$) and take an optimizer step on $\theta$.
+
+  \item \textbf{Stabilization and diagnostics.} Apply EMA to plug-in parameters, enforce box constraints (e.g., $|\rho|\le\rho_{\max}<1$ and $\eta\ge 0$ for $k$-band families), and clip extreme weights. Monitor weight entropy/effective sample size and length-decile stratification.
 \end{enumerate}
 
-\subsection{Algorithm~\ref{alg:eb-capo}: LV--CAPO in the CAPO training loop}
-Algorithm~\ref{alg:eb-capo} implements the full LV-CAPO loop described above.
-At each outer step \(t\), it:
-\begin{enumerate}
-  \item collects a batch \(\mathcal B_t\) of trajectories \((g_i,L_i,\{Y_{i,\tau}\})\);
-  \item computes the E-step statistics under the current hyperparameters \((\beta_{t-1},\xi_{t-1})\), namely the precisions \(\omega_i^{(t)}\), normalized weights \(w_i^{(t)}\), weighted mean \(m_t\), residuals \(e_i^{(t)}\), and summaries \(\Lambda_\omega^{(t)},\mathrm{RSS}_\omega^{(t)}\);
-  \item performs an M-step for the length exponent \(\beta\) using the EB gradient \(\partial_\beta \ell(\beta,\xi)\) in Corollary~\ref{cor:grad-beta}, with EMA and box-constraint stabilization;
-  \item updates the dependence parameter \(\xi\) either via a plug-in ACF-moment fit (Algorithm~\ref{alg:acf-moment}) or via the EB gradient \(\nabla_\xi \ell(\beta,\xi)\) from Proposition~\ref{prop:grad} and Lemma~\ref{lem:kband-deriv};
-  \item recomputes weights at the updated \((\beta_t,\xi_t)\) and passes them to the CAPO policy/teacher loss.
-\end{enumerate}
-Thus Algorithm~\ref{alg:eb-capo} provides an online, amortized approximation to maximizing the EB objective \(\ell(\beta,\xi)\) while simultaneously using the resulting precision weights in the CAPO optimizer.
+\subsection{Algorithm~\ref{alg:capo-modular}: Modular CAPO training loop (GRPO prompt groups)}
+Algorithm~\ref{alg:capo-modular} makes the modularity explicit: a plug-in produces per-trajectory precisions (equivalently, induced-variance estimates), and the outer loop performs the standard GRPO update using within-group normalized weights.
 
 \begin{algorithm}
 \DontPrintSemicolon
-\caption{LV--CAPO: Online EB estimation and trajectory reweighting}
-\label{alg:eb-capo}
+\caption{CAPO (modular): GRPO update with a variance-law plug-in}
+\label{alg:capo-modular}
 \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
-\Input{Initial EB parameters \(\beta_0\in[\beta_{\min},\beta_{\max}]\), \(\xi_0\in\Xi\); learning rates \(\eta_\beta,\eta_\xi>0\); EMA coefficients \(\gamma_\beta,\gamma_\xi\in(0,1]\); constraints (\(|\rho|\le\rho_{\max}<1\), \(\eta\ge 0\), fixed \(k\) for the banded family).}
-\Output{Streaming EB estimates \(\{(\beta_t,\xi_t)\}_{t\ge 0}\) and trajectory weights \(w_i^{(t)}\propto \omega_i(\beta_t,\xi_t)\).}
+\Input{Plug-in $\mathsf{P}\in\{\text{L-CAPO},\text{LV-CAPO},\text{CAPO-Q},\text{CAPO-HAC}\}$ with state $\psi$; group size $N$; optimizer and policy $\pi_{\theta}$.}
+\Output{Updated policy parameters $\theta$ and updated plug-in state $\psi$ (if applicable).}
 
-\For{\(t=1,2,\dots\)}{
-  \textbf{Collect} batch \(\mathcal B_t=\{(g_i,L_i,\{Y_{i,\tau}\}_{\tau=1}^{L_i})\}_{i=1}^{G_t}\).\;
-
-  \tcp{E-step statistics (given \((\beta_{t-1},\xi_{t-1})\))}
-  \ForEach{\(i\in\mathcal B_t\)}{
-    \(\omega_i^{(t)} \gets \big(L_i^{\beta_{t-1}} s(L_i;\xi_{t-1})\big)^{-1}\).\;
+\For{$t=1,2,\dots$}{
+  Sample $P_t$ prompts; for each prompt $p$ sample $N$ trajectories to form $\mathcal B_t=\{(p,i,g_{p,i},L_{p,i},\{Y_{p,i,\tau}\})\}$.\;
+  $(\widehat\omega_{p,i})_{(p,i)\in \mathcal B_t},\ \psi \gets \mathsf{P}.\textsc{FitAndPredict}(\mathcal B_t,\psi)$ \tcp*{plug-in-specific; returns precisions up to scale}\;
+  \ForEach{group $p$}{
+    $\widehat w_{p,i}\gets \widehat\omega_{p,i}/\sum_{j\in\mathcal I_p}\widehat\omega_{p,j}$;\;
+    $m_{p}\gets \sum_{i\in\mathcal I_p}\widehat w_{p,i}g_{p,i}$;\;
+    $e_{p,i}\gets g_{p,i}-m_{p}$;\;
   }
-  \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
-  \ForEach{\(i\in\mathcal B_t\)}{
-    \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
-  }
-
-  \(m_t\gets \sum_{i\in\mathcal B_t} w_i^{(t)} g_i\);\quad
-  \ForEach{\(i\in\mathcal B_t\)}{
-    \(e_i^{(t)}\gets g_i-m_t\).\;
-  }
-  \(\Lambda_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)}\);\quad
-  \(\mathrm{RSS}_\omega^{(t)}\gets \sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2\).\;
-
-  \tcp{M-step: update \(\beta\) using Cor.~\ref{cor:grad-beta}}
-  \(g_\beta \gets \frac{1}{2}\Big[-\sum_{i\in\mathcal B_t} \log L_i + \frac{\sum_{i\in\mathcal B_t} \omega_i^{(t)} \log L_i}{\Lambda_\omega^{(t)}}\Big]
-  + \frac{G_t-1}{2}\frac{1}{\mathrm{RSS}_\omega^{(t)}}\sum_{i\in\mathcal B_t} \omega_i^{(t)} (e_i^{(t)})^2 \log L_i
-  + \partial_\beta \log \pi_\beta(\beta_{t-1})\).\;
-  \(\tilde\beta_t \gets \beta_{t-1} + \eta_\beta\, g_\beta\);\;
-  \(\beta_t \gets (1-\gamma_\beta)\beta_{t-1} + \gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])\).\;
-
-  \tcp{M-step: update \(\xi\) either by ACF-moment (Alg.~\ref{alg:acf-moment}) or EB gradient (Prop.~\ref{prop:grad}, Lem.~\ref{lem:kband-deriv})}
-  \uIf{ACF-moment update}{
-    \(\tilde\xi_t \gets \mathrm{ACF\_Moment\_Fit}\big(\{Y_{i,\tau}\}_{i\in\mathcal B_t,\tau},k\big)\).\;
-  }
-  \Else{\tcp{EB gradient update}
-    \(g_\xi \gets \nabla_\xi \ell(\beta_{t-1},\xi_{t-1})\) evaluated on \(\mathcal B_t\) via \eqref{eq:EB-grad-general}.\;
-    \(\tilde\xi_t \gets \xi_{t-1} + \eta_\xi\, g_\xi\).\;
-  }
-  \(\xi_t \gets (1-\gamma_\xi)\xi_{t-1} + \gamma_\xi\, \mathrm{proj}_\Xi(\tilde\xi_t)\) \tcp*{project to \(|\rho|\le\rho_{\max}<1,\ \eta\ge 0\)}
-
-  \tcp{Reweight and pass to CAPO update}
-  \ForEach{\(i\in\mathcal B_t\)}{
-     \(\omega_i^{(t)} \gets \big(L_i^{\beta_t} s(L_i;\xi_t)\big)^{-1}\).\;
-  }
-  \(Z_t \gets \sum_{j\in\mathcal B_t}\omega_j^{(t)}\);\quad
-  \ForEach{\(i\in\mathcal B_t\)}{
-     \(w_i^{(t)} \gets \omega_i^{(t)} / Z_t\).\;
-  }
-  Use \(\{w_i^{(t)}\}_{i\in\mathcal B_t}\) as trajectory weights in the CAPO policy/teacher loss.\;
-
-  \tcp{Diagnostics and update schedule}
-  Clip extreme \(w_i^{(t)}\) (e.g., the largest \(0.5\%\)); monitor weight entropy and coefficient of variation; optionally update \((\beta_t,\xi_t)\) only every \(2\)–\(4\) outer steps.\;
+  Form the weighted GRPO loss using $(e_{p,i},\widehat w_{p,i})$ and take an optimizer step on $\theta$.\;
+  Apply EMA/projection/clipping to plug-in parameters and weights as needed.\;
 }
 \end{algorithm}
 
+\subsection{Algorithm~\ref{alg:eb-capo}: LV--CAPO in the CAPO training loop}
+LV-CAPO is the empirical-Bayes variance-law plug-in that jointly fits a length exponent $\beta$ and a structured dependence shape $\xi$ under the working model of Section~\ref{sec:eb-theory} and its prompt-group extension (Section~\ref{subsec:eb-grouped}). In the modular CAPO loop (Algorithm~\ref{alg:capo-modular}), LV-CAPO is implemented as a \textsc{FitAndPredict} routine that:
+\begin{enumerate}
+  \item evaluates the current precision weights $\omega_{p,i}(\beta_{t-1},\xi_{t-1})=[L_{p,i}^{\beta_{t-1}}s(L_{p,i};\xi_{t-1})]^{-1}$ on the grouped batch $\mathcal B_t$;
+  \item computes within-group weighted means $m_p$ and grouped summaries $(\Lambda_{\omega,p},\mathrm{RSS}^{\mathrm{grp}}_{\omega})$ as in \eqref{eq:prec-weights-grouped}--\eqref{eq:RSS-grouped};
+  \item updates $\beta$ (and optionally $\xi$) by ascent on the grouped EB objective \eqref{eq:EB-obj-grouped}, using the grouped length-gradient \eqref{eq:EB-grad-beta-grouped} and either an ACF-moment update (Algorithm~\ref{alg:acf-moment}) or a direct EB gradient update for $\xi$;
+  \item returns updated precisions $\omega_{p,i}(\beta_t,\xi_t)$ to be normalized \emph{within each group} by the outer CAPO loop.
+\end{enumerate}
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{LV--CAPO plug-in: online grouped-EB estimation and precision prediction}
+\label{alg:eb-capo}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Grouped batch $\mathcal B_t=\{(p,i,g_{p,i},L_{p,i},\{Y_{p,i,\tau}\})\}$; previous EB parameters $(\beta_{t-1},\xi_{t-1})$; learning rates $\eta_\beta,\eta_\xi$; EMA coefficients $\gamma_\beta,\gamma_\xi$; constraints/projection $\mathrm{proj}_\Xi$ for $\xi$ (e.g., $|\rho|\le\rho_{\max}<1$, $\eta\ge 0$, fixed $k$).}
+\Output{Unnormalized precisions $(\omega_{p,i}^{(t)})_{(p,i)\in\mathcal B_t}$ and updated parameters $(\beta_t,\xi_t)$.}
+
+\tcp{Evaluate current precisions and within-group normalizers}
+\ForEach{group $p$}{
+  \ForEach{$i\in\mathcal I_p$}{
+    $\omega_{p,i}\gets \big(L_{p,i}^{\beta_{t-1}} s(L_{p,i};\xi_{t-1})\big)^{-1}$\;
+  }
+  $\Lambda_{\omega,p}\gets \sum_{j\in\mathcal I_p}\omega_{p,j}$\;
+  \ForEach{$i\in\mathcal I_p$}{
+    $w_{p,i}\gets \omega_{p,i}/\Lambda_{\omega,p}$\;
+  }
+  $m_p\gets \sum_{i\in\mathcal I_p} w_{p,i} g_{p,i}$\;
+  \ForEach{$i\in\mathcal I_p$}{
+    $e_{p,i}\gets g_{p,i}-m_p$\;
+  }
+}
+$\mathrm{RSS}^{\mathrm{grp}}_{\omega}\gets \sum_{p}\sum_{i\in\mathcal I_p}\omega_{p,i}e_{p,i}^2$\;
+$G\gets \sum_{p}|\mathcal I_p|$\;\quad $P\gets \big|\{p:\mathcal I_p\neq\emptyset\}\big|$\;
+
+\tcp{Update $\beta$ by grouped EB ascent (Corollary~\ref{cor:grad-beta-grouped})}
+$g_\beta \gets \frac{1}{2}\Big[-\sum_{p}\sum_{i\in\mathcal I_p}\log L_{p,i} + \sum_{p}\frac{\sum_{i\in\mathcal I_p}\omega_{p,i}\log L_{p,i}}{\Lambda_{\omega,p}}\Big]
++ \frac{G-P}{2}\frac{1}{\mathrm{RSS}^{\mathrm{grp}}_{\omega}}\sum_{p}\sum_{i\in\mathcal I_p}\omega_{p,i}e_{p,i}^2\log L_{p,i}
++ \partial_\beta \log \pi_\beta(\beta_{t-1})$\;
+$\tilde\beta_t\gets \beta_{t-1}+\eta_\beta g_\beta$\;
+$\beta_t\gets (1-\gamma_\beta)\beta_{t-1}+\gamma_\beta\,\mathrm{clip}(\tilde\beta_t;[\beta_{\min},\beta_{\max}])$\;
+
+\tcp{Update $\xi$ (token-aware) either by ACF-moment or EB gradient}
+\uIf{ACF-moment update}{
+  $\tilde\xi_t\gets \mathrm{ACF\_Moment\_Fit}(\{Y_{p,i,\tau}\},k)$ \tcp*{Algorithm~\ref{alg:acf-moment}}
+}
+\Else{
+  Compute $g_\xi\gets \nabla_\xi \ell_{\mathrm{grp}}(\beta_{t-1},\xi_{t-1})$ (grouped analogue of Proposition~\ref{prop:grad})\;
+  $\tilde\xi_t\gets \xi_{t-1}+\eta_\xi g_\xi$\;
+}
+$\xi_t\gets (1-\gamma_\xi)\xi_{t-1}+\gamma_\xi\,\mathrm{proj}_\Xi(\tilde\xi_t)$\;
+
+\tcp{Return updated precisions for the outer CAPO loop}
+\ForEach{group $p$}{
+  \ForEach{$i\in\mathcal I_p$}{
+    $\omega_{p,i}^{(t)}\gets \big(L_{p,i}^{\beta_t} s(L_{p,i};\xi_t)\big)^{-1}$\;
+  }
+}
+\Return $(\omega_{p,i}^{(t)}),(\beta_t,\xi_t)$\;
+\end{algorithm}
 \subsection{Algorithm~\ref{alg:acf-moment}: ACF-moment estimator for dependence}
 Algorithm~\ref{alg:acf-moment} provides a moment-based plug-in estimator for the dependence shape \(\xi=(\rho,\eta,\dots)\) in the $k$-banded stretched-geometric family \(s(L;\rho,k,\eta)\) (Definition~\ref{def:kband}).
 It operates at the \emph{token} level \(Y_{i,\tau}\) and:
@@ -152,41 +169,120 @@ The resulting \(\tilde\xi=(\tilde\rho,\tilde\eta,\dots)\) can be used directly i
 \tcp*{Optionally downweight large \(h\) to reduce noise}
 \end{algorithm}
 
-\subsection{Algorithm~\ref{alg:eb-lite}: L-CAPO length-only estimator}
-Algorithm~\ref{alg:eb-lite} is a lightweight alternative that ignores dependence (\(s(L;\xi)\equiv 1\)) and fits only the length exponent \(\beta\).
-It is based on the approximation
-\[
-\log\big((g_i-m)^2\big) \approx c - \beta \log L_i,
-\]
-which follows from \(v_i(\vartheta)\approx\sigma^2 L_i^\beta\) when \(g_i\) is centered at \(m\approx\mu\).
-The algorithm:
-\begin{enumerate}
-  \item initializes \(m^{(0)}\) as the unweighted mean or median of \(\{g_i\}\);
-  \item iteratively regresses \(z_i = \log(e_i^2+\varepsilon)\) on \(\log L_i\) to obtain \(\hat\beta\) from the (negative) slope;
-  \item reweights trajectories as \(w_i\propto L_i^{-\hat\beta}\) and updates \(m\) as the precision-weighted mean;
-  \item repeats until convergence of \(\hat\beta\) and \(m\).
-\end{enumerate}
-This yields a single-parameter EB estimate \(\hat\beta\) that can be used as a prior or initialization for the full EB updates with dependence.
+\subsection{Algorithm~\ref{alg:eb-lite}: L-CAPO length-only plug-in (includes $\Delta L$)}
+L-CAPO is the \emph{length-only} variance-law plug-in: it fixes the dependence shape to the identity $s(L)\equiv 1$ and models $v(L)\propto L^{\beta}$. In the modular CAPO loop (Algorithm~\ref{alg:capo-modular}), L-CAPO returns unnormalized precisions $\omega_{p,i}\propto L_{p,i}^{-\beta}$ to be normalized within each prompt group.
+\begin{itemize}
+  \item \textbf{$\Delta L$ as a special case.} Under token independence, $\beta=1$ is correctly specified (Proposition~\ref{prop:lcapo-independence}), yielding $\omega_{p,i}\propto 1/L_{p,i}$.
+  \item \textbf{Learned-$\beta$ L-CAPO.} In practice, we can update $\beta$ online via a lightweight moment regression on squared residuals or via a one-dimensional grouped-EB step with $s\equiv 1$.
+\end{itemize}
 
 \begin{algorithm}
 \DontPrintSemicolon
-\caption{L-CAPO (no dependence): single-parameter length fit}
+\caption{L-CAPO plug-in: length-only precisions (optionally fit $\beta$)}
 \label{alg:eb-lite}
 \SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
-\Input{Trajectory pairs \(\{(g_i,L_i)\}_{i=1}^G\); small regularization constant \(\varepsilon>0\).}
-\Output{Estimate \(\hat\beta\) and weights \(w_i \propto L_i^{-\hat\beta}\).}
+\Input{Grouped batch $\mathcal B_t=\{(p,i,g_{p,i},L_{p,i})\}$; either fixed $\beta$ (e.g., $\beta=1$ for $\Delta L$) or previous estimate $\beta_{t-1}$; small $\varepsilon>0$.}
+\Output{Precisions $(\omega_{p,i})$ and (optionally updated) $\beta_t$.}
 
-Initialize \(m^{(0)}\gets \dfrac{1}{G}\sum_{i=1}^G g_i\) or \(m^{(0)}\gets \mathrm{median}\{g_i\}\).\;
-\Repeat{converged}{
-  \For{\(i=1,\dots,G\)}{
-    \(e_i \gets g_i - m^{(k)}\);\quad
-    \(z_i \gets \log(e_i^2+\varepsilon)\).\;
+\uIf{$\beta$ is fixed}{
+  \ForEach{group $p$}{
+    \ForEach{$i\in\mathcal I_p$}{
+      $\omega_{p,i}\gets L_{p,i}^{-\beta}$\;
+    }
   }
-  Fit the regression model \(z_i = c - \beta \log L_i + \varepsilon_i\) by (optionally weighted) least squares; set \(\hat\beta^{(k+1)}\gets -\) (estimated slope).\;
-  Set provisional weights \(w_i \propto L_i^{-\hat\beta^{(k+1)}}\), then normalize \(w_i\gets w_i / \sum_j w_j\).\;
-  Update the aggregator \(m^{(k+1)}\gets \sum_{i=1}^G w_i g_i\).\;
+  \Return $(\omega_{p,i}),\beta$\;
 }
-Set \(\hat\beta\gets \hat\beta^{(k+1)}\).\;
+
+\tcp{Compute crude within-group residuals (uniform baseline) and regress log-squared residuals on log-length}
+\ForEach{group $p$}{
+  $m_p\gets \frac{1}{|\mathcal I_p|}\sum_{i\in\mathcal I_p} g_{p,i}$\;
+  \ForEach{$i\in\mathcal I_p$}{
+    $e_{p,i}\gets g_{p,i}-m_p$;\quad $z_{p,i}\gets \log(e_{p,i}^2+\varepsilon)$;\quad $\ell_{p,i}\gets \log L_{p,i}$\;
+  }
+}
+Fit $z_{p,i}=c-\beta\,\ell_{p,i}+\epsilon_{p,i}$ by least squares pooled over $(p,i)$; set $\beta_t\gets -$ (estimated slope)\;
+\ForEach{group $p$}{
+  \ForEach{$i\in\mathcal I_p$}{
+    $\omega_{p,i}\gets L_{p,i}^{-\beta_t}$\;
+  }
+}
+\Return $(\omega_{p,i}),\beta_t$\;
+\end{algorithm}
+
+\subsection{Algorithm~\ref{alg:capo-q}: CAPO-Q quadratic variance-law plug-in}
+CAPO-Q is an outcomes-only plug-in motivated by compound symmetry / random-intercept covariance (Section~\ref{subsec:capo-q-plugin}). It fits a two-term variance law
+\[
+\widehat v_{\mathrm{Q}}(L)=\widehat a\,L^{\beta}+\widehat b\,L^{\beta+1},
+\]
+and returns precisions $\omega_{p,i}\propto \widehat v_{\mathrm{Q}}(L_{p,i})^{-1}$ (to be normalized within-group by Algorithm~\ref{alg:capo-modular}). When the compound-symmetry surrogate is correct, CAPO-Q coincides with the oracle inverse-variance rule (Proposition~\ref{prop:capoq-fit}).
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{CAPO-Q plug-in: fit a quadratic induced-variance law and return precisions}
+\label{alg:capo-q}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Grouped batch $\mathcal B_t=\{(p,i,g_{p,i},L_{p,i})\}$; fixed $\beta$ (typically $\beta=1$) or an external estimate; nonnegativity constraint $a,b\ge 0$.}
+\Output{Precisions $(\omega_{p,i})$ and fitted coefficients $(\widehat a,\widehat b)$.}
+
+\tcp{Compute within-group residuals}
+\ForEach{group $p$}{
+  $m_p\gets \frac{1}{|\mathcal I_p|}\sum_{i\in\mathcal I_p} g_{p,i}$\;
+  \ForEach{$i\in\mathcal I_p$}{
+    $e_{p,i}\gets g_{p,i}-m_p$;\quad $y_{p,i}\gets e_{p,i}^2$\;
+  }
+}
+\tcp{Nonnegative least squares fit: $y_{p,i}\approx a L_{p,i}^{\beta}+b L_{p,i}^{\beta+1}$}
+$(\widehat a,\widehat b)\gets \arg\min_{a,b\ge 0}\sum_{p,i}\big(y_{p,i}-aL_{p,i}^{\beta}-bL_{p,i}^{\beta+1}\big)^2$\;
+
+\ForEach{group $p$}{
+  \ForEach{$i\in\mathcal I_p$}{
+    $\widehat v\gets \widehat a\,L_{p,i}^{\beta}+\widehat b\,L_{p,i}^{\beta+1}$;\quad
+    $\omega_{p,i}\gets 1/\widehat v$\;
+  }
+}
+\Return $(\omega_{p,i}),(\widehat a,\widehat b)$\;
+\end{algorithm}
+
+\subsection{Algorithm~\ref{alg:capo-hac}: CAPO-HAC lag-window long-run variance plug-in}
+CAPO-HAC is a token-aware plug-in that estimates the induced variance $v(L)=\mathrm{Var}(\sum_{t=1}^{L}Y_t)$ directly via a Bartlett/Newey--West lag window (Section~\ref{subsec:capo-hac-plugin}). It pools autocovariance estimates across trajectories to reduce noise and returns $\omega_{p,i}\propto \widehat v_{\mathrm{HAC}}(L_{p,i})^{-1}$.
+
+\begin{algorithm}
+\DontPrintSemicolon
+\caption{CAPO-HAC plug-in: Newey--West induced-variance estimation and precisions}
+\label{alg:capo-hac}
+\SetKwInOut{Input}{Input}\SetKwInOut{Output}{Output}
+\Input{Grouped batch $\mathcal B_t=\{(p,i,L_{p,i},\{Y_{p,i,\tau}\})\}$; bandwidth $K\ge 1$.}
+\Output{Precisions $(\omega_{p,i})$ and pooled autocovariances $(\widehat\gamma(h))_{h=0}^{K}$.}
+
+\tcp{Estimate pooled autocovariances up to lag $K$}
+\For{$h=0,1,\dots,K$}{
+  $N_h\gets 0$;\quad $S_h\gets 0$\;
+}
+\ForEach{trajectory $(p,i)$}{
+  $\bar Y_{p,i}\gets \frac{1}{L_{p,i}}\sum_{\tau=1}^{L_{p,i}}Y_{p,i,\tau}$\;
+  \For{$h=0,1,\dots,\min\{K,L_{p,i}-1\}$}{
+    \For{$\tau=h+1,\dots,L_{p,i}$}{
+      $S_h \gets S_h + (Y_{p,i,\tau}-\bar Y_{p,i})(Y_{p,i,\tau-h}-\bar Y_{p,i})$\;
+      $N_h \gets N_h + 1$\;
+    }
+  }
+}
+\For{$h=0,1,\dots,K$}{
+  $\widehat\gamma(h)\gets S_h/N_h$\;
+}
+
+\tcp{Map $\widehat\gamma(\cdot)$ to an induced-variance estimate at each length and return precisions}
+\ForEach{group $p$}{
+  \ForEach{$i\in\mathcal I_p$}{
+    $L\gets L_{p,i}$;\quad
+    $\widehat v\gets L\,\widehat\gamma(0)$\;
+    \For{$h=1,\dots,\min\{K,L-1\}$}{
+      $\widehat v\gets \widehat v + 2(L-h)\big(1-\frac{h}{K+1}\big)\widehat\gamma(h)$\;
+    }
+    $\omega_{p,i}\gets 1/\widehat v$\;
+  }
+}
+\Return $(\omega_{p,i}),(\widehat\gamma(h))_{h=0}^{K}$\;
 \end{algorithm}
 
 \subsection{Algorithm~\ref{alg:kband-weights}: \texorpdfstring{$k$}{k}-banded covariance weights}

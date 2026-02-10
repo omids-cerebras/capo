@@ -58,9 +58,15 @@ or remove normalizations:
   \item \textbf{$\Delta L$ normalization} ($\alpha\in\{0.75, 1.0\}$): length-weighted
   normalization via GRPO++-style trajectory weighting.
 \end{itemize}
-We report CAPO with outcome-only trajectory covariance estimation:
-\textbf{L-CAPO} (diagonal empirical Bayes) and \textbf{LV-CAPO} (banded
-empirical Bayes).
+\paragraph{CAPO variants (variance-law plug-ins).}
+CAPO is a modular GRPO-style framework: each variant differs only by the estimator of the induced variance law $v(L)=\mathrm{Var}(g\mid L)$ (Section~\ref{subsec:capo-plugins}) used to produce within-group precision weights (Section~\ref{sec:algorithms}). We implement four plug-ins:
+\begin{itemize}
+  \item \textbf{L-CAPO}: length-only/independence plug-in ($s\equiv 1$), including $\Delta L$ as the fixed-$\beta{=}1$ special case (Proposition~\ref{prop:lcapo-independence}).
+  \item \textbf{LV-CAPO}: structured empirical-Bayes plug-in that jointly fits a length exponent and a dependence shape (Algorithm~\ref{alg:eb-capo}).
+  \item \textbf{CAPO-Q}: quadratic variance-law plug-in motivated by compound symmetry / random intercepts (Algorithm~\ref{alg:capo-q}).
+  \item \textbf{CAPO-HAC}: lag-window/Newey--West long-run variance plug-in that targets $v(L)$ directly under short-range dependence (Algorithm~\ref{alg:capo-hac}).
+\end{itemize}
+In the main CountDown runs (Tables~\ref{tab:main-accuracy}--\ref{tab:stability}), we focus on L-CAPO and LV-CAPO, which bracket the independence and structured-dependence extremes. CAPO-Q and CAPO-HAC are evaluated in our controlled synthetic covariance benchmark (Appendix~\ref{sec:synthetic-covariance-benchmark}), where the dependence regime is known by construction and the plug-in behavior is directly interpretable.
 
 \subsection{Metrics}
 \paragraph{Accuracy.} For each validation prompt, we sample $N=8$ trajectories
@@ -185,6 +191,10 @@ $\Delta L$ ($\alpha = 1.0$) and CAPO both \emph{suppress} long trajectories (rat
 $\Delta L$ applies a fixed correction $L^{-\alpha}$ that is optimal only under IID, while CAPO's precision weighting $w_i \propto 1/v(L_i)$ adapts to the true variance law.
 Under compound symmetry, where $v(L)$ grows superlinearly, $\Delta L$'s fixed-$\alpha$ rule under-corrects: L-CAPO (which assumes $v(L) = L^{\beta}$) shows amplification ratios rising above 1 at CS $\rho = 0.05$, whereas dependence-aware LV-CAPO achieves the lowest amplification across all long-range regimes.
 
+\paragraph{Where CAPO-Q and CAPO-HAC fit in this benchmark.}
+The synthetic benchmark is particularly well-suited for benchmarking plug-ins because the generative covariance regime is controlled. In addition to L-CAPO (length-only) and LV-CAPO (structured EB), we implement two simplified plug-ins:
+(i) \textbf{CAPO-Q}, which uses the quadratic CS variance law $v(L)\propto (1-\rho)L+\rho L^2$ (Section~\ref{subsec:capo-q-plugin}); and (ii) \textbf{CAPO-HAC}, which estimates $v(L)$ by a lag-window/Newey--West long-run variance estimator (Section~\ref{subsec:capo-hac-plugin}). When the simulator uses compound symmetry, CAPO-Q coincides with oracle inverse-variance weighting (Proposition~\ref{prop:capoq-fit}); when the simulator uses short-range dependence (IID/AR(1)/$k$-band), CAPO-HAC targets the same long-run variance appearing in Bartlett’s identity and is consistent under standard mixing conditions. For readability, the main plots focus on GRPO, $\Delta L$, L-CAPO, and LV-CAPO; CAPO-Q and CAPO-HAC behave as predicted by their matched-regime theory and serve as practical ablations between the fully nonparametric and fully parametric ends of the CAPO family.
+
 \noindent
 \emph{(b) Signal allocation} (Figure~\ref{fig:synthetic-signal-share}).
 The fraction of total squared signal $\sum_i A_i^2$ contributed by each length bin shows where update energy concentrates.
@@ -193,7 +203,7 @@ GRPO over-allocates to the longest bin; CAPO redistributes signal towards shorte
 \paragraph{Relative efficiency.}
 Beyond the distributional view, Figure~\ref{fig:efficiency-heatmap} reports the baseline-MSE relative efficiency $\mathrm{RelEff}(M) = \mathrm{Var}(\hat m_{\text{unif}}) / \mathrm{Var}(\hat m_M)$, estimated via Monte Carlo.
 This is the primary metric: values above 1 mean the method achieves a \emph{strictly lower-variance} baseline estimate than uniform averaging.
-LV-CAPO achieves the highest relative efficiency across all regimes, with gains of $2$--$6\times$ under dependence, because its inverse-variance weighting is the minimum-variance unbiased (MVU) linear combination (Lemma~\ref{lem:optimal-weights}).
+LV-CAPO achieves the highest relative efficiency across all regimes, with gains of $2$--$6\times$ under dependence, because its inverse-variance weighting is the minimum-variance unbiased (MVU) linear combination (Lemma~\ref{lem:mvu}).
 $\Delta L$ provides partial correction ($1$--$2\times$), while GRPO is the $1.0\times$ reference by construction.
 
 \paragraph{Summary.}
