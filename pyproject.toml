@@ -47,6 +47,11 @@ analysis = [
   "matplotlib>=3.7",
   "seaborn>=0.12",
 ]
+training = [
+  "peft>=0.7",
+  "accelerate>=0.25",
+  "safetensors>=0.4",
+]
 
 [project.urls]
 Homepage = "https://github.com/omids/capo"
