@@ -44,5 +44,8 @@ outputs/
 *.log
 *.sqlite3
 
+# MkDocs build output
+site/
+
 # Models
 **/scratch
