@@ -10,6 +10,19 @@ Central thesis: **modelling within-trajectory token covariance**
 ($v(L) = L^\beta\, s(L;\xi)$) is strictly better than ignoring it
 (GRPO) or using a fixed power-law correction ($\Delta L$).
 
+CAPO is modular: it expresses all reweighting rules as plug-in
+estimates of the induced variance law $v(L)$.  Four plug-ins are
+implemented:
+
+- **L-CAPO**: length-only / independence plug-in ($s \equiv 1$),
+  with $\Delta L$ as the fixed-$\beta=1$ special case.
+- **LV-CAPO**: structured empirical-Bayes plug-in (joint length
+  exponent + dependence shape).
+- **CAPO-Q**: quadratic variance-law plug-in for compound symmetry /
+  random intercepts.
+- **CAPO-HAC**: Newey–West long-run variance plug-in for short-range
+  dependence.
+
 Synthetic Rollout Generation
 -----------------------------
 Instead of generating scalar $(g_i, L_i)$ pairs, we generate full
@@ -40,6 +53,10 @@ Ten Experiments
 8.  L-CAPO Parameter Recovery
 9.  Mixed-Dependence Stress Test
 10. Scaling with Group Size N
+11. Plug-in Misspecification Robustness
+12. Gradient Signal-to-Noise Ratio by Length Bin
+13. Cumulative Regret (Multi-Step Estimation)
+14. Length-Distribution Sensitivity
 
 All methods operate **within prompt groups** ($P$ groups of $N$
 rollouts), matching the on-policy RLVR workflow.
@@ -71,6 +88,8 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 # wrappers that call these routines; we mirror that logic below to avoid
 # pulling in the verl training stack.
 from capo.eb_core import (
+    capo_hac_fit_and_predict,
+    capo_q_fit_and_predict,
     eb_lite_fit_beta_and_weights,
     joint_eb_update_kband,
     s_kband,
@@ -507,6 +526,108 @@ def compute_capo_eb_full_advantage(
     return advantages, returns, adv_metrics
 
 
+def compute_capo_q_advantage(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index=None,
+    config=None,
+    epsilon: float = 1e-8,
+    beta: float = 1.0,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    r"""CAPO-Q advantage — quadratic induced-variance plug-in.
+
+    Uses the compound-symmetry motivated variance law
+    $\hat{v}(L) = \hat{a} L^\beta + \hat{b} L^{\beta+1}$
+    and weights $\omega_i \propto 1/\hat{v}(L_i)$.
+
+    Implements Algorithm ``alg:capo-q``.
+    """
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+
+    if not torch.any(valid):
+        z = torch.zeros_like(token_level_rewards)
+        return z, z.clone(), {}
+
+    idx_t = None
+    if index is not None:
+        idx_t = torch.as_tensor(index, dtype=torch.long, device=returns_scalar.device)
+
+    a_hat, b_hat, omega = capo_q_fit_and_predict(
+        g=returns_scalar,
+        L=lengths,
+        index=idx_t,
+        beta=beta,
+        eps=epsilon,
+    )
+
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
+    advantages = adv_scalar.unsqueeze(-1) * valid.float()
+
+    if config is not None and getattr(config, "norm_adv_by_std_in_grpo", False):
+        std = advantages[valid].std().clamp_min(epsilon)
+        advantages = advantages / std
+
+    returns = token_level_rewards * valid
+    adv_metrics = {
+        "capo_q/a_hat": float(a_hat),
+        "capo_q/b_hat": float(b_hat),
+        "capo_q/beta": float(beta),
+    }
+    return advantages, returns, adv_metrics
+
+
+def compute_capo_hac_advantage(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index=None,
+    config=None,
+    epsilon: float = 1e-8,
+    K: int = 16,
+    **kwargs,
+) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    r"""CAPO-HAC advantage — Newey–West lag-window plug-in.
+
+    Estimates pooled autocovariances from the token-level reward
+    increments and uses a Bartlett/Newey–West window to estimate
+    $v_{\mathrm{HAC}}(L)$ for each trajectory, then weights
+    $\omega_i \propto 1/\hat{v}_{\mathrm{HAC}}(L_i)$.
+
+    Implements Algorithm ``alg:capo-hac``.
+    """
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+
+    if not torch.any(valid):
+        z = torch.zeros_like(token_level_rewards)
+        return z, z.clone(), {}
+
+    # Token-level rewards are the increments Y_{p,i,t}
+    increments = token_level_rewards
+    increments_mask = response_mask
+
+    gamma_hat, omega = capo_hac_fit_and_predict(
+        increments=increments,
+        increments_mask=increments_mask,
+        L=lengths,
+        K=K,
+        eps=epsilon,
+    )
+
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
+    advantages = adv_scalar.unsqueeze(-1) * valid.float()
+
+    if config is not None and getattr(config, "norm_adv_by_std_in_grpo", False):
+        std = advantages[valid].std().clamp_min(epsilon)
+        advantages = advantages / std
+
+    returns = token_level_rewards * valid
+    adv_metrics = {
+        "capo_hac/K": float(K),
+        "capo_hac/gamma0": float(gamma_hat[0].item()),
+    }
+    return advantages, returns, adv_metrics
+
+
 def compute_grpo_advantage_grouped(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
@@ -598,6 +719,18 @@ def compute_all_advantages(
         )
         results["lv_capo"] = adv
 
+    if "capo_q" in method_keys:
+        adv, _, _ = compute_capo_q_advantage(
+            token_level_rewards, response_mask, index=index, config=_make_config(norm=False)
+        )
+        results["capo_q"] = adv
+
+    if "capo_hac" in method_keys:
+        adv, _, _ = compute_capo_hac_advantage(
+            token_level_rewards, response_mask, index=index, config=_make_config(norm=False)
+        )
+        results["capo_hac"] = adv
+
     return results
 
 
@@ -676,6 +809,18 @@ def compute_scalar_baselines(
         omega = (L.double().pow(beta_t) * s_vals.double()).reciprocal().float().clamp_min(1e-8)
         out["lv_capo"] = _groupwise_baseline(omega, g, index)
 
+    if "capo_q" in method_keys:
+        idx_t = torch.as_tensor(index, dtype=torch.long, device=g.device)
+        _a, _b, omega = capo_q_fit_and_predict(g, L, index=idx_t)
+        out["capo_q"] = _groupwise_baseline(omega, g, index)
+
+    if "capo_hac" in method_keys:
+        # Need token-level rewards for HAC — use the full tensors
+        increments = token_level_rewards
+        inc_mask = response_mask
+        _gamma, omega = capo_hac_fit_and_predict(increments, inc_mask, L, K=16)
+        out["capo_hac"] = _groupwise_baseline(omega, g, index)
+
     return out
 
 
@@ -689,11 +834,45 @@ _PAL = {
     "deltal_1.0": "#bcbd22",
     "l_capo": "#1f77b4",
     "lv_capo": "#2ca02c",
+    "capo_q": "#9467bd",
+    "capo_hac": "#e377c2",
 }
-_MK = {"grpo": "o", "deltal_0.5": "v", "deltal_1.0": "^", "l_capo": "D", "lv_capo": "s"}
-_LS = {"grpo": "--", "deltal_0.5": ":", "deltal_1.0": ":", "l_capo": "-", "lv_capo": "-"}
-_ZO = {"grpo": 2, "deltal_0.5": 2, "deltal_1.0": 2, "l_capo": 5, "lv_capo": 6}
-_LW = {"grpo": 1.6, "deltal_0.5": 1.4, "deltal_1.0": 1.4, "l_capo": 2.3, "lv_capo": 2.6}
+_MK = {
+    "grpo": "o",
+    "deltal_0.5": "v",
+    "deltal_1.0": "^",
+    "l_capo": "D",
+    "lv_capo": "s",
+    "capo_q": "P",
+    "capo_hac": "X",
+}
+_LS = {
+    "grpo": "--",
+    "deltal_0.5": ":",
+    "deltal_1.0": ":",
+    "l_capo": "-",
+    "lv_capo": "-",
+    "capo_q": "-.",
+    "capo_hac": "-.",
+}
+_ZO = {
+    "grpo": 2,
+    "deltal_0.5": 2,
+    "deltal_1.0": 2,
+    "l_capo": 5,
+    "lv_capo": 6,
+    "capo_q": 4,
+    "capo_hac": 3,
+}
+_LW = {
+    "grpo": 1.6,
+    "deltal_0.5": 1.4,
+    "deltal_1.0": 1.4,
+    "l_capo": 2.3,
+    "lv_capo": 2.6,
+    "capo_q": 2.0,
+    "capo_hac": 2.0,
+}
 
 
 def _sty(key: str) -> dict:
@@ -750,10 +929,21 @@ METHODS: list[Method] = [
     Method(r"$\Delta L$ ($\alpha$=1.0)", "deltal_1.0"),
     Method("L-CAPO", "l_capo"),
     Method("LV-CAPO", "lv_capo"),
+    Method("CAPO-Q", "capo_q"),
+    Method("CAPO-HAC", "capo_hac"),
 ]
 
 METHODS4: list[Method] = [
     Method("GRPO", "grpo"),
+    Method(r"$\Delta L$ ($\alpha$=1.0)", "deltal_1.0"),
+    Method("L-CAPO", "l_capo"),
+    Method("LV-CAPO", "lv_capo"),
+]
+
+# The original 5-method list (without CAPO-Q/HAC) for backward compat
+METHODS5: list[Method] = [
+    Method("GRPO", "grpo"),
+    Method(r"$\Delta L$ ($\alpha$=0.5)", "deltal_0.5"),
     Method(r"$\Delta L$ ($\alpha$=1.0)", "deltal_1.0"),
     Method("L-CAPO", "l_capo"),
     Method("LV-CAPO", "lv_capo"),
@@ -872,7 +1062,7 @@ def experiment_01_variance_landscape(out: Path) -> None:
     )
     fig.tight_layout()
     _save(fig, out / "fig_01_variance_landscape")
-    print("  [1/10] Variance landscape done")
+    print("  [1/14] Variance landscape done")
 
 
 # ######################################################################## #
@@ -884,12 +1074,18 @@ def experiment_02_weight_comparison(out: Path) -> None:
     """CAPO's weights approximate oracle; GRPO and DeltaL don't."""
     bins = DEFAULT_LENGTH_BINS
     panels = [
-        ("AR(1) $\\rho$=0.8", lambda L: v_ar1(int(L), 0.8)),
-        ("CS $\\rho$=0.05", lambda L: v_compound_symmetry(int(L), 0.05)),
+        ("AR(1) $\\rho$=0.8", lambda L: v_ar1(int(L), 0.8), lambda L: cov_ar1(int(L), 0.8)),
+        (
+            "CS $\\rho$=0.05",
+            lambda L: v_compound_symmetry(int(L), 0.05),
+            lambda L: cov_compound_symmetry(int(L), 0.05),
+        ),
     ]
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
-    for pi, (pname, vfn) in enumerate(panels):
+    # 6 bars per length bin: Oracle, LV-CAPO, L-CAPO, CAPO-Q, CAPO-HAC, DeltaL, GRPO
+    n_bars = 7
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+    for pi, (pname, vfn, covfn) in enumerate(panels):
         ax = axes[pi]
         v = np.array([vfn(L) for L in bins])
 
@@ -908,53 +1104,72 @@ def experiment_02_weight_comparison(out: Path) -> None:
         w_lite = L_t.pow(-beta_hat).numpy()
         w_lite /= w_lite.sum()
 
+        # CAPO-Q: fit quadratic variance law from synthetic residuals
+        # Use a small MC batch to get realistic CAPO-Q weights
+        rng = np.random.default_rng(42)
+        chol_cache = _cholesky_cache(bins, covfn)
+        P_q, N_q = 200, 8
+        rewards_q, mask_q, lengths_q, index_q = generate_grouped_rollouts(
+            rng, P_q, N_q, bins, covfn, int(bins.max()), chol_cache
+        )
+        g_q = (rewards_q * mask_q).sum(dim=-1)
+        L_q = mask_q.sum(dim=-1).clamp_min(1).float()
+        idx_q_t = torch.as_tensor(index_q, dtype=torch.long)
+        a_hat, b_hat, omega_q = capo_q_fit_and_predict(g_q, L_q, index=idx_q_t)
+        # Compute representative weights at each length bin
+        x1 = L_t.double().pow(1.0)
+        x2 = L_t.double().pow(2.0)
+        vq = (a_hat * x1 + b_hat * x2).clamp_min(1e-8)
+        w_capo_q = vq.reciprocal().float().numpy()
+        w_capo_q /= w_capo_q.sum()
+
+        # CAPO-HAC: use pooled autocovariance from MC batch
+        gamma_hat, omega_hac = capo_hac_fit_and_predict(
+            rewards_q,
+            mask_q,
+            L_q,
+            K=16,
+        )
+        # Compute representative weights at each length bin
+        K_hac = 16
+        gamma_d = gamma_hat.double()
+        L_d = L_t.double()
+        vhac = L_d * gamma_d[0]
+        for h in range(1, K_hac + 1):
+            bartlett_w = 1.0 - h / (K_hac + 1.0)
+            contrib = 2.0 * (L_d - h) * bartlett_w * gamma_d[h]
+            valid = (L_d > h).double()
+            vhac = vhac + contrib * valid
+        w_capo_hac = vhac.clamp_min(1e-8).reciprocal().float().numpy()
+        w_capo_hac /= w_capo_hac.sum()
+
         x = np.arange(len(bins))
-        w = 0.18
-        ax.bar(
-            x - 1.5 * w,
-            w_oracle,
-            w,
-            label="Oracle ($1/v(L)$)",
-            color=_PAL["lv_capo"],
-            edgecolor="white",
-            lw=0.8,
-            zorder=4,
-        )
-        ax.bar(
-            x - 0.5 * w,
-            w_lite,
-            w,
-            label=f"L-CAPO ($\\beta$={beta_hat:.2f})",
-            color=_PAL["l_capo"],
-            edgecolor="white",
-            lw=0.8,
-            zorder=3,
-        )
-        ax.bar(
-            x + 0.5 * w,
-            w_dl,
-            w,
-            label="$\\Delta L$ ($\\alpha$=1)",
-            color=_PAL["deltal_1.0"],
-            edgecolor="white",
-            lw=0.8,
-            zorder=2,
-        )
-        ax.bar(
-            x + 1.5 * w,
-            w_grpo,
-            w,
-            label="GRPO (uniform)",
-            color=_PAL["grpo"],
-            edgecolor="white",
-            lw=0.8,
-            zorder=2,
-        )
+        bw = 0.8 / n_bars
+        bar_items = [
+            (w_oracle, "Oracle ($1/v(L)$)", _PAL["lv_capo"], 6),
+            (w_lite, f"L-CAPO ($\\beta$={beta_hat:.2f})", _PAL["l_capo"], 5),
+            (w_capo_q, f"CAPO-Q ($a$={a_hat:.2f},$b$={b_hat:.3f})", _PAL["capo_q"], 4),
+            (w_capo_hac, "CAPO-HAC", _PAL["capo_hac"], 3),
+            (w_dl, "$\\Delta L$ ($\\alpha$=1)", _PAL["deltal_1.0"], 2),
+            (w_grpo, "GRPO (uniform)", _PAL["grpo"], 2),
+        ]
+        for bi, (wvals, lbl, clr, zo) in enumerate(bar_items):
+            offset = (bi - (len(bar_items) - 1) / 2) * bw
+            ax.bar(
+                x + offset,
+                wvals,
+                bw,
+                label=lbl,
+                color=clr,
+                edgecolor="white",
+                lw=0.6,
+                zorder=zo,
+            )
         ax.set_xticks(x)
         ax.set_xticklabels([f"$L$={L}" for L in bins])
         ax.set_ylabel("Normalised weight $w(L)$")
         ax.set_title(f"({chr(97+pi)}) {pname}", fontweight="bold")
-        ax.legend(fontsize=8, loc="upper right")
+        ax.legend(fontsize=7, loc="upper right")
         ax.set_ylim(0)
 
     fig.suptitle(
@@ -965,7 +1180,7 @@ def experiment_02_weight_comparison(out: Path) -> None:
     )
     fig.tight_layout()
     _save(fig, out / "fig_02_weight_comparison")
-    print("  [2/10] Weight comparison done")
+    print("  [2/14] Weight comparison done")
 
 
 # ######################################################################## #
@@ -1003,7 +1218,7 @@ def experiment_03_relative_efficiency(out, seed, P, N, bins, n_mc=200):
 
     mat = np.array([[eff[reg.name][m.display] for reg in regimes] for m in methods])
 
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(12, 5))
     cmap = LinearSegmentedColormap.from_list(
         "eff", ["#ffffff", "#c7e9c0", "#74c476", "#238b45", "#00441b"]
     )
@@ -1048,7 +1263,7 @@ def experiment_03_relative_efficiency(out, seed, P, N, bins, n_mc=200):
         tab, [m.display for m in methods], [r.name for r in regimes], bold_best="max"
     )
     (out / "tab_03_relative_efficiency.tex").write_text(tex, encoding="utf-8")
-    print("  [3/10] Relative efficiency done")
+    print("  [3/14] Relative efficiency done")
     return eff
 
 
@@ -1063,11 +1278,11 @@ def experiment_04_mse_vs_correlation(out, seed, P, N, bins, n_mc=200):
     Panel (a): RE vs GRPO — all methods improve with rho.
     Panel (b): RE vs DeltaL(alpha=1) — isolates covariance-modelling gain.
     """
-    methods = METHODS4
+    methods = METHODS
     rhos = np.array([0.0, 0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95])
     T_max = int(bins.max())
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
 
     for panel_idx, ref_key in enumerate(["grpo", "deltal_1.0"]):
         ax = axes[panel_idx]
@@ -1115,7 +1330,7 @@ def experiment_04_mse_vs_correlation(out, seed, P, N, bins, n_mc=200):
     )
     fig.tight_layout()
     _save(fig, out / "fig_04_mse_vs_correlation")
-    print("  [4/10] MSE vs correlation done")
+    print("  [4/14] MSE vs correlation done")
 
 
 # ######################################################################## #
@@ -1125,12 +1340,12 @@ def experiment_04_mse_vs_correlation(out, seed, P, N, bins, n_mc=200):
 
 def experiment_05_effective_sample_size(out, seed, P, N, bins, n_mc=200):
     regimes = [r for r in REGIMES if "IID" not in r.name]
-    methods = METHODS4
+    methods = METHODS
     T_max = int(bins.max())
 
-    fig, ax = plt.subplots(figsize=(13, 5.5))
+    fig, ax = plt.subplots(figsize=(15, 5.5))
     x = np.arange(len(regimes))
-    bw = 0.18
+    bw = 0.8 / len(methods)
     m_ess: dict[str, list] = {m.key: [] for m in methods}
 
     for _ri, reg in enumerate(regimes):
@@ -1187,7 +1402,7 @@ def experiment_05_effective_sample_size(out, seed, P, N, bins, n_mc=200):
     ax.set_ylim(0)
     fig.tight_layout()
     _save(fig, out / "fig_05_effective_sample_size")
-    print("  [5/10] Effective sample size done")
+    print("  [5/14] Effective sample size done")
 
 
 # ######################################################################## #
@@ -1201,11 +1416,11 @@ def experiment_06_length_bias(out, seed, P, N, bins, n_mc=300):
     def build_cov(L, _r=0.8):
         return cov_ar1(int(L), _r)
 
-    methods = METHODS4
+    methods = METHODS
     T_max = int(bins.max())
     chol_cache = _cholesky_cache(bins, build_cov)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
 
     # (a) E[A^2 | L]
     ax = axes[0]
@@ -1226,7 +1441,7 @@ def experiment_06_length_bias(out, seed, P, N, bins, n_mc=300):
                 msa_acc[m.key][Li].append(float(A_scalar[j].item() ** 2))
 
     x = np.arange(len(bins))
-    bw = 0.18
+    bw = 0.8 / len(methods)
     for mi, m in enumerate(methods):
         vals = [float(np.mean(msa_acc[m.key][int(L)])) for L in bins]
         ax.bar(
@@ -1289,7 +1504,7 @@ def experiment_06_length_bias(out, seed, P, N, bins, n_mc=300):
     )
     fig.tight_layout()
     _save(fig, out / "fig_06_length_bias")
-    print("  [6/10] Length-bias diagnostic done")
+    print("  [6/14] Length-bias diagnostic done")
 
 
 # ######################################################################## #
@@ -1306,10 +1521,10 @@ def experiment_07_advantage_concentration(out, seed, P, N, bins):
             lambda L: v_compound_symmetry(int(L), 0.05),
         ),
     ]
-    methods = METHODS4
+    methods = METHODS
     T_max = int(bins.max())
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
     for pi, reg in enumerate(panels):
         chol_cache = _cholesky_cache(bins, reg.build_cov)
         rng = np.random.default_rng(seed)
@@ -1348,7 +1563,7 @@ def experiment_07_advantage_concentration(out, seed, P, N, bins):
     )
     fig.tight_layout()
     _save(fig, out / "fig_07_advantage_concentration")
-    print("  [7/10] Advantage concentration done")
+    print("  [7/14] Advantage concentration done")
 
 
 # ######################################################################## #
@@ -1484,7 +1699,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
     )
     fig.tight_layout()
     _save(fig, out / "fig_08_eb_recovery")
-    print("  [8/10] EB recovery done")
+    print("  [8/14] EB recovery done")
     return {"recovery_rmse": rmse}
 
 
@@ -1495,7 +1710,7 @@ def experiment_08_eb_recovery(out, seed, P=512, N=8, n_mc=100):
 
 def experiment_09_mixed_dependence(out, seed, P, N, bins, n_mc=200):
     """Test robustness when different lengths have different covariance."""
-    methods = METHODS4
+    methods = METHODS
     T_max = int(bins.max())
 
     def _mx1(b):
@@ -1547,7 +1762,7 @@ def experiment_09_mixed_dependence(out, seed, P, N, bins, n_mc=200):
 
     builders = [_mx1, _mx2, _mx3, _mx4, _mx5]
 
-    fig, ax = plt.subplots(figsize=(13, 5.5))
+    fig, ax = plt.subplots(figsize=(15, 6))
     names = []
     m_res: dict[str, list] = {m.key: [] for m in methods}
 
@@ -1572,7 +1787,7 @@ def experiment_09_mixed_dependence(out, seed, P, N, bins, n_mc=200):
             m_res[m.key].append(re[m.key])
 
     x = np.arange(len(names))
-    bw = 0.18
+    bw = 0.8 / len(methods)
     for mi, m in enumerate(methods):
         bars = ax.bar(
             x + mi * bw,
@@ -1607,7 +1822,7 @@ def experiment_09_mixed_dependence(out, seed, P, N, bins, n_mc=200):
     ax.set_ylim(0)
     fig.tight_layout()
     _save(fig, out / "fig_09_mixed_dependence")
-    print("  [9/10] Mixed-dependence done")
+    print("  [9/14] Mixed-dependence done")
 
 
 # ######################################################################## #
@@ -1618,7 +1833,7 @@ def experiment_09_mixed_dependence(out, seed, P, N, bins, n_mc=200):
 def experiment_10_scaling_with_N(out, seed, P, bins, n_mc=200):
     """CAPO's advantage persists and grows with group size N."""
     Nvals = np.array([4, 8, 16, 32, 64])
-    methods = METHODS4
+    methods = METHODS
     T_max = int(bins.max())
     panels = [
         Regime(r"AR(1) $\rho$=0.8", lambda L: cov_ar1(int(L), 0.8), lambda L: v_ar1(int(L), 0.8)),
@@ -1629,7 +1844,7 @@ def experiment_10_scaling_with_N(out, seed, P, bins, n_mc=200):
         ),
     ]
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
     for pi, reg in enumerate(panels):
         ax = axes[pi]
         chol_cache = _cholesky_cache(bins, reg.build_cov)
@@ -1673,7 +1888,398 @@ def experiment_10_scaling_with_N(out, seed, P, bins, n_mc=200):
     )
     fig.tight_layout()
     _save(fig, out / "fig_10_scaling_with_N")
-    print("  [10/10] Scaling with N done")
+    print("  [10/14] Scaling with N done")
+
+
+# ######################################################################## #
+#  EXPERIMENT 11 — Plug-in Misspecification Robustness                     #
+# ######################################################################## #
+
+
+def experiment_11_misspecification_robustness(out, seed, P, N, bins, n_mc=200):
+    r"""What happens when a plug-in's variance-law model is wrong?
+
+    Each CAPO plug-in targets a specific covariance family.  Here we
+    cross every plug-in with every regime to answer: **does a
+    misspecified plug-in degrade gracefully or fail catastrophically?**
+
+    Produces a heatmap of RE (vs GRPO) where the x-axis is the *true*
+    covariance regime and the y-axis is the CAPO plug-in.  Diagonal
+    entries are "matched"; off-diagonal entries are misspecified.
+    """
+    methods = METHODS
+    T_max = int(bins.max())
+
+    # Use REGIMES (7 regimes) for comprehensive coverage
+    regimes = REGIMES
+    mkeys = [m.key for m in methods]
+
+    eff: dict[str, dict[str, float]] = {}
+    for reg in regimes:
+        chol_cache = _cholesky_cache(bins, reg.build_cov)
+        bl: dict[str, list] = {k: [] for k in mkeys}
+
+        for r in range(n_mc):
+            rng = np.random.default_rng(seed * 100_000 + r)
+            rewards, mask, lengths, index = generate_grouped_rollouts(
+                rng, P, N, bins, reg.build_cov, T_max, chol_cache
+            )
+            b = compute_scalar_baselines(rewards, mask, index, mkeys)
+            for k in mkeys:
+                bl[k].append(b[k])
+
+        var_u = float(np.var(bl["grpo"]))
+        eff[reg.name] = {}
+        for m in methods:
+            var_m = float(np.var(bl[m.key]))
+            eff[reg.name][m.key] = var_u / var_m if var_m > 1e-30 else 1.0
+
+    # Focus on CAPO plug-ins only (the interesting cross-regime story)
+    capo_methods = [m for m in methods if m.key in ("l_capo", "lv_capo", "capo_q", "capo_hac")]
+    mat = np.array([[eff[reg.name][m.key] for reg in regimes] for m in capo_methods])
+
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+    cmap = LinearSegmentedColormap.from_list(
+        "misspec", ["#fee0d2", "#ffffff", "#c7e9c0", "#74c476", "#238b45"]
+    )
+    vmax = max(float(mat.max()) * 1.05, 2.0)
+    im = ax.imshow(mat, aspect="auto", cmap=cmap, vmin=0.8, vmax=vmax)
+    ax.set_xticks(range(len(regimes)))
+    ax.set_xticklabels([r.name for r in regimes], rotation=25, ha="right", fontsize=9)
+    ax.set_yticks(range(len(capo_methods)))
+    ax.set_yticklabels([m.display for m in capo_methods], fontsize=10)
+
+    for ri in range(len(regimes)):
+        best = int(np.argmax(mat[:, ri]))
+        for mi in range(len(capo_methods)):
+            v = mat[mi, ri]
+            tc = "white" if v > 0.6 * vmax else "black"
+            txt = f"{v:.1f}x" if v >= 10 else f"{v:.2f}x"
+            ax.text(
+                ri,
+                mi,
+                txt,
+                ha="center",
+                va="center",
+                fontsize=11 if mi == best else 9,
+                color=tc,
+                fontweight="bold" if mi == best else "normal",
+            )
+
+    cb = fig.colorbar(im, ax=ax, shrink=0.85, pad=0.02)
+    cb.set_label("Relative Efficiency vs GRPO", fontsize=10)
+    ax.set_xlabel("True covariance regime (data-generating process)")
+    ax.set_title(
+        "Experiment 11 — Misspecification Robustness: " "CAPO Plug-ins Degrade Gracefully",
+        fontweight="bold",
+        pad=12,
+    )
+    fig.tight_layout()
+    _save(fig, out / "fig_11_misspecification_robustness")
+
+    # LaTeX table
+    tab: dict[str, dict[str, float]] = {}
+    for reg in regimes:
+        tab[reg.name] = {m.display: eff[reg.name][m.key] for m in capo_methods}
+    tex = _latex_table(
+        tab, [m.display for m in capo_methods], [r.name for r in regimes], bold_best="max"
+    )
+    (out / "tab_11_misspecification.tex").write_text(tex, encoding="utf-8")
+    print("  [11/14] Misspecification robustness done")
+
+
+# ######################################################################## #
+#  EXPERIMENT 12 — Gradient Signal-to-Noise Ratio by Length Bin            #
+# ######################################################################## #
+
+
+def experiment_12_gradient_snr(out, seed, P, N, bins, n_mc=200):
+    r"""Per-length-bin SNR: $\text{SNR}(L) = |E[A|L]|^2 / \text{Var}(A|L)$.
+
+    Motivation: in policy gradient, what matters is not just the magnitude
+    of advantages but their *signal-to-noise ratio*.  A well-designed
+    weighting scheme should equalise SNR across lengths, preventing any
+    single length bin from dominating the gradient with noise.
+
+    Under the null $\mu = 0$ (our simulator), the signal is zero, so we
+    inject a small *true* signal $\mu(L) = c / \sqrt{v(L)}$ (the oracle-
+    optimal signal strength) and measure whether each method recovers it
+    with the highest per-bin SNR.
+    """
+    methods = METHODS
+    T_max = int(bins.max())
+    rho = 0.8
+
+    def build_cov(L):
+        return cov_ar1(int(L), rho)
+
+    chol_cache = _cholesky_cache(bins, build_cov)
+
+    # Inject signal: per-token mean = c / sqrt(L) => per-trajectory mean = c * sqrt(L)
+    # This gives E[g|L] = c * sqrt(L), which is the case where the "true advantage"
+    # signal exists and we want to detect it.
+    signal_c = 0.5
+
+    snr_acc: dict[str, dict[int, list]] = {m.key: {int(L): [] for L in bins} for m in methods}
+
+    for rep in range(n_mc):
+        rng = np.random.default_rng(seed * 100_000 + rep)
+        rewards, mask, lengths, index = generate_grouped_rollouts(
+            rng, P, N, bins, build_cov, T_max, chol_cache
+        )
+        # Add signal: per-token shift of c / sqrt(L_i) for each trajectory
+        for i in range(len(lengths)):
+            Li = int(lengths[i])
+            rewards[i, :Li] += signal_c / np.sqrt(Li)
+
+        advs = compute_all_advantages(rewards, mask, index, [m.key for m in methods])
+        for m in methods:
+            A_scalar = (advs[m.key] * mask).sum(dim=-1)
+            for j in range(len(lengths)):
+                Li = int(lengths[j])
+                snr_acc[m.key][Li].append(float(A_scalar[j].item()))
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
+
+    # (a) Per-bin SNR = mean(A)^2 / var(A)
+    ax = axes[0]
+    x = np.arange(len(bins))
+    bw = 0.8 / len(methods)
+    for mi, m in enumerate(methods):
+        snrs = []
+        for L in bins:
+            vals = np.array(snr_acc[m.key][int(L)])
+            mu = vals.mean()
+            var = vals.var()
+            snrs.append(mu**2 / var if var > 1e-30 else 0.0)
+        ax.bar(
+            x + mi * bw,
+            snrs,
+            bw,
+            label=m.display,
+            color=_PAL.get(m.key, "#888"),
+            edgecolor="white",
+            lw=0.6,
+        )
+    ax.set_xticks(x + bw * (len(methods) - 1) / 2)
+    ax.set_xticklabels([f"$L$={L}" for L in bins])
+    ax.set_ylabel("SNR = $\\mu(A|L)^2 / \\mathrm{Var}(A|L)$")
+    ax.set_title("(a) Per-bin gradient SNR", fontweight="bold")
+    ax.legend(fontsize=7, loc="upper right")
+
+    # (b) SNR ratio: max-bin / min-bin (equalisation measure)
+    ax = axes[1]
+    snr_ratios = []
+    labels = []
+    colors = []
+    for m in methods:
+        snrs = []
+        for L in bins:
+            vals = np.array(snr_acc[m.key][int(L)])
+            mu = vals.mean()
+            var = vals.var()
+            snrs.append(mu**2 / var if var > 1e-30 else 1e-30)
+        snr_ratios.append(max(snrs) / (min(snrs) + 1e-30))
+        labels.append(m.display)
+        colors.append(_PAL.get(m.key, "#888"))
+
+    ax.barh(range(len(methods)), snr_ratios, color=colors, edgecolor="white", lw=0.8)
+    ax.set_yticks(range(len(methods)))
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.axvline(1.0, color="grey", lw=1.0, ls="--", label="Perfect equalisation")
+    ax.set_xlabel("SNR ratio (max bin / min bin)")
+    ax.set_title("(b) SNR equalisation (lower = better)", fontweight="bold")
+    ax.legend(fontsize=8)
+
+    fig.suptitle(
+        "Experiment 12 — Gradient SNR by Length: " "CAPO Equalises Signal-to-Noise Across Lengths",
+        fontweight="bold",
+        fontsize=12,
+        y=1.02,
+    )
+    fig.tight_layout()
+    _save(fig, out / "fig_12_gradient_snr")
+    print("  [12/14] Gradient SNR done")
+
+
+# ######################################################################## #
+#  EXPERIMENT 13 — Cumulative Regret (Multi-Step Estimation)               #
+# ######################################################################## #
+
+
+def experiment_13_cumulative_regret(out, seed, P, N, bins, n_steps=50, n_mc=100):
+    r"""Track cumulative MSE over T independent batches.
+
+    Motivation: in online RL, the advantage estimator is invoked
+    every step.  A method that converges faster to low MSE will
+    accumulate less total regret.  This experiment simulates the
+    multi-step setting by drawing T independent batches and plotting
+    cumulative MSE $\sum_{t=1}^{T} (\hat m_t - 0)^2$ (the true mean
+    is 0).
+
+    Panels: (a) AR(1) rho=0.8, (b) CS rho=0.05.
+    """
+    methods = METHODS
+    T_max = int(bins.max())
+    panels = [
+        Regime(r"AR(1) $\rho$=0.8", lambda L: cov_ar1(int(L), 0.8), lambda L: v_ar1(int(L), 0.8)),
+        Regime(
+            r"CS $\rho$=0.05",
+            lambda L: cov_compound_symmetry(int(L), 0.05),
+            lambda L: v_compound_symmetry(int(L), 0.05),
+        ),
+    ]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
+    for pi, reg in enumerate(panels):
+        ax = axes[pi]
+        chol_cache = _cholesky_cache(bins, reg.build_cov)
+        mkeys = [m.key for m in methods]
+
+        # Accumulate squared baselines across steps and MC reps
+        cum_mse: dict[str, np.ndarray] = {k: np.zeros(n_steps) for k in mkeys}
+
+        for rep in range(n_mc):
+            for step in range(n_steps):
+                rng = np.random.default_rng(seed * 100_000 + rep * 10_000 + step)
+                rewards, mask, lengths, index = generate_grouped_rollouts(
+                    rng, P, N, bins, reg.build_cov, T_max, chol_cache
+                )
+                bl = compute_scalar_baselines(rewards, mask, index, mkeys)
+                for k in mkeys:
+                    # True mean is 0; squared error = baseline^2
+                    cum_mse[k][step] += bl[k] ** 2
+
+        # Average over MC reps and compute cumulative sum
+        for k in mkeys:
+            cum_mse[k] /= n_mc
+
+        for m in methods:
+            cumsum = np.cumsum(cum_mse[m.key])
+            ax.plot(range(1, n_steps + 1), cumsum, label=m.display, **_sty(m.key))
+
+        ax.set_xlabel("Training step $t$")
+        ax.set_ylabel("Cumulative MSE $\\sum_{s=1}^{t} \\hat{m}_s^2$")
+        ax.set_title(f"({chr(97+pi)}) {reg.name}", fontweight="bold")
+        ax.legend(fontsize=7, loc="upper left")
+
+    fig.suptitle(
+        "Experiment 13 — Cumulative Regret: " "CAPO Accumulates Less Error Over Training",
+        fontweight="bold",
+        fontsize=12,
+        y=1.02,
+    )
+    fig.tight_layout()
+    _save(fig, out / "fig_13_cumulative_regret")
+    print("  [13/14] Cumulative regret done")
+
+
+# ######################################################################## #
+#  EXPERIMENT 14 — Length-Distribution Sensitivity                         #
+# ######################################################################## #
+
+
+def experiment_14_length_distribution_sensitivity(out, seed, P, N, bins, n_mc=200):
+    r"""How does each method perform under different length distributions?
+
+    Real RLVR training produces highly non-uniform length distributions
+    (e.g., log-normal or heavy-tailed).  This experiment compares RE
+    across three length distributions:
+    - Uniform over bins (baseline)
+    - Right-skewed (dominated by long trajectories)
+    - Left-skewed (dominated by short trajectories)
+
+    A good method should be robust across distributions; a fragile one
+    will degrade when the distribution departs from uniform.
+    """
+    methods = METHODS
+    T_max = int(bins.max())
+
+    def build_cov(L):
+        return cov_ar1(int(L), 0.8)
+
+    chol_cache = _cholesky_cache(bins, build_cov)
+
+    # Three length distributions
+    n_bins = len(bins)
+    distributions = {
+        "Uniform": np.ones(n_bins) / n_bins,
+        "Right-skewed\n(long-dominated)": np.array([1, 2, 4, 8, 16], dtype=float)[:n_bins],
+        "Left-skewed\n(short-dominated)": np.array([16, 8, 4, 2, 1], dtype=float)[:n_bins],
+        "Bimodal\n(extreme only)": np.array([8, 1, 1, 1, 8], dtype=float)[:n_bins],
+    }
+    for k in distributions:
+        distributions[k] = distributions[k] / distributions[k].sum()
+
+    fig, ax = plt.subplots(figsize=(15, 6))
+    dist_names = list(distributions.keys())
+    mkeys = [m.key for m in methods]
+    m_res: dict[str, list] = {m.key: [] for m in methods}
+
+    for _dname, probs in distributions.items():
+        bl: dict[str, list] = {k: [] for k in mkeys}
+
+        for r in range(n_mc):
+            rng = np.random.default_rng(seed * 100_000 + r)
+            # Use generate_rollouts with length_probs
+            B = P * N
+            rewards, mask, lengths = generate_rollouts(
+                rng,
+                B,
+                bins,
+                build_cov,
+                T_max,
+                length_probs=probs,
+                chol_cache=chol_cache,
+            )
+            index = np.repeat(np.arange(P), N)
+            b = compute_scalar_baselines(rewards, mask, index, mkeys)
+            for k in mkeys:
+                bl[k].append(b[k])
+
+        re = _relative_efficiency(bl)
+        for m in methods:
+            m_res[m.key].append(re[m.key])
+
+    x = np.arange(len(dist_names))
+    bw = 0.8 / len(methods)
+    for mi, m in enumerate(methods):
+        bars = ax.bar(
+            x + mi * bw,
+            m_res[m.key],
+            bw,
+            label=m.display,
+            color=_PAL.get(m.key, "#888"),
+            edgecolor="white",
+            lw=0.6,
+        )
+        for bar, val in zip(bars, m_res[m.key], strict=False):
+            if val > 1.05:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.05,
+                    f"{val:.2f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=6,
+                    fontweight="bold" if "capo" in m.key else "normal",
+                )
+
+    ax.axhline(1.0, color="grey", lw=1.0, ls="--")
+    ax.set_xticks(x + bw * (len(methods) - 1) / 2)
+    ax.set_xticklabels(dist_names, fontsize=9)
+    ax.set_ylabel("Relative Efficiency vs GRPO")
+    ax.set_title(
+        "Experiment 14 — Length-Distribution Sensitivity: "
+        "CAPO is Robust to Skewed Length Distributions",
+        fontweight="bold",
+        pad=10,
+    )
+    ax.legend(fontsize=7, loc="upper left")
+    ax.set_ylim(0)
+    fig.tight_layout()
+    _save(fig, out / "fig_14_length_distribution_sensitivity")
+    print("  [14/14] Length-distribution sensitivity done")
 
 
 # ######################################################################## #
@@ -1693,6 +2299,9 @@ def build_all_experiments(out_dir, *, seed=0, P=4000, N=8, fast=False):
         n_mc_eb = 50
         n_mc_mixed = 40
         n_mc_scale = 40
+        n_mc_regret = 30
+        n_steps_regret = 20
+        n_mc_dist = 40
     else:
         n_mc = 300
         P0 = P
@@ -1700,9 +2309,12 @@ def build_all_experiments(out_dir, *, seed=0, P=4000, N=8, fast=False):
         n_mc_eb = 150
         n_mc_mixed = 300
         n_mc_scale = 250
+        n_mc_regret = 150
+        n_steps_regret = 50
+        n_mc_dist = 250
 
     print("=" * 60)
-    print(f"Generating 10 experiments  (fast={fast}, P={P0}, N={N})")
+    print(f"Generating 14 experiments  (fast={fast}, P={P0}, N={N})")
     print("=" * 60)
 
     experiment_01_variance_landscape(out)
@@ -1715,9 +2327,13 @@ def build_all_experiments(out_dir, *, seed=0, P=4000, N=8, fast=False):
     experiment_08_eb_recovery(out, seed, P=P0, N=N, n_mc=n_mc_eb)
     experiment_09_mixed_dependence(out, seed, P0, N, bins, n_mc_mixed)
     experiment_10_scaling_with_N(out, seed, P0, bins, n_mc_scale)
+    experiment_11_misspecification_robustness(out, seed, P0, N, bins, n_mc)
+    experiment_12_gradient_snr(out, seed, P0, N, bins, n_mc)
+    experiment_13_cumulative_regret(out, seed, P0, N, bins, n_steps_regret, n_mc_regret)
+    experiment_14_length_distribution_sensitivity(out, seed, P0, N, bins, n_mc_dist)
 
     print("=" * 60)
-    print(f"All 10 experiments -> {out}/")
+    print(f"All 14 experiments -> {out}/")
     print("=" * 60)
 
 

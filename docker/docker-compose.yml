@@ -1,0 +1,98 @@
+# =============================================================================
+# CAPO: docker-compose for 8×A10 (single-node multi-GPU training)
+#
+# Usage:
+#   # 1. Build the image
+#   docker compose build
+#
+#   # 2. Prepare data (one-time)
+#   docker compose run --rm capo prepare --out_dir /data/countdown
+#
+#   # 3. Run diagnostics
+#   docker compose run --rm capo diag
+#
+#   # 4. Launch training (8×A10, full EB-CAPO on CountDown)
+#   docker compose run --rm capo train \
+#     data.train_files=/data/countdown/train.parquet \
+#     data.val_files=/data/countdown/test.parquet \
+#     actor_rollout_ref.model.path=Qwen/Qwen2.5-1.5B-Instruct \
+#     algorithm.adv_estimator=capo_eb
+#
+#   # 5. Interactive shell
+#   docker compose run --rm capo bash
+# =============================================================================
+
+services:
+  capo:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: capo:latest
+
+    # ---- GPU allocation -----------------------------------------------------
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all          # all 8 GPUs; change to a number if needed
+              capabilities: [gpu]
+
+    # ---- shared memory & IPC ------------------------------------------------
+    # NCCL and PyTorch need generous shared memory for GPU comms.
+    ipc: host
+    shm_size: "32g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+    # ---- volumes ------------------------------------------------------------
+    volumes:
+      # Source code (live mount for development; remove for production)
+      - ..:/workspace
+
+      # Persistent data (datasets, checkpoints, outputs)
+      - capo-data:/data
+
+      # HuggingFace cache (avoids re-downloading models between runs)
+      - capo-hf-cache:/root/.cache/huggingface
+
+    # ---- environment --------------------------------------------------------
+    environment:
+      # GPU / comms
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NCCL_IB_DISABLE=1
+      - NCCL_P2P_DISABLE=0
+      - NCCL_SOCKET_IFNAME=eth0
+      - NCCL_DEBUG=WARN
+
+      # Python / CAPO
+      - PYTHONUNBUFFERED=1
+      - HYDRA_FULL_ERROR=1
+      - TOKENIZERS_PARALLELISM=true
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - VLLM_LOGGING_LEVEL=WARN
+      - PYTHONPATH=/workspace/src/capo/experiments:/workspace/src
+
+      # WandB (optional; set in .env or shell)
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - WANDB_PROJECT=${WANDB_PROJECT:-capo}
+      - WANDB_MODE=${WANDB_MODE:-offline}
+
+      # HuggingFace token (optional; for gated models)
+      - HF_TOKEN=${HF_TOKEN:-}
+
+    working_dir: /workspace
+
+    # ---- networking ---------------------------------------------------------
+    # Ray dashboard (optional; useful for monitoring)
+    ports:
+      - "8265:8265"
+
+volumes:
+  capo-data:
+  capo-hf-cache:

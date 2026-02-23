@@ -820,3 +820,234 @@ def joint_eb_update_kband(
     _, w = kband_weights(L=L, beta=beta, rho=rho, eta=eta, k=k, eps=eps)
 
     return beta, rho, eta, w
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CAPO-Q: Quadratic induced-variance plug-in (Algorithm alg:capo-q)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def capo_q_fit_and_predict(
+    g: Tensor,
+    L: Tensor,
+    index: Tensor | None = None,
+    beta: float = 1.0,
+    eps: float = 1e-8,
+) -> tuple[float, float, Tensor]:
+    """CAPO-Q plug-in: fit quadratic variance law and return precisions.
+
+    Implements Algorithm ``alg:capo-q`` from the paper.
+
+    Given scalar returns *g* and lengths *L*, computes within-group
+    residuals ``e = g - m_p``, then fits
+
+        E[e² | L] ≈ a·L^β + b·L^{β+1},   a,b ≥ 0
+
+    via non-negative least squares pooled across groups.  Returns
+    precision weights ω_i = 1 / v̂(L_i).
+
+    Parameters
+    ----------
+    g : Tensor [B]
+        Scalar trajectory returns.
+    L : Tensor [B]
+        Trajectory lengths.
+    index : Tensor [B] or None
+        Prompt-group indices.  If None, treat all as one group.
+    beta : float
+        Fixed length exponent (typically 1.0).
+    eps : float
+        Numerical floor.
+
+    Returns
+    -------
+    a_hat : float
+        Fitted linear coefficient.
+    b_hat : float
+        Fitted quadratic coefficient.
+    omega : Tensor [B]
+        Precision weights ω_i = 1 / (a·L^β + b·L^{β+1}).
+    """
+    g = g.double()
+    L = L.double()
+
+    # Step 1: compute within-group residuals  e = g - m_p
+    e = torch.empty_like(g)
+    if index is None:
+        m = g.mean()
+        e[:] = g - m
+    else:
+        idx_t = (
+            index
+            if isinstance(index, Tensor)
+            else torch.as_tensor(index, dtype=torch.long, device=g.device)
+        )
+        for gid in idx_t.unique():
+            mask = idx_t == gid
+            m_p = g[mask].mean()
+            e[mask] = g[mask] - m_p
+
+    # Step 2: squared residuals as targets
+    y = e.pow(2)  # [B]
+
+    # Step 3: design matrix  X = [L^β, L^{β+1}]
+    x1 = L.pow(beta)  # [B]
+    x2 = L.pow(beta + 1.0)  # [B]
+    X = torch.stack([x1, x2], dim=1)  # [B, 2]
+
+    # Step 4: non-negative least squares (NNLS) via projected gradient
+    # For a 2-parameter problem, a few iterations of projected GD suffice.
+    # Alternatively, use the closed-form OLS solution and clamp negatives.
+    XtX = X.T @ X  # [2, 2]
+    Xty = X.T @ y  # [2]
+
+    # Solve normal equations then project to non-negative orthant
+    try:
+        coeffs = torch.linalg.solve(XtX + eps * torch.eye(2, dtype=g.dtype, device=g.device), Xty)
+    except torch.linalg.LinAlgError:
+        coeffs = torch.zeros(2, dtype=g.dtype, device=g.device)
+
+    a_hat = max(float(coeffs[0].item()), 0.0)
+    b_hat = max(float(coeffs[1].item()), 0.0)
+
+    # If both are zero (degenerate), fall back to uniform
+    if a_hat < eps and b_hat < eps:
+        a_hat = 1.0
+        b_hat = 0.0
+
+    # Step 5: compute precision weights
+    v_hat = a_hat * x1 + b_hat * x2  # [B]
+    omega = v_hat.clamp_min(eps).reciprocal().float()
+
+    return a_hat, b_hat, omega
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CAPO-HAC: Newey–West lag-window plug-in (Algorithm alg:capo-hac)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def capo_hac_pooled_autocovariance(
+    increments: Tensor,
+    increments_mask: Tensor,
+    K: int,
+) -> Tensor:
+    r"""Estimate pooled autocovariances γ̂(h) for h=0,…,K.
+
+    Implements Eq. (``eq:gammahat-pooled``) from the paper:
+
+    .. math::
+        \hat\gamma(h) = \frac{\sum_{p,i}\sum_{t=h+1}^{L_{p,i}}
+        (Y_{t}-\bar{Y})(Y_{t-h}-\bar{Y})}{\sum_{p,i}(L_{p,i}-h)}
+
+    Parameters
+    ----------
+    increments : Tensor [B, T]
+        Token-level increments Y_{p,i,t}.
+    increments_mask : Tensor [B, T]
+        Binary mask (1 = valid token, 0 = padding).
+    K : int
+        Maximum lag (bandwidth).
+
+    Returns
+    -------
+    gamma_hat : Tensor [K+1]
+        Pooled autocovariance estimates.
+    """
+    B, T = increments.shape
+    device = increments.device
+    dtype = increments.dtype
+
+    # Centre each trajectory: Y - mean(Y)
+    lengths = increments_mask.sum(dim=1).clamp_min(1)  # [B]
+    sums = (increments * increments_mask).sum(dim=1, keepdim=True)  # [B, 1]
+    means = sums / lengths.unsqueeze(1)  # [B, 1]
+    Y_centered = (increments - means) * increments_mask  # [B, T]
+
+    gamma_hat = torch.zeros(K + 1, dtype=dtype, device=device)
+
+    for h in range(min(K + 1, T)):
+        if h == 0:
+            # γ(0) = Σ_{p,i} Σ_t Y_c[t]^2 / N_0
+            prod = Y_centered.pow(2)  # [B, T]
+            S_h = (prod * increments_mask).sum()
+            N_h = increments_mask.sum()
+        else:
+            # Y_centered[:, h:] * Y_centered[:, :-h], both masked
+            Y_t = Y_centered[:, h:]  # [B, T-h]
+            Y_th = Y_centered[:, :-h]  # [B, T-h]
+            # Both positions must be valid
+            m_t = increments_mask[:, h:]  # [B, T-h]
+            m_th = increments_mask[:, :-h]  # [B, T-h]
+            valid = m_t * m_th  # [B, T-h]
+            prod = Y_t * Y_th * valid  # [B, T-h]
+            S_h = prod.sum()
+            N_h = valid.sum()
+
+        if N_h > 0:
+            gamma_hat[h] = S_h / N_h
+
+    return gamma_hat
+
+
+def capo_hac_fit_and_predict(
+    increments: Tensor,
+    increments_mask: Tensor,
+    L: Tensor,
+    K: int = 16,
+    eps: float = 1e-8,
+) -> tuple[Tensor, Tensor]:
+    r"""CAPO-HAC plug-in: Newey–West induced-variance and precisions.
+
+    Implements Algorithm ``alg:capo-hac`` from the paper.
+
+    Given token-level increments and trajectory lengths, estimates pooled
+    autocovariances up to lag *K*, then evaluates the Bartlett-window
+    (Newey–West) induced variance at each trajectory's length:
+
+    .. math::
+        \hat{v}_{\mathrm{HAC}}(L) = L\hat\gamma(0)
+        + 2\sum_{h=1}^{\min\{K,L-1\}} (L-h)\Big(1-\frac{h}{K+1}\Big)\hat\gamma(h)
+
+    Returns precision weights ω_i = 1 / v̂_HAC(L_i).
+
+    Parameters
+    ----------
+    increments : Tensor [B, T]
+        Token-level increments Y_{p,i,t}.
+    increments_mask : Tensor [B, T]
+        Binary mask (1 = valid token, 0 = padding).
+    L : Tensor [B]
+        Trajectory lengths.
+    K : int
+        Bandwidth (max lag for Bartlett window).
+    eps : float
+        Numerical floor.
+
+    Returns
+    -------
+    gamma_hat : Tensor [K+1]
+        Pooled autocovariance estimates.
+    omega : Tensor [B]
+        Precision weights ω_i = 1 / v̂_HAC(L_i).
+    """
+    gamma_hat = capo_hac_pooled_autocovariance(increments, increments_mask, K)
+
+    L_float = L.double()
+    gamma_d = gamma_hat.double()
+
+    # Compute v̂_HAC(L_i) for each trajectory
+    v_hat = L_float * gamma_d[0]  # [B]
+
+    for h in range(1, K + 1):
+        # Bartlett weight: w(h) = 1 - h/(K+1)
+        bartlett_w = 1.0 - h / (K + 1.0)
+        # Only add for trajectories where L > h
+        contrib = 2.0 * (L_float - h) * bartlett_w * gamma_d[h]
+        # Zero out for trajectories shorter than h+1
+        valid = (L_float > h).double()
+        v_hat = v_hat + contrib * valid
+
+    omega = v_hat.clamp_min(eps).reciprocal().float()
+
+    return gamma_hat, omega

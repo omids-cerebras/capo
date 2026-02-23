@@ -43,3 +43,6 @@ outputs/
 # Misc
 *.log
 *.sqlite3
+
+# Models
+**/scratch

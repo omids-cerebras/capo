@@ -314,6 +314,29 @@ Estimate \((\hat\beta,\hat\xi)\) via Algorithm~\ref{alg:eb-capo} and set
 \end{equation}
 In the oracle diagnostic, \(\hat\beta\) and \(\hat\xi\) are replaced by the true parameters of the generative model.
 
+\emph{(v) CAPO-Q (quadratic variance-law plug-in).}
+Compute within-group residuals \(e_i = g_i - \bar g_p\), then fit
+\begin{equation}
+  \hat v(L)
+  \;=\;
+  \hat a\,L^{\beta} \;+\; \hat b\,L^{\beta+1},
+  \qquad \hat a,\hat b \ge 0,
+  \label{eq:synth_w_capoq}
+\end{equation}
+via NNLS on pooled squared residuals (Algorithm~\ref{alg:capo-q}).  Set \(\omega_i^{\mathrm{Q}} = 1/\hat v(L_i)\).
+Under compound symmetry with \(\rho_{\mathrm{cs}}\), the quadratic law matches the true \(v(L) = (1{-}\rho_{\mathrm{cs}})L + \rho_{\mathrm{cs}} L^2\).
+
+\emph{(vi) CAPO-HAC (Newey--West lag-window plug-in).}
+Estimate pooled autocovariances \(\hat\gamma(h)\) from the token-level reward increments (Eq.~\ref{eq:gammahat-pooled}), then evaluate the Bartlett-window long-run variance at each trajectory's length:
+\begin{equation}
+  \hat v_{\mathrm{HAC}}(L)
+  \;=\;
+  L\hat\gamma(0) \;+\; 2\sum_{h=1}^{\min\{K,L{-}1\}}(L{-}h)\Big(1 - \tfrac{h}{K{+}1}\Big)\hat\gamma(h),
+  \label{eq:synth_w_capohac}
+\end{equation}
+using bandwidth \(K=16\) (Algorithm~\ref{alg:capo-hac}).  Set \(\omega_i^{\mathrm{HAC}} = 1/\hat v_{\mathrm{HAC}}(L_i)\).
+Under short-range dependence (IID/AR(1)/\(k\)-band), this is consistent for the true induced variance.
+
 \paragraph{Evaluation metrics.}
 For each method and each covariance regime, we compute the mean-squared advantage conditional on length,
 \(\mathbb E[A_i^2\mid L_i=L]\), and summarize length sensitivity by the amplification ratio

@@ -28,6 +28,8 @@ from typing import Any
 import torch
 
 from capo.eb_core import (
+    capo_hac_fit_and_predict,
+    capo_q_fit_and_predict,
     eb_lite_fit_beta_and_weights,
     joint_eb_update_kband,
     s_kband,
@@ -469,6 +471,191 @@ def compute_capo_eb_full_advantage(
         "capo/weight_kurtosis": float(w_kurt),
         "capo/weight_ess": float(w_ess),
     }
+
+    return advantages, returns, adv_metrics
+
+
+def compute_capo_q_advantage(
+    token_level_rewards: Tensor,
+    response_mask: Tensor,
+    index: Any,
+    config: Any = None,
+    epsilon: float = 1e-8,
+    beta: float = 1.0,
+    **kwargs,
+) -> tuple[Tensor, Tensor, dict]:
+    r"""CAPO-Q advantage (Algorithm~\ref{alg:capo-q}).
+
+    Uses the quadratic induced-variance plug-in motivated by
+    compound symmetry / random intercepts:
+
+        v̂(L) = â·L^β + b̂·L^{β+1},   â,b̂ ≥ 0
+
+    The coefficients (â, b̂) are estimated via non-negative least
+    squares on the pooled squared residuals.  Precision weights are
+    ω_i = 1/v̂(L_i), normalised within each prompt group.
+
+    Parameters
+    ----------
+    token_level_rewards : Tensor, shape [B, T]
+        CAPO token-level rewards r_{i,t}.
+    response_mask : Tensor, shape [B, T]
+        Mask for valid response tokens.
+    index : array-like or None
+        Prompt-group IDs.
+    config : Any
+        VERL config; `config.norm_adv_by_std_in_grpo` for optional
+        global std-normalization.
+    epsilon : float
+        Numerical floor.
+    beta : float
+        Fixed length exponent for the quadratic law (default 1.0).
+
+    Returns
+    -------
+    advantages : Tensor, shape [B, T]
+        Token-level CAPO-Q advantages.
+    returns : Tensor, shape [B, T]
+        Returns (masked token-level rewards).
+    adv_metrics : dict
+        Diagnostics: fitted â, b̂, β.
+    """
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+
+    if not torch.any(valid):
+        advantages = torch.zeros_like(token_level_rewards)
+        returns = token_level_rewards.clone()
+        return advantages, returns, {}
+
+    idx_t = None
+    if index is not None:
+        idx_t = torch.as_tensor(index, dtype=torch.long, device=returns_scalar.device)
+
+    a_hat, b_hat, omega = capo_q_fit_and_predict(
+        g=returns_scalar,
+        L=lengths,
+        index=idx_t,
+        beta=beta,
+        eps=epsilon,
+    )
+
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
+    advantages = adv_scalar.unsqueeze(-1) * valid.float()
+
+    if config is not None and getattr(config, "norm_adv_by_std_in_grpo", False):
+        valid_adv = advantages[valid]
+        std = valid_adv.std().clamp_min(epsilon)
+        advantages = advantages / std
+
+    returns = token_level_rewards * valid
+
+    with torch.no_grad():
+        w_mean = w.mean()
+        w_std = w.std(unbiased=False)
+        w_cv = (w_std / (w_mean.abs() + epsilon)).item()
+        w_centered = w - w_mean
+        w_var = w_centered.pow(2).mean().clamp_min(epsilon)
+        w_kurt = (w_centered.pow(4).mean() / (w_var * w_var)).item()
+        ess = (w.sum().pow(2) / w.pow(2).sum().clamp_min(epsilon)).item()
+
+        adv_metrics = {
+            "capo_q/a_hat": float(a_hat),
+            "capo_q/b_hat": float(b_hat),
+            "capo_q/beta": float(beta),
+            "capo_q/weight_cv": float(w_cv),
+            "capo_q/weight_kurtosis": float(w_kurt),
+            "capo_q/weight_ess": float(ess),
+        }
+
+    return advantages, returns, adv_metrics
+
+
+def compute_capo_hac_advantage(
+    token_level_rewards: Tensor,
+    response_mask: Tensor,
+    index: Any,
+    config: Any = None,
+    epsilon: float = 1e-8,
+    K: int = 16,
+    **kwargs,
+) -> tuple[Tensor, Tensor, dict]:
+    r"""CAPO-HAC advantage (Algorithm~\ref{alg:capo-hac}).
+
+    Uses the Newey–West lag-window plug-in to estimate the
+    long-run variance v_HAC(L) from pooled autocovariances of
+    the token-level reward increments.  Precision weights are
+    ω_i = 1/v̂_HAC(L_i), normalised within each prompt group.
+
+    Parameters
+    ----------
+    token_level_rewards : Tensor, shape [B, T]
+        CAPO token-level rewards r_{i,t} (used as increments).
+    response_mask : Tensor, shape [B, T]
+        Mask for valid response tokens.
+    index : array-like or None
+        Prompt-group IDs.
+    config : Any
+        VERL config; `config.norm_adv_by_std_in_grpo` for optional
+        global std-normalization.
+    epsilon : float
+        Numerical floor.
+    K : int
+        Bandwidth (maximum lag for Bartlett window).
+
+    Returns
+    -------
+    advantages : Tensor, shape [B, T]
+        Token-level CAPO-HAC advantages.
+    returns : Tensor, shape [B, T]
+        Returns (masked token-level rewards).
+    adv_metrics : dict
+        Diagnostics: K, γ̂(0), weight stats.
+    """
+    lengths, returns_scalar, valid = _lengths_and_scalar_returns(token_level_rewards, response_mask)
+
+    if not torch.any(valid):
+        advantages = torch.zeros_like(token_level_rewards)
+        returns = token_level_rewards.clone()
+        return advantages, returns, {}
+
+    # Token-level rewards serve as the increments Y_{p,i,t}
+    increments = token_level_rewards
+    increments_mask = response_mask
+
+    gamma_hat, omega = capo_hac_fit_and_predict(
+        increments=increments,
+        increments_mask=increments_mask,
+        L=lengths,
+        K=K,
+        eps=epsilon,
+    )
+
+    w, adv_scalar = _groupwise_advantages(omega, returns_scalar, index, eps=epsilon)
+    advantages = adv_scalar.unsqueeze(-1) * valid.float()
+
+    if config is not None and getattr(config, "norm_adv_by_std_in_grpo", False):
+        valid_adv = advantages[valid]
+        std = valid_adv.std().clamp_min(epsilon)
+        advantages = advantages / std
+
+    returns = token_level_rewards * valid
+
+    with torch.no_grad():
+        w_mean = w.mean()
+        w_std = w.std(unbiased=False)
+        w_cv = (w_std / (w_mean.abs() + epsilon)).item()
+        w_centered = w - w_mean
+        w_var = w_centered.pow(2).mean().clamp_min(epsilon)
+        w_kurt = (w_centered.pow(4).mean() / (w_var * w_var)).item()
+        ess = (w.sum().pow(2) / w.pow(2).sum().clamp_min(epsilon)).item()
+
+        adv_metrics = {
+            "capo_hac/K": float(K),
+            "capo_hac/gamma0": float(gamma_hat[0].item()),
+            "capo_hac/weight_cv": float(w_cv),
+            "capo_hac/weight_kurtosis": float(w_kurt),
+            "capo_hac/weight_ess": float(ess),
+        }
 
     return advantages, returns, adv_metrics
 
