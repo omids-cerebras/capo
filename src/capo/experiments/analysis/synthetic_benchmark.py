@@ -740,7 +740,7 @@ def _groupwise_baseline(
     index: np.ndarray,
     eps: float = 1e-8,
 ) -> float:
-    """Per-group weighted-mean baseline, averaged across groups.
+    r"""Per-group weighted-mean baseline, averaged across groups.
 
     Uses the same per-group normalisation as ``_groupwise_advantages``:
     within each group, $w_j = \omega_j / \sum_{k \in I_p} \omega_k$,
@@ -764,7 +764,7 @@ def compute_scalar_baselines(
     index: np.ndarray,
     method_keys: list[str],
 ) -> dict[str, float]:
-    """Compute the scalar weighted-mean baseline for each method.
+    r"""Compute the scalar weighted-mean baseline for each method.
 
     Every method uses the same per-group normalisation structure;
     only the precision weights $\omega_i$ differ.  This makes the
