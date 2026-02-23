@@ -7,7 +7,7 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
-        args: ['--maxkb=1000']
+        args: ['--maxkb=5000']
       - id: check-merge-conflict
       - id: debug-statements
 
@@ -22,8 +22,9 @@ repos:
     hooks:
       - id: pytest-check
         name: pytest-check
-        entry: pytest --tb=short -q
+        entry: python -m pytest --tb=short -q
         language: system
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+        verbose: true

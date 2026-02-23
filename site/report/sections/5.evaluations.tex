@@ -1,0 +1,254 @@
+\section{Experiments}
+\label{sec:results}
+
+We evaluate CAPO on a controlled RLVR setting designed to isolate the effect of
+advantage aggregation. All results are produced with a single open-weight model
+(Qwen2.5--1.5B--Instruct) and a single task distribution (CountDown).
+
+\subsection{Setup}
+\paragraph{Task.} CountDown presents a target integer and a small multiset of
+integers; the model must return an arithmetic expression that evaluates to the
+target. We use the standard exact-match verifier, yielding a binary outcome
+reward.
+
+\paragraph{Model.} We finetune Qwen2.5--1.5B--Instruct with group-based
+on-policy RL. For each prompt, we sample $N=8$ trajectories per update, matching
+the aggregation dimension assumed by GRPO-style estimators.
+
+\paragraph{Context budgets.} We report two response-length regimes:
+(i) a \emph{short} regime with maximum response length 2048 tokens and
+(ii) a \emph{long} regime with maximum response length 8192 tokens. Unless
+otherwise noted, all other hyperparameters are kept identical across regimes.
+
+\paragraph{Implementation.} We implement all methods within the same training
+stack (VERL), holding fixed the rollout procedure, optimizer, and training
+schedule. This ensures that differences can be attributed to the advantage
+aggregation / normalization rule rather than to unrelated systems choices.
+
+\paragraph{Group-based objective and estimator.}
+All baselines and CAPO variants use the same group-based on-policy objective.
+Concretely, for each prompt we sample $N$ trajectories, compute token-level policy-gradient terms using the same clipping and advantage conventions, and differ only in how the per-trajectory advantages (and hence token-level losses) are reweighted as a function of trajectory length and dependence.
+This isolates the effect of the aggregation rule discussed in \S\ref{sec:setup}--\S\ref{sec:method}.
+
+\paragraph{Hyperparameters and reproducibility.}
+We use identical optimizer, rollout, and training-schedule hyperparameters across all methods within a given context budget.
+For transparency and reproducibility, we report the key optimization hyperparameters in Table~\ref{tab:hyperparams}.
+Unless otherwise stated, all reported curves are averaged over multiple random seeds; the stability metrics in Table~\ref{tab:stability} are computed from the per-seed validation trajectories prior to averaging.
+
+\begin{table}[t]
+\centering
+\small
+\input{artifacts/paper/tab_hyperparams.tex}
+\caption{Key optimization and rollout hyperparameters used in the CountDown RLVR experiments.
+We hold these fixed across methods within a given context budget; only the advantage aggregation / normalization rule varies.}
+\label{tab:hyperparams}
+\end{table}
+
+\subsection{Baselines and method variants}
+We compare CAPO against a set of aggregation baselines that progressively add
+or remove normalizations:
+\begin{itemize}
+  \item \textbf{DAPO normalization} (token-mean): GRPO with token-averaged policy
+  loss.
+  \item \textbf{GRPO normalization} (seq-mean-token-mean): GRPO with per-sequence
+  normalization of the loss, which empirically reduces length bias but can
+  increase variance.
+  \item \textbf{Dr.~GRPO normalization:} GRPO with distributional-reweighting
+  correction (Dr.~GRPO) combined with the GRPO normalization.
+  \item \textbf{$\Delta L$ normalization} ($\alpha\in\{0.75, 1.0\}$): length-weighted
+  normalization via GRPO++-style trajectory weighting.
+\end{itemize}
+\paragraph{CAPO variants (variance-law plug-ins).}
+CAPO is a modular GRPO-style framework: each variant differs only by the estimator of the induced variance law $v(L)=\mathrm{Var}(g\mid L)$ (Section~\ref{subsec:capo-plugins}) used to produce within-group precision weights (Section~\ref{sec:algorithms}). We implement four plug-ins:
+\begin{itemize}
+  \item \textbf{L-CAPO}: length-only/independence plug-in ($s\equiv 1$), including $\Delta L$ as the fixed-$\beta{=}1$ special case (Proposition~\ref{prop:lcapo-independence}).
+  \item \textbf{LV-CAPO}: structured empirical-Bayes plug-in that jointly fits a length exponent and a dependence shape (Algorithm~\ref{alg:eb-capo}).
+  \item \textbf{CAPO-Q}: quadratic variance-law plug-in motivated by compound symmetry / random intercepts (Algorithm~\ref{alg:capo-q}).
+  \item \textbf{CAPO-HAC}: lag-window/Newey--West long-run variance plug-in that targets $v(L)$ directly under short-range dependence (Algorithm~\ref{alg:capo-hac}).
+\end{itemize}
+In the main CountDown runs (Tables~\ref{tab:main-accuracy}--\ref{tab:stability}), we focus on L-CAPO and LV-CAPO, which bracket the independence and structured-dependence extremes. All four CAPO plug-ins are evaluated side-by-side in every experiment of our controlled synthetic covariance benchmark (Appendix~\ref{sec:synthetic-covariance-benchmark}), where the dependence regime is known by construction and the plug-in behavior is directly interpretable.
+
+\subsection{Metrics}
+\paragraph{Accuracy.} For each validation prompt, we sample $N=8$ trajectories
+and report (i) \emph{Avg@8}, the average verifier success over trajectories, and
+(ii) \emph{Best@8}, the success rate of the best trajectory within each group
+(equivalently, pass@8 under a binary verifier).
+
+\paragraph{Stability and efficiency.} We summarize learning-curve stability and
+sample efficiency with:
+\begin{itemize}
+  \item \textbf{Monotonicity:} the Pearson correlation between evaluation step
+  and validation Avg@8.
+  \item \textbf{Negative drift rate (NDR):} the fraction of evaluation intervals
+  with a decrease in validation Avg@8.
+  \item \textbf{Tokens-to-target (TTT):} the cumulative number of training tokens
+  processed until validation Avg@8 first exceeds a fixed target threshold.
+\end{itemize}
+
+\subsection{Main results}
+Table~\ref{tab:main-accuracy} reports end performance under both context budgets.
+Figure~\ref{fig:dynamics} shows representative learning dynamics.
+
+\begin{table}[t]
+\centering
+\small
+\input{artifacts/paper/tab_main_accuracy.tex}
+\caption{Main accuracy on CountDown with Qwen2.5--1.5B--Instruct. We report
+Avg@8 under a short (2048) and long (8192) response budget.}
+\label{tab:main-accuracy}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{artifacts/paper/fig_dynamics.pdf}
+\caption{Training dynamics (validation Avg@8 vs. global step) for a
+representative subset of methods.}
+\label{fig:dynamics}
+\end{figure}
+
+\subsection{Stability and efficiency}
+Table~\ref{tab:stability} aggregates stability and efficiency diagnostics.
+Figure~\ref{fig:stability} visualizes the stability trade-off across methods.
+
+\begin{table}[t]
+\centering
+\small
+\input{artifacts/paper/tab_stability_efficiency.tex}
+\caption{Stability and efficiency diagnostics computed from validation curves.
+Higher monotonicity is better; lower NDR and lower TTT are better.}
+\label{tab:stability}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{artifacts/paper/fig_stability.pdf}
+\caption{Stability summary. Each point corresponds to a method, plotted by
+monotonicity (higher is better) and negative drift rate (lower is better).}
+\label{fig:stability}
+\end{figure}
+
+\subsection{Length equity}
+To make length effects explicit, we stratify validation by response-length
+deciles and report verifier success within each stratum.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{artifacts/paper/fig_length_deciles.pdf}
+\caption{Verifier success by response-length decile. This analysis highlights
+whether a method disproportionately favors short (or long) trajectories even
+when end-to-end accuracy is similar.}
+\label{fig:length-deciles}
+\end{figure}
+
+
+\subsection{Additional diagnostics and failure modes}
+
+\paragraph{Weight degeneracy.}
+A central practical concern in any variance-based weighting scheme is \emph{degeneracy} of the normalized weights $w_i$:
+if one trajectory receives nearly all mass, the effective number of trajectories contributing to the update collapses.
+To monitor this, we recommend reporting the effective sample size
+$\mathrm{ESS}:=(\sum_i w_i)^2/(\sum_i w_i^2)$ and/or the entropy $-\sum_i w_i\log w_i$ of the normalized weights.
+CAPO includes explicit clipping and $\varepsilon$-regularization steps (Algorithms~\ref{alg:eb-lite}--\ref{alg:eb-capo}) to prevent pathological collapse.
+
+\paragraph{Length-conditioned bias.}
+Length-based normalization can introduce systematic differences in how short and long trajectories are reinforced.
+The length-decile analysis in Figure~\ref{fig:length-deciles} is intended to expose such effects.
+For publication-quality reporting, we recommend additionally stratifying by reward outcome (success/failure) and by prompt difficulty to distinguish genuine credit assignment from spurious length preferences.
+
+\paragraph{Model misspecification.}
+The variance law $v(L)\propto L^{\beta}s(L;\xi)$ is a working model.
+When this model is misspecified, CAPO remains unbiased (because \eqref{eq:linear-agg} enforces unbiasedness), but suboptimal weighting can increase variance and exacerbate instability.
+The robustness results in \S\ref{subsec:cs} and the covariance examples in Appendix~\ref{sec:eb-examples} provide guidance for diagnosing when simple dependence surrogates (e.g., exponential or compound-symmetry) are adequate.
+
+
+\subsection{Synthetic covariance benchmark}\label{subsec:synthetic-benchmark}
+
+The online CountDown experiments exercise CAPO in a full RLVR pipeline, but they do not isolate the specific statistical question that CAPO targets: \emph{how a batch of heterogeneous-length trajectories should be reweighted when within-trajectory dependence induces structured heteroscedasticity.}
+To answer this question under maximum experimental control, we include a base-model-free simulator that generates trajectory lengths $L_i$ and scalar returns $g_i \sim \mathcal{N}(0, v(L_i))$ under configurable covariance structures \emph{without querying a base model} (Appendix~\ref{sec:synthetic-covariance-benchmark}).
+
+\paragraph{Setup.}
+We simulate $G = P \times N$ rollouts organised into $P$ prompt groups of $N$ trajectories, matching the on-policy workflow.
+All methods operate \emph{within each prompt group}, differing only in the weighting rule applied to the $N$ rollouts:
+GRPO uses uniform weights (z-score normalisation), $\Delta L$ uses $w_i \propto L_i^{-\alpha}$ with a fixed $\alpha$, and CAPO uses precision weights $w_i \propto 1/v(L_i)$ derived from modelling how variance depends on length and within-trajectory token covariance.
+We compare oracle instantiations (true $v(L)$ known) to isolate the effect of the weighting rule itself, rather than estimation error.
+
+\paragraph{Covariance regimes.}
+Six canonical regimes span short-range and long-range dependence:
+(i) IID token noise ($v(L) = L$),
+(ii)--(iii) geometric (AR(1)) dependence at correlation levels $\rho \in \{0.7, 0.9\}$,
+(iv) $k$-banded stretched-geometric dependence ($\rho=0.7, k=16, \eta=1.5$), and
+(v)--(vi) compound-symmetry (CS) regimes with off-diagonal correlation $\rho \in \{0.01, 0.05\}$, where variance grows superlinearly in $L$.
+These regimes directly mirror the families analysed in \S\ref{subsec:kband-eta}--\S\ref{subsec:cs}.
+
+\paragraph{Diagnostics.}
+We report two complementary views of how each method transforms an identical batch $\{(g_i, L_i)\}$:
+
+\noindent
+\emph{(a) Length amplification} (Table~\ref{tab:synthetic-covariance}, Figure~\ref{fig:synthetic-covariance}).
+The normalised mean-squared advantage profile $\mathbb{E}[A^2 \mid L] / \mathbb{E}[A^2 \mid L_{\min}]$ measures whether an advantage construction amplifies or suppresses long trajectories.
+GRPO amplifies long (noisy) trajectories by $3$--$7\times$ across regimes.
+$\Delta L$ ($\alpha = 1.0$) and CAPO both \emph{suppress} long trajectories (ratios $\ll 1$), but for different reasons:
+$\Delta L$ applies a fixed correction $L^{-\alpha}$ that is optimal only under IID, while CAPO's precision weighting $w_i \propto 1/v(L_i)$ adapts to the true variance law.
+Under compound symmetry, where $v(L)$ grows superlinearly, $\Delta L$'s fixed-$\alpha$ rule under-corrects: L-CAPO (which assumes $v(L) = L^{\beta}$) shows amplification ratios rising above 1 at CS $\rho = 0.05$, whereas dependence-aware LV-CAPO achieves the lowest amplification across all long-range regimes.
+
+\paragraph{Where CAPO-Q and CAPO-HAC fit in this benchmark.}
+The synthetic benchmark is particularly well-suited for benchmarking plug-ins because the generative covariance regime is controlled. In addition to L-CAPO (length-only) and LV-CAPO (structured EB), we include all four plug-ins in every experiment:
+(i) \textbf{CAPO-Q}, which uses the quadratic CS variance law $v(L)\propto (1-\rho)L+\rho L^2$ (Section~\ref{subsec:capo-q-plugin}); and (ii) \textbf{CAPO-HAC}, which estimates $v(L)$ by a lag-window/Newey--West long-run variance estimator (Section~\ref{subsec:capo-hac-plugin}). When the simulator uses compound symmetry, CAPO-Q coincides with oracle inverse-variance weighting (Proposition~\ref{prop:capoq-fit}); when the simulator uses short-range dependence (IID/AR(1)/$k$-band), CAPO-HAC targets the same long-run variance appearing in Bartlett’s identity and is consistent under standard mixing conditions. All seven methods (GRPO, $\Delta L(\alpha{=}0.5)$, $\Delta L(\alpha{=}1.0)$, L-CAPO, LV-CAPO, CAPO-Q, CAPO-HAC) are included in every experiment, enabling direct comparison of all plug-ins across all covariance regimes.
+
+\noindent
+\emph{(b) Signal allocation} (Figure~\ref{fig:synthetic-signal-share}).
+The fraction of total squared signal $\sum_i A_i^2$ contributed by each length bin shows where update energy concentrates.
+GRPO over-allocates to the longest bin; CAPO redistributes signal towards shorter (higher-precision) trajectories, concentrating gradient energy where the signal-to-noise ratio is highest.
+
+\paragraph{Relative efficiency.}
+Beyond the distributional view, Figure~\ref{fig:efficiency-heatmap} reports the baseline-MSE relative efficiency $\mathrm{RelEff}(M) = \mathrm{Var}(\hat m_{\text{unif}}) / \mathrm{Var}(\hat m_M)$, estimated via Monte Carlo.
+This is the primary metric: values above 1 mean the method achieves a \emph{strictly lower-variance} baseline estimate than uniform averaging.
+LV-CAPO achieves the highest relative efficiency across all regimes, with gains of $2$--$6\times$ under dependence, because its inverse-variance weighting is the minimum-variance unbiased (MVU) linear combination (Lemma~\ref{lem:mvu}).
+$\Delta L$ provides partial correction ($1$--$2\times$), while GRPO is the $1.0\times$ reference by construction.
+
+\paragraph{Summary.}
+These synthetic experiments confirm three properties of CAPO's per-group precision weighting:
+(i) it eliminates the length amplification that destabilises GRPO in long-horizon settings;
+(ii) it concentrates update signal on high-precision trajectories where the gradient carries the most information per unit noise; and
+(iii) it achieves the statistically optimal variance reduction for baseline estimation, with the largest gains appearing under the strong within-trajectory dependence structures that arise in real RLVR training.
+
+Full simulator details, variance law derivations, and reproducibility instructions appear in Appendix~\ref{sec:synthetic-covariance-benchmark}.
+The reference implementation is provided as \texttt{capo.experiments.analysis.synthetic\_benchmark}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{artifacts/paper/fig_synthetic_covariance.pdf}
+\caption{Synthetic benchmark: normalised mean-squared advantage $\mathbb{E}[A^2 \mid L] / \mathbb{E}[A^2 \mid L_{\min}]$ versus trajectory length under six covariance regimes.
+Curves above~$1$ indicate length amplification (long trajectories dominate the gradient); curves below~$1$ indicate precision-optimal suppression of noisy trajectories.
+GRPO amplifies long trajectories by $3$--$7\times$; LV-CAPO suppresses them by concentrating weight on high-precision (short) trajectories.}
+\label{fig:synthetic-covariance}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{artifacts/paper/fig_synthetic_signal_share.pdf}
+\caption{Signal allocation across length bins.
+Each bar shows the fraction of total $\sum_i A_i^2$ contributed by a given length bin.
+GRPO over-allocates to the longest bin; CAPO shifts signal towards shorter trajectories where the signal-to-noise ratio is highest.}
+\label{fig:synthetic-signal-share}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{artifacts/paper/fig_efficiency_heatmap.pdf}
+\caption{Baseline-MSE relative efficiency $\mathrm{Var}(\hat m_{\text{unif}}) / \mathrm{Var}(\hat m_M)$ across methods and covariance regimes.
+Values above $1.0$ indicate strictly lower-variance baseline estimation than uniform averaging.
+LV-CAPO achieves $2$--$6\times$ relative efficiency under dependence, the theoretical optimum for inverse-variance weighting.}
+\label{fig:efficiency-heatmap}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\small
+\input{artifacts/paper/tab_synthetic_covariance.tex}
+\caption{Length amplification ratio $\mathbb{E}[A^2 \mid L_{\max}] / \mathbb{E}[A^2 \mid L_{\min}]$.
+Ratios $\gg 1$ indicate that long trajectories dominate the gradient (GRPO); ratios $\ll 1$ indicate precision-optimal suppression.
+Column-wise best (lowest ratio) is bolded.
+Under short-range dependence, $\Delta L$ ($\alpha{=}1$) achieves the lowest ratio; under compound symmetry, LV-CAPO adapts to the superlinear variance law and dominates.}
+\label{tab:synthetic-covariance}
+\end{table}

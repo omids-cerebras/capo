@@ -1,0 +1,363 @@
+\section{Illustrative examples}
+\label{sec:eb-examples}
+
+In this section we give two concrete examples illustrating the LV--CAPO algorithm:
+(i) a simple hand-computable toy example that makes the weighting mechanism transparent, and
+(ii) a simulated rollout experiment that can be used to compare CAPO with a GRPO-style baseline and empirically demonstrate the variance and sample-efficiency gains predicted by the theory.
+
+\subsection{Toy example: three trajectories with different lengths}
+\label{sec:toy-example-eb}
+
+Consider a single batch of \(G=3\) trajectories with lengths
+\[
+L_1=16,\qquad L_2=64,\qquad L_3=256.
+\]
+Suppose their scalarized returns (e.g., episode rewards) are
+\[
+g_1=0.8,\qquad g_2=1.0,\qquad g_3=1.1.
+\]
+We will assume, for this toy example, that the dependence factor is constant, \(s(L;\xi)\equiv 1\), so that
+\[
+\omega_i(\beta,\xi)=\omega_i(\beta)=L_i^{-\beta}
+\]
+and we focus on how the length exponent \(\beta\) changes the weights and the aggregated estimate of \(\mu\).
+
+\paragraph{Case 1: GRPO-style \(\Delta L\) weighting (\(\beta=1\)).}
+Setting \(\beta=1\) and \(s\equiv 1\) corresponds to the \(\Delta L\) rule discussed in Proposition~\ref{prop:deltaL}.
+The (unnormalized) precisions are
+\[
+\omega_1=L_1^{-1}=16^{-1}=0.0625,\quad
+\omega_2=64^{-1}\approx 0.015625,\quad
+\omega_3=256^{-1}\approx 0.00390625.
+\]
+The normalization constant is
+\[
+\Lambda_\omega=\omega_1+\omega_2+\omega_3
+=0.0625+0.015625+0.00390625
+=0.08203125.
+\]
+Hence the normalized weights are
+\[
+w_1=\frac{\omega_1}{\Lambda_\omega}\approx 0.7619,\quad
+w_2\approx 0.1905,\quad
+w_3\approx 0.0476.
+\]
+The aggregated estimate is
+\[
+m(\beta=1)
+=\sum_{i=1}^3 w_i g_i
+\approx 0.7619\cdot 0.8 + 0.1905\cdot 1.0 + 0.0476\cdot 1.1
+\approx 0.846.
+\]
+Here the shortest trajectory gets the largest weight, because GRPO implicitly assumes that longer episodes are noisier (variance growing proportionally with length).
+
+\paragraph{Case 2: EB-favored \(\beta<1\) when longer rollouts are less noisy.}
+Suppose the empirical EB fit (e.g., via Algorithm~\ref{alg:eb-lite}) finds that the residual variance decreases approximately like \(L^{-0.5}\), corresponding to an optimal \(\beta^\star\approx 0.5\).
+Then
+\[
+\omega_1=L_1^{-1/2}=16^{-1/2}=0.25,\quad
+\omega_2=64^{-1/2}=0.125,\quad
+\omega_3=256^{-1/2}=0.0625,
+\]
+and
+\[
+\Lambda_\omega=0.25+0.125+0.0625=0.4375.
+\]
+The normalized weights become
+\[
+w_1=\frac{0.25}{0.4375}\approx 0.5714,\quad
+w_2\approx 0.2857,\quad
+w_3\approx 0.1429.
+\]
+The aggregated estimate is now
+\[
+m(\beta=0.5)
+\approx 0.5714\cdot 0.8 + 0.2857\cdot 1.0 + 0.1429\cdot 1.1
+\approx 0.892.
+\]
+Relative to the GRPO-style \(\beta=1\) case, EB has shifted mass from the shortest trajectory towards the longer, more stable trajectories, because the data indicated that per-token noise decreases with length.
+The toy example makes the effect of \(\beta\) on the weights and on the overall estimator \(m(\beta,\xi)\) transparent, while keeping all computations fully explicit.
+
+\paragraph{Case 3: EB-favored \(\beta>1\) when very long rollouts are degraded.}
+Conversely, if the empirical analysis (e.g., based on \(\mathrm{RSS}_\omega\) across length buckets) suggests that very long rollouts are degraded due to reward sparsity or drift, the EB objective \(\ell(\beta,\xi)\) will favor \(\beta>1\), further downweighting extremely long episodes relative to the \(\beta=1\) baseline.
+This case can be illustrated by repeating the above calculations with, say, \(\beta=1.5\), in which case \(L_3\) receives much smaller weight than in the GRPO configuration.
+
+These hand-computable examples are convenient for visual demonstrations (e.g., plotting the weights \(w_i(\beta)\) as a function of \(\beta\)) and for sanity-checking code paths that implement Algorithm~\ref{alg:eb-capo}.
+
+\subsubsection{Simulated rollouts: LV--CAPO versus GRPO}
+\label{sec:simulated-eb-vs-grpo}
+
+We now outline a fully specified simulated experiment that can be used to compare CAPO with a GRPO-style baseline on a controlled synthetic task.
+The goal is to isolate the effect of length- and covariance-aware weighting on the variance and sample-efficiency of the training signal.
+
+\paragraph{Generative model.}
+We construct a synthetic rollout generator with the following components:
+
+\begin{itemize}
+  \item \textbf{Length distribution.}
+  At each outer step \(t\), draw \(G_t\) trajectory lengths i.i.d.\ from a heavy-tailed discrete distribution to mimic realistic RLHF setups, for example
+  \[
+  L_i \sim \text{Uniform}\{32,64,128,256\}
+  \quad\text{or}\quad
+  L_i \sim \text{Discrete-Lognormal}(\mu_L,\sigma_L^2)\text{ clipped to }[16,512].
+  \]
+
+  \item \textbf{Token-level increments with dependence.}
+  For each trajectory \(i\), generate scalar increments \(\{Y_{i,\tau}\}_{\tau=1}^{L_i}\) according to a Gaussian AR(1) process with length-dependent variance:
+  \begin{align*}
+    Y_{i,1} &\sim \mathcal N(0,\sigma_0^2),\\
+    Y_{i,\tau} \mid Y_{i,\tau-1} &\sim \mathcal N\big(\rho\,Y_{i,\tau-1},\,\sigma_\epsilon^2 L_i^{-\gamma}\big),
+    \qquad \tau=2,\dots,L_i,
+  \end{align*}
+  where \(\rho\in(0,1)\) controls temporal dependence and \(\gamma>0\) controls how per-token noise decays with length.
+  For large \(L_i\) and fixed \(\rho,\gamma\), this construction induces an approximate variance for the trajectory average that behaves like \(L_i^{-\gamma}\) up to a multiplicative factor depending on \(\rho\).
+
+  \item \textbf{Scalarized return.}
+  Define the scalarized trajectory return as
+  \[
+  g_i = \mu^\star + \frac{1}{L_i}\sum_{\tau=1}^{L_i} Y_{i,\tau} + \varepsilon_i,
+  \qquad
+  \varepsilon_i \sim \mathcal N(0,\sigma_{\text{tail}}^2),
+  \]
+  where $\mu^\star$ is the true global mean (e.g., the “teacher” target) and \(\varepsilon_i\) is an additional independent noise term capturing unmodeled effects.
+  By construction, conditional on \(L_i\) and \(\{Y_{i,\tau}\}\), we have \(\mathbb E[g_i\mid L_i]=\mu^\star\) and \(\mathrm{Var}(g_i\mid L_i)\approx \sigma^2 L_i^{-\gamma}\) for a suitable \(\sigma^2\), so the true length–variance exponent is \(\beta^\star\approx -\gamma\) (under the family \(v_i(\vartheta)=\sigma^2 L_i^\beta s(L_i;\xi)\), we have \(\beta^\star=-\gamma\) and \(s\equiv 1\) in the simplest case).
+\end{itemize}
+
+\paragraph{Compared estimators (LV--CAPO vs.\ GRPO).}
+On top of this generator, we compare two weighting strategies for estimating \(\mu^\star\) (or, in an RL context, for aggregating policy gradients):
+
+\begin{itemize}
+  \item \textbf{GRPO-style baseline.}
+  Use the \(\Delta L\) rule (Proposition~\ref{prop:deltaL}) regardless of the actual noise law:
+  \[
+  \omega_i^{\mathrm{GRPO}} = L_i^{-1},\qquad
+  w_i^{\mathrm{GRPO}} = \frac{\omega_i^{\mathrm{GRPO}}}{\sum_j \omega_j^{\mathrm{GRPO}}},\qquad
+  m_{\mathrm{GRPO}} = \sum_i w_i^{\mathrm{GRPO}} g_i.
+  \]
+  In a full GRPO implementation, these same weights would be used to aggregate per-trajectory gradients or log-prob increments for the policy update.
+
+  \item \textbf{LV--CAPO.}
+  Use the EB objective \(\ell(\beta,\xi)\) in \eqref{eq:EB-obj} to fit \(\beta\) (and optionally \(\xi\)), and then weight trajectories according to
+  \[
+  \omega_i^{\mathrm{CAPO}} = L_i^{-\beta_t} s(L_i;\xi_t)^{-1},
+  \qquad
+  w_i^{\mathrm{CAPO}} = \frac{\omega_i^{\mathrm{CAPO}}}{\sum_j \omega_j^{\mathrm{CAPO}}},
+  \qquad
+  m_{\mathrm{CAPO}} = \sum_i w_i^{\mathrm{CAPO}} g_i.
+  \]
+  In terms of the modular view (Algorithm~\ref{alg:capo-modular}), we instantiate CAPO with the following variance-law plug-ins (Section~\ref{subsec:capo-plugins}):
+  \begin{itemize}
+    \item \emph{L--CAPO:} Set \(s\equiv 1\) and either fix \(\beta=1\) (\(\Delta L\)) or estimate \(\beta_t\) using Algorithm~\ref{alg:eb-lite} (no token-level ACFs required).
+    \item \emph{LV--CAPO:} Use \(s(L;\rho,k,\eta)\) from Definition~\ref{def:kband}, update \(\beta_t\) via EB ascent, and update \(\xi_t=(\rho_t,\eta_t)\) via Algorithm~\ref{alg:eb-capo} (optionally warm-started by Algorithm~\ref{alg:acf-moment}).
+    \item \emph{CAPO-Q:} Fit a two-term variance law \(\widehat v(L)=\widehat a L^{\beta}+\widehat b L^{\beta+1}\) and weight by \(\omega_i\propto 1/\widehat v(L_i)\) (Algorithm~\ref{alg:capo-q}).
+    \item \emph{CAPO-HAC:} Estimate the induced variance directly via a Bartlett/Newey--West lag window and weight by \(\omega_i\propto 1/\widehat v_{\mathrm{HAC}}(L_i)\) (Algorithm~\ref{alg:capo-hac}).
+  \end{itemize}
+\end{itemize}
+
+\paragraph{Simulation protocol.}
+A simple protocol that is straightforward to implement and plot is:
+
+\begin{enumerate}
+  \item Fix hyperparameters: true \(\mu^\star\), \(\rho\), \(\gamma\), \(\sigma_0^2\), \(\sigma_\epsilon^2\), \(\sigma_{\text{tail}}^2\), length distribution for \(L_i\), batch size \(G_t\), and number of outer steps \(T\).
+  \item For each outer step \(t=1,\dots,T\):
+  \begin{enumerate}
+    \item Generate a batch \(\mathcal B_t\) using the generative model above.
+    \item \textbf{GRPO branch:} Compute \((w_i^{\mathrm{GRPO}},m_{\mathrm{GRPO}}^{(t)})\) using \(\omega_i^{\mathrm{GRPO}}=L_i^{-1}\).
+    \item \textbf{CAPO branch:} Choose a plug-in (L-CAPO, LV-CAPO, CAPO-Q, or CAPO-HAC), run one iteration of its \textsc{FitAndPredict} routine (Algorithms~\ref{alg:eb-lite}, \ref{alg:eb-capo}, \ref{alg:capo-q}, \ref{alg:capo-hac}) to compute precisions \(\omega_i\) and within-group weights \(w_i^{\mathrm{CAPO}}\), and form \(m_{\mathrm{CAPO}}^{(t)}\).
+  \end{enumerate}
+  \item Repeat the entire \(T\)-step process over \(R\) independent trials (e.g., \(R=500\) or \(R=1000\)), re-simulating fresh data each time, and record the sequences
+  \(\{m_{\mathrm{GRPO}}^{(t,r)}\}_{t,r}\) and \(\{m_{\mathrm{CAPO}}^{(t,r)}\}_{t,r}\).
+\end{enumerate}
+
+\paragraph{Evaluation metrics.}
+On this synthetic task the ground truth \(\mu^\star\) is known, which allows clean comparisons:
+
+\begin{itemize}
+  \item \textbf{Mean-squared error (MSE) over time.}
+  For each method \(M\in\{\mathrm{GRPO},\mathrm{CAPO}\}\), define
+  \[
+  \mathrm{MSE}_M(t)
+  =\frac{1}{R}\sum_{r=1}^R \big(m_M^{(t,r)}-\mu^\star\big)^2.
+  \]
+  Plotting \(\mathrm{MSE}_{\mathrm{GRPO}}(t)\) and \(\mathrm{MSE}_{\mathrm{CAPO}}(t)\) on the same axis typically shows that CAPO reaches a given error threshold (e.g., \(10^{-2}\)) in many fewer outer steps, reflecting its variance-optimal weighting.
+
+  \item \textbf{Variance and bias decomposition.}
+  Because both estimators are unbiased in the model of Section~\ref{sec:eb-theory}, the MSE is dominated by variance,
+  \(\mathrm{MSE}_M(t)\approx \mathrm{Var}(m_M^{(t)})\).
+  One can empirically confirm this by computing
+  \[
+  \widehat{\mathrm{Bias}}_M(t)
+  =\frac{1}{R}\sum_{r=1}^R m_M^{(t,r)}-\mu^\star,
+  \]
+  and checking that \(|\widehat{\mathrm{Bias}}_M(t)|\) is negligible compared to \(\sqrt{\mathrm{MSE}_M(t)}\).
+
+  \item \textbf{Effective sample size (ESS).}
+  For each method \(M\) at step \(t\), define
+  \[
+  \mathrm{ESS}_M(t)
+  =\frac{1}{\sum_{i\in\mathcal B_t} (w_i^M)^2},
+  \]
+  where \(w_i^M\) are the normalized weights (either GRPO or CAPO).
+  CAPO typically yields a larger ESS in regimes where GRPO over- or under-weights certain length ranges, indicating more efficient usage of the same batch of trajectories.
+\end{itemize}
+
+\paragraph{Integrating with a policy update.}
+The above simulation evaluates CAPO and GRPO purely as estimators of \(\mu^\star\) (i.e., of the scalarized training signal).
+To embed this into a full policy-learning loop, one can replace the role of \(g_i\) by per-trajectory gradient estimates (or log-prob increments) and use the same weights \(w_i^{\mathrm{GRPO}}\) vs.\ \(w_i^{\mathrm{CAPO}}\) to aggregate them.
+Because the EB estimator \(m(\beta,\xi)\) has strictly smaller variance than any fixed-weight scheme of the form \(w_i\propto L_i^{-\beta_0}\) when the working model is approximately correct, the same simulation framework can then be used to compare downstream learning curves (e.g., average return or teacher score versus wall-clock steps) and empirically demonstrate the superiority of CAPO over GRPO on this controlled benchmark.
+
+
+\subsubsection{Synthetic covariance benchmark: CAPO variants, GRPO++, and advantage scaling}
+\label{sec:synthetic-covariance-benchmark}
+
+This section formalizes the synthetic benchmark summarized in \S\ref{subsec:synthetic-benchmark}.
+The objective is to isolate, in a fully controlled setting, how different aggregation/normalization rules transform an identical batch of scalar rollout signals \(\{(g_i,L_i)\}_{i=1}^{B}\) into per-trajectory advantage magnitudes.
+Unlike the full CountDown pipeline, the benchmark does not require querying a base language model; instead, it directly simulates heteroscedastic returns induced by specified within-trajectory covariance regimes.
+
+\paragraph{Synthetic batch structure.}
+We simulate \(P\) prompt groups, each with \(N\) rollouts (responses), so that \(B:=PN\) trajectories are present in a batch.
+Trajectory \(i\) has a discrete length \(L_i\in\{32,64,128,256\}\), sampled i.i.d.\ within and across groups unless otherwise noted.
+The GRPO-family estimators use the prompt-group index to center/standardize within each group, while CAPO variants estimate EB parameters (\(\beta,\xi\)) from the full batch but normalise weights and compute baselines \emph{within} each prompt group\,---\,the same per-group structure used by GRPO and \(\Delta L\).
+
+\paragraph{Covariance regimes via an induced variance law.}
+We model each trajectory-level scalar return as a (scaled) sum of token-level increments,
+\(g_i=\sum_{t=1}^{L_i} Y_{i,t}\),
+where \(\{Y_{i,t}\}_{t\ge 1}\) is a zero-mean stationary process with unit marginal variance and autocovariance \(\gamma(h):=\mathrm{Cov}(Y_{i,t},Y_{i,t-h})\).
+Under stationarity, the induced variance law is
+\begin{equation}
+  \mathrm{Var}(g_i\mid L_i=L)
+  \;=\;
+  L \;+\; 2\sum_{h=1}^{L-1} (L-h)\,\gamma(h)
+  \;=\;
+  L\,s(L;\xi),
+  \label{eq:synth_vL_general}
+\end{equation}
+where \(s(L;\xi):=\mathrm{Var}(g_i\mid L_i=L)/L\) is the dependence shape factor used throughout the paper (cf.\ Lemma~\ref{lem:sL-kband-eta} and \S\ref{subsec:cs}).
+In all regimes below we keep the base length exponent at \(\beta=1\) so that variation across regimes is attributable entirely to dependence.
+
+We instantiate six regimes spanning short-range and long-range dependence by specifying \(\gamma(\cdot)\) and hence \(s(\cdot)\):
+\begin{itemize}
+  \item \textbf{IID:} \(\gamma(h)\equiv 0\) for \(h\ge 1\), so \(\mathrm{Var}(g\mid L)=L\) and \(s(L)=1\).
+  \item \textbf{AR(1) / geometric dependence (two levels):} \(\gamma(h)=\rho^{h}\) for \(h\ge 1\), yielding
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; 2\sum_{h=1}^{L-1}(L-h)\rho^{h},
+    \qquad
+    \rho\in\{0.7,0.9\}.
+    \label{eq:synth_vL_ar1}
+  \end{equation}
+  \item \textbf{$k$-banded stretched-geometric dependence:} \(\gamma(h)=\rho^{\,h^{\eta}}\mathbf 1\{h\le k\}\), giving
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; 2\sum_{h=1}^{\min\{k,L-1\}}(L-h)\rho^{\,h^{\eta}},
+    \qquad
+    (\rho,k,\eta)=(0.7,16,1.5).
+    \label{eq:synth_vL_kband}
+  \end{equation}
+  \item \textbf{Compound symmetry (two levels):} \(\gamma(h)=\rho_{\mathrm{cs}}\) for \(h\ge 1\), so
+  \begin{equation}
+    \mathrm{Var}(g\mid L)
+    \;=\;
+    L \;+\; \rho_{\mathrm{cs}}\,L(L-1),
+    \qquad
+    \rho_{\mathrm{cs}}\in\{0.01,0.05\}.
+    \label{eq:synth_vL_cs}
+  \end{equation}
+  This regime represents long-range dependence in which off-diagonal correlations do not decay and the trajectory variance grows superlinearly in \(L\).
+\end{itemize}
+The figure and tables in \S\ref{subsec:synthetic-benchmark} are generated by the reference implementation \texttt{capo.experiments.analysis.synthetic\_covariance\_benchmark} and saved as compile-ready artifacts under \texttt{docs/report/artifacts/paper/}.
+
+\paragraph{Compared advantage constructions.}
+Given a batch \(\{(g_i,L_i)\}\), we compute scalar advantages using the following rules.
+To ensure an apples-to-apples comparison, every method uses the \emph{same} structural form: within each prompt group \(\mathcal I_p\), define
+\begin{equation}
+  w_i \;=\; \frac{\omega_i}{\sum_{j\in\mathcal I_p} \omega_j},
+  \qquad
+  m_p \;=\; \sum_{j\in\mathcal I_p} w_j\, g_j,
+  \qquad
+  A_i \;=\; w_i\,(g_i - m_p).
+  \label{eq:synth_unified_adv}
+\end{equation}
+The methods differ \emph{only} in the precision weights \(\omega_i\):
+
+\emph{(i) GRPO.}
+Uniform weights: \(\omega_i = 1\).  This gives the unweighted group mean \(m_p = \bar g_p\) and equal per-trajectory influence \(w_i = 1/N\).
+
+\emph{(ii) \(\Delta L\) (length scaling).}
+For \(\alpha\in(0,\infty)\), set
+\begin{equation}
+  \omega_i^{\Delta L(\alpha)}
+  \;=\;
+  L_i^{-\alpha}.
+  \label{eq:synth_deltal_omega}
+\end{equation}
+This is structurally identical to L-CAPO with a fixed exponent \(\beta=\alpha\) and \(s\equiv 1\).
+
+\emph{(iii) L--CAPO (length-only weighting).}
+Estimate \(\hat\beta\) from the batch via Algorithm~\ref{alg:eb-lite} and set
+\begin{equation}
+  \omega_i^{\mathrm{lite}}
+  \;=\;
+  L_i^{-\hat\beta}.
+  \label{eq:synth_w_lite}
+\end{equation}
+
+\emph{(iv) LV--CAPO (dependence-aware weighting).}
+Estimate \((\hat\beta,\hat\xi)\) via Algorithm~\ref{alg:eb-capo} and set
+\begin{equation}
+  \omega_i^{\mathrm{full}}
+  \;=\;
+  \big(L_i^{\hat\beta}\,s(L_i;\hat\xi)\big)^{-1}.
+  \label{eq:synth_w_full}
+\end{equation}
+In the oracle diagnostic, \(\hat\beta\) and \(\hat\xi\) are replaced by the true parameters of the generative model.
+
+\emph{(v) CAPO-Q (quadratic variance-law plug-in).}
+Compute within-group residuals \(e_i = g_i - \bar g_p\), then fit
+\begin{equation}
+  \hat v(L)
+  \;=\;
+  \hat a\,L^{\beta} \;+\; \hat b\,L^{\beta+1},
+  \qquad \hat a,\hat b \ge 0,
+  \label{eq:synth_w_capoq}
+\end{equation}
+via NNLS on pooled squared residuals (Algorithm~\ref{alg:capo-q}).  Set \(\omega_i^{\mathrm{Q}} = 1/\hat v(L_i)\).
+Under compound symmetry with \(\rho_{\mathrm{cs}}\), the quadratic law matches the true \(v(L) = (1{-}\rho_{\mathrm{cs}})L + \rho_{\mathrm{cs}} L^2\).
+
+\emph{(vi) CAPO-HAC (Newey--West lag-window plug-in).}
+Estimate pooled autocovariances \(\hat\gamma(h)\) from the token-level reward increments (Eq.~\ref{eq:gammahat-pooled}), then evaluate the Bartlett-window long-run variance at each trajectory's length:
+\begin{equation}
+  \hat v_{\mathrm{HAC}}(L)
+  \;=\;
+  L\hat\gamma(0) \;+\; 2\sum_{h=1}^{\min\{K,L{-}1\}}(L{-}h)\Big(1 - \tfrac{h}{K{+}1}\Big)\hat\gamma(h),
+  \label{eq:synth_w_capohac}
+\end{equation}
+using bandwidth \(K=16\) (Algorithm~\ref{alg:capo-hac}).  Set \(\omega_i^{\mathrm{HAC}} = 1/\hat v_{\mathrm{HAC}}(L_i)\).
+Under short-range dependence (IID/AR(1)/\(k\)-band), this is consistent for the true induced variance.
+
+\paragraph{Evaluation metrics.}
+For each method and each covariance regime, we compute the mean-squared advantage conditional on length,
+\(\mathbb E[A_i^2\mid L_i=L]\), and summarize length sensitivity by the amplification ratio
+\begin{equation}
+  \mathrm{Amp}
+  \;:=\;
+  \frac{\mathbb E[A_i^2\mid L_i=L_{\max}]}{\mathbb E[A_i^2\mid L_i=L_{\min}]},
+  \label{eq:synth_amp_def}
+\end{equation}
+where \(L_{\min}\) and \(L_{\max}\) denote the smallest and largest length bins in the simulation.
+Values larger than \(1\) indicate amplification of long trajectories; values below \(1\) indicate suppression.
+
+To visualize where update energy concentrates, we additionally report the \emph{signal share} contributed by each length bin:
+\begin{equation}
+  \mathrm{Share}(L)
+  \;:=\;
+  \frac{\mathbb E\big[\sum_{i:\,L_i=L} A_i^2\big]}{\mathbb E\big[\sum_{i=1}^{B} A_i^2\big]},
+  \label{eq:synth_share_def}
+\end{equation}
+which corresponds to the expected fraction of the total squared learning signal arising from trajectories of length \(L\).
+
+\paragraph{Reproducibility.}
+The benchmark used to generate Figures~\ref{fig:synthetic-covariance}--\ref{fig:synthetic-signal-share} and Table~\ref{tab:synthetic-covariance} is implemented in the repository as \texttt{capo.experiments.analysis.synthetic\_covariance\_benchmark}.
+The script is self-contained and can be executed on CPU to regenerate the corresponding \LaTeX\ table and PDF figures.
