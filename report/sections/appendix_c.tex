@@ -1,0 +1,43 @@
+\section{Bartlett summation identity for trajectory covariance}
+\label{app:bartlett}
+
+\begin{lemma}[Bartlett summation identity for trajectory covariance]\label{lem:bartlett}
+Assume second–order stationarity along the token index for trajectory $i$: for all $t$ and all lags $k\in\mathbb{Z}$,
+\[
+\mathbb{E}\,\boldsymbol{Z}_{i,t}=\boldsymbol{m}_i\quad\text{(constant)},\qquad
+\mathrm{Cov}(\boldsymbol{Z}_{i,t},\boldsymbol{Z}_{i,t-k})=\boldsymbol{\Gamma}_i(k).
+\]
+Let $\boldsymbol{g}_i=\sum_{t=1}^{L_i}\boldsymbol{Z}_{i,t}$. Then
+\begin{equation}
+\mathrm{Var}(\boldsymbol{g}_i)
+\;=\;
+\sum_{k=-(L_i-1)}^{L_i-1} (L_i-|k|)\,\boldsymbol{\Gamma}_i(k).
+\tag{\ref{eq:var-sum}}
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Write $\widetilde{\boldsymbol{Z}}_{i,t}:=\boldsymbol{Z}_{i,t}-\boldsymbol{m}_i$. Then
+\[
+\mathrm{Var}(\boldsymbol{g}_i)
+=\mathrm{Cov}\!\Big(\sum_{t=1}^{L_i}\widetilde{\boldsymbol{Z}}_{i,t},\,\sum_{s=1}^{L_i}\widetilde{\boldsymbol{Z}}_{i,s}\Big)
+=\sum_{t=1}^{L_i}\sum_{s=1}^{L_i}\mathrm{Cov}\!\big(\widetilde{\boldsymbol{Z}}_{i,t},\widetilde{\boldsymbol{Z}}_{i,s}\big).
+\]
+By stationarity, $\mathrm{Cov}(\widetilde{\boldsymbol{Z}}_{i,t},\widetilde{\boldsymbol{Z}}_{i,s})=\boldsymbol{\Gamma}_i(t-s)$. Hence
+\[
+\mathrm{Var}(\boldsymbol{g}_i)
+=\sum_{t=1}^{L_i}\sum_{s=1}^{L_i}\boldsymbol{\Gamma}_i(t-s).
+\]
+Group terms by the lag \(k=t-s\). For a fixed \(k\) with \(|k|\le L_i-1\), the number of index pairs \((t,s)\) in \(\{1,\dots,L_i\}^2\) satisfying \(t-s=k\) is \(L_i-|k|\) (for \(k\ge 0\): \(s=1,\dots,L_i-k\); for \(k<0\): \(t=1,\dots,L_i-|k|\)). Therefore
+\[
+\sum_{t=1}^{L_i}\sum_{s=1}^{L_i}\boldsymbol{\Gamma}_i(t-s)
+=\sum_{k=-(L_i-1)}^{L_i-1}(L_i-|k|)\,\boldsymbol{\Gamma}_i(k),
+\]
+which is \eqref{eq:var-sum}.
+\end{proof}
+
+% Optional symmetric form (equivalent):
+% \[
+% \mathrm{Var}(\boldsymbol{g}_i)
+% = L_i\,\boldsymbol{\Gamma}_i(0) \;+\; \sum_{k=1}^{L_i-1} (L_i-k)\,\big(\boldsymbol{\Gamma}_i(k)+\boldsymbol{\Gamma}_i(k)^\top\big).
+% \]

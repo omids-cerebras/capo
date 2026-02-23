@@ -1,0 +1,1181 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Covariance-Aware Policy Optimization for RLVR">
+      
+      
+      
+        <link rel="canonical" href="https://omids.github.io/capo/algorithms/">
+      
+      
+        <link rel="prev" href="../method/">
+      
+      
+        <link rel="next" href="../evaluations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
+    
+    
+      
+        <title>Algorithms - CAPO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#algorithms-capo-with-empirical-bayes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="CAPO" class="md-header__button md-logo" aria-label="CAPO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CAPO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Algorithms
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/omids/capo" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    omids/capo
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../setup/" class="md-tabs__link">
+          
+  
+  
+  Method
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/01_capo_basics/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../api/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../experiments/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Experiments
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="CAPO" class="md-nav__button md-logo" aria-label="CAPO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CAPO
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/omids/capo" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    omids/capo
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Method
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Method
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup & Notation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../method/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CAPO Method
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-lv-capo-workflow-online" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. LV-CAPO workflow (online)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. LV-CAPO workflow (online)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mapping-to-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapping to code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-l-capo-loglog-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. L-CAPO: log–log regression
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-acf-moment-estimator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. ACF-moment estimator
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/01_capo_basics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CAPO Basics: Understanding Covariance-Aware Weighting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/02_comparing_estimators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Advantage Estimators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/03_empirical_bayes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Empirical Bayes Estimation Deep Dive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Experiments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-lv-capo-workflow-online" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. LV-CAPO workflow (online)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. LV-CAPO workflow (online)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mapping-to-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mapping to code
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-l-capo-loglog-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. L-CAPO: log–log regression
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-acf-moment-estimator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. ACF-moment estimator
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="algorithms-capo-with-empirical-bayes">Algorithms: CAPO with Empirical Bayes<a class="headerlink" href="#algorithms-capo-with-empirical-bayes" title="Permanent link">&para;</a></h1>
+<p>This page describes the three algorithmic components from §4, and
+how they map to the functions in <code>capo/verl_integration/adv_estimators.py</code>.</p>
+<h2 id="1-lv-capo-workflow-online">1. LV-CAPO workflow (online)<a class="headerlink" href="#1-lv-capo-workflow-online" title="Permanent link">&para;</a></h2>
+<p>The LV-CAPO workflow maintains streaming estimates
+<span class="arithmatex">\((\beta_t, \xi_t)\)</span> and uses them to reweight trajectories at each
+outer step <span class="arithmatex">\(t\)</span>.</p>
+<p>At step <span class="arithmatex">\(t\)</span>:</p>
+<ol>
+<li><strong>Collect rollouts</strong></li>
+</ol>
+<p>Draw a batch</p>
+<p>[
+     \mathcal{B}<em>t
+       = {(g_i, L_i, {Y</em>{i,\tau}}<em>{\tau=1}^{L_i})}</em>{i=1}^{G_t}
+   ]</p>
+<p>under the current policy. Here:</p>
+<ul>
+<li><span class="arithmatex">\(g_i\)</span> is a scalar (e.g. CAPO reward or gradient projection).</li>
+<li><span class="arithmatex">\(L_i\)</span> is trajectory length.</li>
+<li>
+<p><span class="arithmatex">\(Y_{i,\tau}\)</span> are increments for ACF estimation (if used).</p>
+</li>
+<li>
+<p><strong>E-step statistics (given <span class="arithmatex">\((\beta_{t-1}, \xi_{t-1})\)</span>)</strong></p>
+</li>
+</ul>
+<p>For each trajectory:</p>
+<p>[
+     \omega_i^{(t)}
+       \gets \big(L_i^{\beta_{t-1}}
+                  s(L_i; \xi_{t-1})\big)^{-1}.
+   ]</p>
+<p>Let <span class="arithmatex">\(Z_t = \sum_j \omega_j^{(t)}\)</span> and normalized weights</p>
+<p>[
+     w_i^{(t)} = \omega_i^{(t)} / Z_t.
+   ]</p>
+<p>The EB mean at step <span class="arithmatex">\(t\)</span> is</p>
+<p>[
+     m_t = \sum_{i\in \mathcal{B}_t} w_i^{(t)} g_i.
+   ]</p>
+<p>This is precisely what <code>eb_stats</code> computes in a single batch.</p>
+<ol>
+<li><strong>EB updates</strong></li>
+</ol>
+<p>Using <span class="arithmatex">\((\omega_i^{(t)}, w_i^{(t)}, m_t, e_i^{(t)})\)</span>, form
+   <span class="arithmatex">\(\Lambda_\omega^{(t)}\)</span>, <span class="arithmatex">\(\mathrm{RSS}_\omega^{(t)}\)</span> and take a
+   few gradient steps on <span class="arithmatex">\(\ell(\beta,\xi)\)</span> with respect to β and ξ:</p>
+<ul>
+<li><code>grad_ell_beta</code> implements the length gradient direction
+     (Corollary for ∂ℓ/∂β),</li>
+<li><code>grad_ell_rho_eta</code> implements dependence directions using
+     the k-banded shape <span class="arithmatex">\(s(L;\rho,k,\eta)\)</span> and Lemma on its
+     derivatives.</li>
+</ul>
+<p>In the code, this is wrapped by
+   <code>compute_capo_eb_full_advantage</code>, which performs a small number of
+   gradient-ascent steps for β and ξ before computing final weights
+   and advantages.</p>
+<ol>
+<li><strong>Reweight and update policy</strong></li>
+</ol>
+<p>Use <span class="arithmatex">\(w_i^{(t)}\)</span> as trajectory weights for CAPO (e.g. reweighting
+   gradients or policy losses). In VERL, this corresponds to using
+   the EB-derived trajectory advantages <span class="arithmatex">\(A_i\)</span> inside PPO/GRPO-style
+   updates.</p>
+<h3 id="mapping-to-code">Mapping to code<a class="headerlink" href="#mapping-to-code" title="Permanent link">&para;</a></h3>
+<ul>
+<li>
+<p><strong>Plain CAPO</strong> (no EB):</p>
+</li>
+<li>
+<p>Estimator: <code>capo</code></p>
+</li>
+<li>Function: <code>compute_capo_advantage</code></li>
+<li>
+<p>Algorithm: token-wise z-normalization over CAPO rewards.</p>
+</li>
+<li>
+<p><strong>L-CAPO</strong> (length-only):</p>
+</li>
+<li>
+<p>Algorithm: “L-CAPO (no dependence)” in the text.</p>
+</li>
+<li>Function implementing EB fit:
+    <code>eb_lite_fit_beta_and_weights(g, L)</code></li>
+<li>
+<p>VERL estimator: <code>capo_eb_lite</code>
+    (<code>compute_capo_eb_lite_advantage</code>):</p>
+<ul>
+<li>Collapses to <span class="arithmatex">\((g_i, L_i)\)</span>,</li>
+<li>Runs L-CAPO,</li>
+<li>Sets <span class="arithmatex">\(A_i = w_i (g_i - m)\)</span>,</li>
+<li>Broadcasts <span class="arithmatex">\(A_i\)</span> across tokens.</li>
+</ul>
+</li>
+<li>
+<p><strong>Full LV-CAPO</strong> (length + dependence):</p>
+</li>
+<li>
+<p>Dependence shape: <code>s_kband(L, rho, k, eta)</code>
+    implements <span class="arithmatex">\(s(L; \rho, k, \eta)\)</span>.</p>
+</li>
+<li>EB statistics: <code>eb_stats(g, L, beta, rho, k, eta)</code> compute
+    <span class="arithmatex">\(\omega_i\)</span>, <span class="arithmatex">\(w_i\)</span>, <span class="arithmatex">\(m\)</span>, <span class="arithmatex">\(e_i\)</span>,
+    <span class="arithmatex">\(\Lambda_\omega\)</span>, <span class="arithmatex">\(\mathrm{RSS}_\omega\)</span>.</li>
+<li>Gradients:<ul>
+<li><code>grad_ell_beta</code> – ∂ℓ/∂β,</li>
+<li><code>grad_ell_rho_eta</code> – ∂ℓ/∂ρ, ∂ℓ/∂η.</li>
+</ul>
+</li>
+<li>
+<p>ACF-moment:</p>
+<ul>
+<li><code>acf_moment_fit(Y, mask, k)</code> – moment-based estimator for
+  <span class="arithmatex">\((\rho, \eta)\)</span> from increments <span class="arithmatex">\(\{Y_{i,\tau}\}\)</span>.</li>
+</ul>
+</li>
+<li>
+<p>VERL estimator: <code>capo_eb</code>
+    (<code>compute_capo_eb_full_advantage</code>):</p>
+<ul>
+<li>Optional ACF-based initialization of <span class="arithmatex">\((\rho, \eta)\)</span>,</li>
+<li>Few gradient steps for β and ξ,</li>
+<li>Final weights and advantages as in L-CAPO.</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="2-l-capo-loglog-regression">2. L-CAPO: log–log regression<a class="headerlink" href="#2-l-capo-loglog-regression" title="Permanent link">&para;</a></h2>
+<p>L-CAPO is a length-only, single-batch algorithm designed to sit
+between fixed ΔL-style weights and the full LV-CAPO machinery.</p>
+<p>Given <span class="arithmatex">\((g_i, L_i)\)</span>, it iteratively:</p>
+<ol>
+<li>Computes residuals <span class="arithmatex">\(e_i = g_i - m^{(k)}\)</span>.</li>
+<li>Forms</li>
+</ol>
+<p>[
+     z_i = \log(e_i^2 + \varepsilon).
+   ]</p>
+<ol>
+<li>Fits a linear regression</li>
+</ol>
+<p>[
+     z_i = c - \beta \log L_i + \varepsilon_i
+   ]</p>
+<p>by least squares and sets <span class="arithmatex">\(\hat{\beta}^{(k+1)} = -\)</span>slope.
+4. Sets weights <span class="arithmatex">\(w_i \propto L_i^{-\hat{\beta}^{(k+1)}}\)</span>, normalizes
+   them, and updates the aggregator</p>
+<p>[
+     m^{(k+1)} = \sum_i w_i g_i.
+   ]</p>
+<ol>
+<li>Repeats until <span class="arithmatex">\(m^{(k)}\)</span> stabilizes.</li>
+</ol>
+<p>The function <code>eb_lite_fit_beta_and_weights</code> is a direct translation
+of this procedure, with a small number of outer iterations and a
+tolerance on <span class="arithmatex">\(|m^{(k+1)} - m^{(k)}|\)</span>.</p>
+<hr />
+<h2 id="3-acf-moment-estimator">3. ACF-moment estimator<a class="headerlink" href="#3-acf-moment-estimator" title="Permanent link">&para;</a></h2>
+<p>The ACF-moment estimator is used to initialize or refine the
+dependence parameters ξ from token-level increments <span class="arithmatex">\(Y_{i,\tau}\)</span>.</p>
+<p>Steps:</p>
+<ol>
+<li>For each trajectory, compute empirical auto-covariances
+   <span class="arithmatex">\(\hat{\gamma}_i(h)\)</span> up to lag <span class="arithmatex">\(k\)</span>.</li>
+<li>Aggregate to <span class="arithmatex">\(\bar{\gamma}(h)\)</span>, and normalize to obtain
+   <span class="arithmatex">\(\bar{r}(h)\)</span>.</li>
+<li>Fit the stretched-geometric model</li>
+</ol>
+<p>[
+     \bar{r}(h) \approx \rho^{h^{\eta}}
+   ]</p>
+<p>by least squares over <span class="arithmatex">\(h = 1,\dots,k\)</span>.</p>
+<p>In code, this is implemented as <code>acf_moment_fit</code>, which adopts a
+coarse grid search over <span class="arithmatex">\(\rho\)</span> and <span class="arithmatex">\(\eta\)</span> and returns <span class="arithmatex">\((\hat{\rho}, \hat{\eta})\)</span>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../javascripts/mathjax.js"></script>
+      
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

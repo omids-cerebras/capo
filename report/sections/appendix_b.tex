@@ -1,0 +1,15 @@
+\section{\texorpdfstring{$\Delta L$}{Delta L} under Token Independence}\label{app:warmup}
+
+This appendix provides an explicit, self-contained derivation of the $\Delta L$ warm-up case (token independence) and a notation bridge to \citet{he2025deltal}. The main text in \S\ref{sec:method} states the result succinctly; here we record the derivation and the exact conditions under which the inverse-length rule is MVU.
+
+Under an i.i.d.\ token model with $\mathrm{Var}(\boldsymbol{Z}_{i,t})=\boldsymbol{\Sigma}_0$ and $\boldsymbol{\Gamma}_i(k)=\boldsymbol{0}$ for $k\neq 0$,
+\begin{equation}
+  \mathrm{Var}(\boldsymbol{g}_i)=L_i\,\boldsymbol{\Sigma}_0
+  \quad\Longrightarrow\quad
+  v_i \propto L_i.
+\end{equation}
+Substituting into the MVU weights \eqref{eq:mvu-weights} yields $x_i\propto L_i^{-1}$, i.e., the $\Delta L$ rule with exponent $\alpha=1$. More generally, the practical one-parameter family
+\begin{equation}
+  x_i \ \propto\ L_i^{-\alpha},\qquad \alpha\in[0,1],
+\end{equation}
+interpolates between constant weighting ($\alpha=0$) and inverse-length weighting ($\alpha=1$), providing a baseline that CAPO formalizes via posterior precisions in \S\ref{sec:method}.

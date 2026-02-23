@@ -1,0 +1,84 @@
+\section{Annotated Literature Review}\label{app:annotated_lit_review}
+
+This appendix provides an annotated, one-paragraph summary for each cited reference in the main manuscript.
+Each annotation explains why the work is cited and how it connects to the technical development of CAPO.
+
+\subsection{RLVR, RLHF, and LLM Training Systems}
+
+\paragraph{\citet{shao2024deepseekmath}.}
+\citet{shao2024deepseekmath} is cited as an early, influential exemplar of reinforcement learning with verifiable rewards (RLVR) for mathematical reasoning, demonstrating that outcome-supervised reinforcement learning can materially improve long-form chain-of-thought performance.
+We reference this work to motivate the empirical regime in which CAPO operates: training pipelines where rollouts vary substantially in length and where update stability depends critically on how per-trajectory learning signals are normalized and aggregated.
+In particular, the DeepSeekMath setting highlights the practical consequences of length heterogeneity (variance growth and instability), which CAPO treats through an explicit variance law and covariance-aware weighting.
+
+\paragraph{\citet{qwen2024qwen25}.}
+\citet{qwen2024qwen25} is cited to document the base model family used in our empirical evaluation and to ground experimental claims in a concrete, reproducible model specification.
+This reference provides architectural and training-context details for Qwen2.5 that are necessary to interpret downstream RLVR behavior (e.g., typical response-length distributions, scaling behavior, and stability considerations) without conflating CAPO's aggregation effects with undocumented model idiosyncrasies.
+
+\paragraph{\citet{yu2025dapo}.}
+\citet{yu2025dapo} is cited as a closely related RLVR optimization pipeline that explicitly discusses length-driven instability and proposes a practical normalization strategy (DAPO) that operates at the batch level.
+We reference this work both as a strong baseline and as motivation for treating length effects as a statistical estimation problem: DAPO stabilizes training by modifying how per-token losses are normalized, whereas CAPO targets the same failure mode by directly estimating trajectory-level variance and applying an inverse-variance reweighting rule.
+The comparison clarifies when batch-level length scaling is beneficial and when it can be improved by dependence-aware variance modeling.
+
+\paragraph{\citet{he2025deltal}.}
+\citet{he2025deltal} is a primary methodological antecedent for CAPO.
+It provides a systematic account of $\Delta L$-type length-dependent normalization and empirically demonstrates that suppressing long trajectories can improve stability in RLVR.
+We cite this work to position CAPO as a principled extension: CAPO recovers the $\Delta L$ family as a special case (via MVU/Jeffreys arguments) and then generalizes it by (i) learning the length exponent from data and (ii) incorporating explicit dependence corrections through $s(L;\xi)$, thereby addressing regimes where length alone is an insufficient proxy for gradient dispersion.
+
+\paragraph{\citet{liu2025drgrpo}.}
+\citet{liu2025drgrpo} is cited for its analysis of GRPO-style estimators and for proposing a ``Dr.\ GRPO'' variant that removes or modifies standard normalization components to mitigate undesirable statistical side-effects.
+We reference this work as evidence that small, seemingly innocuous normalization choices (e.g., scaling by within-group standard deviation) can materially change estimator behavior.
+CAPO's contribution is to replace ad hoc normalization knobs with an explicit variance model and an estimator-theoretically justified weighting rule, while still allowing practitioners to recover Dr.\ GRPO-like behavior as a boundary case under appropriate assumptions.
+
+\paragraph{\citet{ouyang2022instructgpt}.}
+\citet{ouyang2022instructgpt} is cited as a canonical reference for modern RLHF pipelines in which policy-gradient updates (typically PPO variants) are combined with reward or preference models.
+We reference this work to situate RLVR as a specialization of RLHF and to emphasize that variance control and stability in the policy-gradient update remain central challenges when scaling to large language models.
+CAPO inherits the same basic optimization substrate but focuses on a distinct, RLVR-specific pathology: extreme length heterogeneity that induces structured heteroscedasticity at the trajectory level.
+
+\paragraph{\citet{rafailov2023dpo}.}
+\citet{rafailov2023dpo} is cited as a prominent alternative to RL-based fine-tuning---direct preference optimization---that avoids explicit policy-gradient rollouts.
+We reference it to delimit the scope of CAPO: CAPO is designed for rollout-based objectives (RLHF/RLVR) where per-trajectory stochasticity is intrinsic, and where normalization and aggregation decisions directly control estimator variance.
+Contrasting with DPO helps clarify that CAPO's statistical machinery is targeted at policy-gradient aggregation rather than preference-model regression or supervised ranking.
+
+\subsection{Policy-Gradient and Advantage-Estimation Foundations}
+
+\paragraph{\citet{williams1992simple}.}
+\citet{williams1992simple} (REINFORCE) is cited as the foundational policy-gradient method that makes explicit the variance challenges inherent to likelihood-ratio gradient estimators.
+We reference it to justify why variance reduction is not an optional engineering detail but a core statistical requirement, especially when rollouts are long and gradients accumulate correlated noise.
+CAPO can be viewed as a variance-reduction mechanism that operates at the aggregation layer of REINFORCE/PPO-style updates by optimizing a linear unbiased estimator under heteroscedastic, dependent noise.
+
+\paragraph{\citet{sutton2018rl}.}
+\citet{sutton2018rl} is cited as a standard reference for the principles of policy-gradient estimation, baselines, and the bias--variance trade-offs that arise in practice.
+We reference it to anchor terminology (advantages, baselines, and return aggregation) and to motivate why variance control must respect unbiasedness constraints when the goal is to preserve correct optimization direction.
+CAPO's formulation can be interpreted as importing classical estimation-theoretic ideas into this reinforcement-learning setting.
+
+\paragraph{\citet{schulman2016gae}.}
+\citet{schulman2016gae} is cited for generalized advantage estimation (GAE), which is central to modern actor--critic training and provides a canonical template for trading bias against variance in advantage construction.
+We reference this work to distinguish two levels of variance control: (i) how token- or step-level advantages are computed (e.g., via GAE) and (ii) how trajectory-level gradients are aggregated when response lengths vary.
+CAPO addresses the latter and is therefore compatible with GAE-style advantage estimators; the cited connection helps clarify how CAPO can be integrated into PPO-type pipelines without altering the underlying credit-assignment mechanism.
+
+\paragraph{\citet{schulman2017ppo}.}
+\citet{schulman2017ppo} is cited as the dominant practical policy-gradient update used in RLHF and RLVR systems.
+We reference PPO to emphasize that, even with clipping and other stabilizers, the stochastic-gradient estimator in PPO remains sensitive to how trajectories are normalized and combined---particularly in long-horizon language-model rollouts.
+CAPO is intended as a drop-in aggregation layer that can be used within PPO/GRPO-style updates to reduce gradient dispersion induced by length heterogeneity and within-trajectory dependence.
+
+\subsection{Statistical Foundations: Dependence Modeling and Empirical Bayes}
+
+\paragraph{\citet{hamilton1994time}.}
+\citet{hamilton1994time} is cited as a classical reference for estimation with autocorrelated errors and for the relationship between time-series dependence and efficient generalized least squares (GLS) procedures.
+We reference this work to motivate the dependence-aware extensions of CAPO: when token-level gradient increments exhibit serial correlation, the trajectory-level variance is not determined by length alone, and GLS-style corrections become statistically natural.
+The cited perspective supports our use of structured covariance models and helps interpret CAPO as a practical, structured-GLS approximation for RLVR gradient aggregation.
+
+\paragraph{\citet{efron2012large}.}
+\citet{efron2012large} is cited to situate CAPO's empirical-Bayes (EB) approach within the broader EB tradition.
+We reference it because CAPO estimates hyperparameters (e.g., length exponent and dependence shape) by marginal likelihood and then plugs the estimates into a precision-weighted decision rule---an EB pattern that is well-studied in large-scale inference.
+This connection clarifies why CAPO's ``learned normalization'' can be treated as statistically principled shrinkage/weighting rather than as a purely heuristic tuning mechanism.
+
+\paragraph{\citet{jeffreys1946invariant}.}
+\citet{jeffreys1946invariant} is cited for Jeffreys' prior and the invariance principles that motivate it.
+We reference this work because CAPO's Bayesian warm-up derivation uses a Jeffreys scale prior to obtain an aggregation rule that is invariant to reparameterizations of the variance scale, and this derivation provides a principled route to recovering $\Delta L$-type behavior as a special case.
+The citation therefore grounds our choice of baseline prior in established Bayesian theory rather than in convenience.
+
+\paragraph{\citet{vandervaart1998}.}
+\citet{vandervaart1998} is cited as a standard reference for the asymptotic theory of M-estimators and consistency arguments.
+We reference it to justify technical steps in the convergence analysis of CAPO's EB hyperparameter estimates, where we appeal to general results ensuring that maximizers of empirical criteria converge to population maximizers under regularity conditions.
+This citation supports the rigor of the EB theory by linking our proofs to well-established asymptotic tools.

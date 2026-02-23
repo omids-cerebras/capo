@@ -1,0 +1,19 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}\label{secConc}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+This paper developed \emph{Covariance-Aware Policy Optimization (CAPO)}, a variance-aware aggregation principle for policy-gradient updates under the length heterogeneity and within-trajectory dependence that arise in reinforcement learning with verifiable rewards (RLVR).
+Starting from a minimum-variance unbiased estimation (MVUE) formulation of trajectory reweighting, we showed that inverse-variance weights arise as the unique optimal linear unbiased rule (Lemma~\ref{lem:mvu}) and that classical length-normalizations such as $\Delta L$ correspond to special cases when trajectory variance grows proportionally to length.
+We then introduced a flexible heteroscedastic Gaussian working model with structured dependence through a \emph{shape factor} $s(L;\xi)$, established a posterior-precision view of optimal weighting with an invariant Jeffreys baseline, and derived principled sublinear length exponents $\beta<1$ under correctness-linked variance reduction.
+To make these ideas operational, we proposed empirical-Bayes (EB) estimators for $(\beta,\xi)$, provided asymptotic guarantees under weak dependence, and gave implementable CAPO variants that interpolate between outcomes-only weighting and full token-level dependence corrections.
+
+Beyond the specific RLVR setting, the CAPO perspective clarifies a general design principle for stochastic-gradient aggregation with variable-length or variable-cost samples:
+\emph{the correct normalization is determined by how the sample-level covariance grows with length and dependence, rather than by length alone}.
+In this sense, CAPO connects the practical engineering of stable LLM RL training to classical ideas from weighted least squares, generalized least squares, and empirical Bayes.
+
+\paragraph{Limitations and future directions.}
+CAPO is intentionally conservative in its modeling assumptions: we treat the within-trajectory covariance through low-dimensional summaries (bandwidth, decay, or compound-symmetry surrogates) and adopt cross-trajectory uncorrelatedness as a working approximation (Assumption~\ref{assump:cross_traj_uncorr}).
+Two directions appear especially important for future work.
+First, prompt-level random effects and group-based baselines can induce non-negligible dependence across trajectories within a batch; extending CAPO to explicit block-structured cross-trajectory covariance is a natural next step.
+Second, policy-gradient contributions may exhibit heavy tails or non-Gaussianity under rare but extreme rewards; robustness to tail behavior and stable estimation of variance under such distributions merit dedicated study.
+We view these extensions as complementary to the present contribution: CAPO provides a rigorous baseline framework upon which richer covariance models and robust estimators can be layered without sacrificing unbiasedness.
